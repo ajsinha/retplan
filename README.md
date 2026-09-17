@@ -30,9 +30,28 @@ make install     # put the macros in your LibreOffice profile
 Then open `RetPlan.ods`, work through **Start Here**, and press **Run simulation**
 on the Dashboard. The projection itself is live formulas and needs no macros.
 
-To use the buttons you need LibreOffice's Python script provider
-(`sudo apt install libreoffice-script-provider-python`). Without it, run
-`python3 tools/simulate.py RetPlan.ods --full` instead — same code, same results.
+### Enabling the buttons
+
+The projection is live formulas and needs nothing. The four Dashboard buttons need
+two things:
+
+1. **The Python script provider** — `sudo apt install libreoffice-script-provider-python`
+   (already present on most desktop installs).
+2. **Permission to run the document's macros.** The workbook binds its buttons to
+   scripts, so LibreOffice's macro security applies. At the default **High** level
+   with no trusted location, it disables them on open and the buttons do nothing.
+   Either:
+   - **Tools ▸ Options ▸ LibreOffice ▸ Security ▸ Macro Security… ▸ Trusted Sources ▸
+     Trusted File Locations ▸ Add…** and add the folder holding `RetPlan.ods`
+     (recommended — scoped to one folder), or
+   - set Macro Security to **Medium**, which prompts on every open.
+
+Prefer not to touch either setting? Run the simulation from the command line
+instead — identical code, identical results:
+
+```bash
+python3 tools/simulate.py RetPlan.ods --trials 10000 --full
+```
 
 ## What is in the box
 

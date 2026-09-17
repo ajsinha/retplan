@@ -14,8 +14,32 @@ import sys
 import time
 import traceback
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
+def _script_dir():
+    """Locate this module's directory so the engine package can be imported.
+
+    LibreOffice's Python script provider exec()s the module source without
+    defining __file__, so the obvious path lookup raises NameError and the whole
+    module fails to load - which looks exactly like "macros are disabled".
+    Fall back to asking LibreOffice where the user profile is.
+    """
+    try:
+        return os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        pass
+    try:
+        import uno
+        import unohelper
+        ctx = uno.getComponentContext()
+        ps = ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.util.PathSubstitution", ctx)
+        user = unohelper.fileUrlToSystemPath(ps.substituteVariables("$(user)", True))
+        return os.path.join(user, "Scripts", "python")
+    except Exception:
+        return ""
+
+
+_HERE = _script_dir()
+if _HERE and _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 NPCT = 7
@@ -26,21 +50,41 @@ N_SWEEP = 21
 
 
 # --------------------------------------------------------------- plumbing
+def _is_spreadsheet(obj):
+    try:
+        return bool(obj) and obj.supportsService("com.sun.star.sheet.SpreadsheetDocument")
+    except Exception:
+        return False
+
+
 def _doc():
     """The document the macro is acting on.
 
-    XSCRIPTCONTEXT is injected by LibreOffice when a button fires; the fallback
-    covers being driven headless by the test harness.
+    XSCRIPTCONTEXT is injected by LibreOffice when a button fires and is the
+    normal path.  It returns None for a document with no frame - a hidden or
+    headless one - so fall back to the desktop's current component and then to
+    the first open spreadsheet, and fail loudly rather than silently doing
+    nothing to nothing.
     """
     try:
-        return XSCRIPTCONTEXT.getDocument()      # noqa: F821  (injected by LO)
+        d = XSCRIPTCONTEXT.getDocument()         # noqa: F821  (injected by LO)
+        if _is_spreadsheet(d):
+            return d
     except NameError:
         pass
     import uno
     ctx = uno.getComponentContext()
     desktop = ctx.ServiceManager.createInstanceWithContext(
         "com.sun.star.frame.Desktop", ctx)
-    return desktop.getCurrentComponent()
+    cur = desktop.getCurrentComponent()
+    if _is_spreadsheet(cur):
+        return cur
+    comps = desktop.getComponents().createEnumeration()
+    while comps.hasMoreElements():
+        c = comps.nextElement()
+        if _is_spreadsheet(c):
+            return c
+    raise RuntimeError("RetPlan: no spreadsheet document found to act on")
 
 
 def _cells(doc, name):
@@ -85,20 +129,13 @@ def _status(doc, msg):
         pass
 
 
-def _is_doc(obj):
-    try:
-        return bool(obj.supportsService("com.sun.star.sheet.SpreadsheetDocument"))
-    except Exception:
-        return False
-
-
 def _guard(fn):
     def wrapper(*args):
         # A button passes an ActionEvent; the CLI runner passes the document
         # itself.  Never fall back to the desktop when a document was handed in:
         # doing that from outside LibreOffice builds the service in the wrong
         # process and takes the bridge down with it.
-        doc = args[0] if args and _is_doc(args[0]) else _doc()
+        doc = args[0] if args and _is_spreadsheet(args[0]) else _doc()
         try:
             auto = doc.isAutomaticCalculationEnabled()
             doc.enableAutomaticCalculation(False)

@@ -53,19 +53,38 @@ this file is the honest reconciliation against it.
    modelled today as an expense row with a probability, which is how the sample
    data does it.
 
-## Environment note: the buttons
+## The buttons: requirements and verification
 
-The in-document buttons need LibreOffice's Python script provider:
+The buttons are now **verified end-to-end** through LibreOffice's own Python
+script provider (`tools/run_macro.py RetPlan.ods run_quick` resolves the same
+`vnd.sun.star.script:` URL a button fires and completes a 500-trial run).
 
-```
-sudo apt install libreoffice-script-provider-python
-```
+Two things must be true for them to work:
 
-It is **not** installed on the build machine, so the buttons were not fired
-end-to-end here. The same code paths were exercised through
-`tools/simulate.py`, which drives the identical functions over the UNO bridge
-and needs only `python3-uno`. If the package is absent, use the CLI; nothing is
-lost but the convenience.
+1. `libreoffice-script-provider-python` is installed.
+2. The document is allowed to run macros. Because the workbook binds button
+   events to scripts, LibreOffice's macro security applies even though the
+   scripts live in the user profile rather than inside the file. At the default
+   **High** level with no trusted location, macros are disabled on open and the
+   buttons silently do nothing. Add the workbook's folder under
+   *Tools ▸ Options ▸ LibreOffice ▸ Security ▸ Macro Security ▸ Trusted Sources*,
+   or drop to Medium to be prompted.
+
+`tools/simulate.py` remains the no-configuration path: identical code, identical
+results, needs only `python3-uno`.
+
+### Two macro defects found by that verification
+
+Both were masked while the script provider was absent, and both would have made
+the buttons appear "disabled" even once macros were allowed:
+
+- **`__file__` is not defined** in a provider-loaded module. The module set its
+  import path from `__file__`, so it raised `NameError` at import and never
+  loaded. It now asks LibreOffice for the user profile path instead.
+- **`XSCRIPTCONTEXT.getDocument()` returns `None`** for a document with no frame
+  (hidden or headless). Document resolution now falls back to the desktop's
+  current component, then to the first open spreadsheet, and raises a clear
+  error instead of failing silently.
 
 ## Known rough edges
 
