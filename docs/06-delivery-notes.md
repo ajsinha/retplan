@@ -66,9 +66,17 @@ Two things must be true for them to work:
    events to scripts, LibreOffice's macro security applies even though the
    scripts live in the user profile rather than inside the file. At the default
    **High** level with no trusted location, macros are disabled on open and the
-   buttons silently do nothing. Add the workbook's folder under
-   *Tools ▸ Options ▸ LibreOffice ▸ Security ▸ Macro Security ▸ Trusted Sources*,
-   or drop to Medium to be prompted.
+   buttons silently do nothing. `make setup` (or `tools/trust_folder.py`) adds the
+   checkout to LibreOffice's trusted file locations through its own configuration
+   API. Trust is matched by URL prefix, so one entry covers every subfolder, and
+   the macro security *level* is left alone — only a location is added. The tool
+   resolves the repo root at run time, so it stays correct wherever the project is
+   cloned, and `--remove` reverses it.
+
+   Two operational notes: LibreOffice must be closed when the tool runs, because a
+   running instance owns the profile and rewrites it on exit; and `SecureURL` is a
+   `[]string` property that configmgr rejects unless it is passed as an explicitly
+   typed `uno.Any`.
 
 `tools/simulate.py` remains the no-configuration path: identical code, identical
 results, needs only `python3-uno`.

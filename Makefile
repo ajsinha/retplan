@@ -4,7 +4,7 @@ PY      ?= python3
 OUT     ?= RetPlan.ods
 TRIALS  ?= 5000
 
-.PHONY: all build install test verify simulate clean check
+.PHONY: all build install trust untrust test verify simulate clean check setup
 
 all: check
 
@@ -15,6 +15,17 @@ build:
 ## install the macro module and engine into the LibreOffice profile
 install:
 	$(PY) tools/install_macros.py
+
+## let this checkout's documents run macros (this folder and everything under it)
+trust:
+	$(PY) tools/trust_folder.py
+
+## undo the above
+untrust:
+	$(PY) tools/trust_folder.py --remove
+
+## one-command setup after cloning anywhere: macros installed and folder trusted
+setup: install trust
 
 ## unit, engine and statistical tests (no LibreOffice needed)
 test:

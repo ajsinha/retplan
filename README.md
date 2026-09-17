@@ -40,11 +40,27 @@ two things:
 2. **Permission to run the document's macros.** The workbook binds its buttons to
    scripts, so LibreOffice's macro security applies. At the default **High** level
    with no trusted location, it disables them on open and the buttons do nothing.
-   Either:
-   - **Tools ▸ Options ▸ LibreOffice ▸ Security ▸ Macro Security… ▸ Trusted Sources ▸
-     Trusted File Locations ▸ Add…** and add the folder holding `RetPlan.ods`
-     (recommended — scoped to one folder), or
-   - set Macro Security to **Medium**, which prompts on every open.
+   The portable way, from anywhere you have cloned this repo:
+
+   ```bash
+   make setup          # installs the macros and trusts this checkout
+   # or, separately:
+   python3 tools/install_macros.py
+   python3 tools/trust_folder.py           # trusts the repo root and everything under it
+   python3 tools/trust_folder.py --list    # show current trusted locations
+   python3 tools/trust_folder.py --remove  # undo
+   ```
+
+   `trust_folder.py` resolves the repo root at run time, so it does the right thing
+   wherever the project lives — move or re-clone it and re-run `make setup`.
+   LibreOffice matches trusted locations by URL prefix, so one entry covers every
+   subfolder. Your macro security **level is left untouched**; only this location is
+   added. LibreOffice must be closed when you run it, since a running instance owns
+   the profile and rewrites it on exit.
+
+   Prefer the GUI? **Tools ▸ Options ▸ LibreOffice ▸ Security ▸ Macro Security… ▸
+   Trusted Sources ▸ Trusted File Locations ▸ Add…**, or set Macro Security to
+   **Medium** to be prompted on every open.
 
 Prefer not to touch either setting? Run the simulation from the command line
 instead — identical code, identical results:
