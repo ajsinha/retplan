@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}About - {{ app_name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8">
+<div class="card"><div class="card-body p-4">
+  <h2>About {{ app_name }}</h2>
+  <p class="lede">A household cash-flow and portfolio model, version {{ app_version }}.</p>
+
+  <h6 class="mt-4">What it does</h6>
+  <p>Projects income, spending, debt, tax and investments year by year, then
+     stress-tests the plan against thousands of simulated market histories. The same
+     engine drives a LibreOffice workbook whose formulas are proved to agree with it
+     to 7&times;10<sup>-12</sup> over 61 years.</p>
+
+  <h6 class="mt-4">Known limitations &mdash; please read</h6>
+  <ul class="small">
+    <li><strong>Household-level tax.</strong> Income is taxed as one unit rather than
+        split between two people with separate bands. Where a jurisdiction taxes
+        individuals separately this overstates tax for couples with uneven incomes.</li>
+    <li><strong>Annual periods.</strong> Within-year timing of flows is not modelled.</li>
+    <li><strong>Allowances are bands.</strong> A tax-free allowance is entered as a 0%
+        first band and a taper as a band with the higher effective rate.</li>
+    <li><strong>Capital gains</strong> are taxed as the gain share of a withdrawal times
+        an inclusion rate, under the ordinary bands. No separate gains allowance.</li>
+    <li><strong>Survivor mechanics are simplified</strong> &mdash; continuation
+        percentages apply; account consolidation is not modelled in full.</li>
+    <li><strong>Long-term care, annuity purchase and wrapper conversions</strong> are not
+        yet modelled as their own modules. Care costs can be entered today as an
+        expense row with a probability, which is what the sample does.</li>
+  </ul>
+
+  <h6 class="mt-4">Privacy</h6>
+  <p class="small">Your plan is stored on this server as JSON, keyed by an opaque id in
+     your session cookie. No personal identifier beyond a display name is needed, and
+     nothing is sent anywhere else. Download your plan at any time from the editor.</p>
+
+  <h6 class="mt-4">Not financial advice</h6>
+  <p class="small">This is an educational model. Its outputs are projections under
+     assumptions you supply, not predictions, and must not be relied on as financial,
+     tax or investment advice.</p>
+</div></div>
+</div></div>
+{% endblock %}

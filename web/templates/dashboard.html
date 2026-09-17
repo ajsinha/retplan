@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - {{ app_name }}{% endblock %}
+{% block content %}
+
+{% if blocking %}
+<div class="alert alert-danger py-2 px-3">
+  <strong>{{ blocking|length }} blocking check{{ '' if blocking|length == 1 else 's' }} failed.</strong>
+  Do not trust these numbers until they are resolved &mdash;
+  <a href="{{ url_for('audit') }}">see the audit</a>.
+</div>
+{% endif %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h5 class="mb-0 me-2">{{ plan.label }}</h5>
+  <span class="pill {{ 'pill-good' if view.funded_verdict == 'Fully funded' else 'pill-bad' }}">
+    <i class="bi {{ 'bi-check-circle' if view.funded_verdict == 'Fully funded' else 'bi-exclamation-circle' }}"></i>
+    {{ view.funded_verdict }}
+  </span>
+  <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+    <label class="form-label mb-0 small">Trials</label>
+    <select id="simTrials" class="form-select form-select-sm" style="width:auto">
+      <option>500</option><option selected>2000</option><option>5000</option>
+      <option>10000</option><option>25000</option>
+    </select>
+    <button class="btn btn-sm btn-accent" data-sim="{{ url_for('api_simulate') }}">
+      <i class="bi bi-play-fill"></i> Run simulation
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" data-sim="{{ url_for('api_analysis') }}">
+      <i class="bi bi-cpu"></i> Full analysis
+    </button>
+    <span id="simStatus" class="pill {{ 'pill-good' if sim else 'pill-warn' }}">
+      {% if sim %}{{ '{:,}'.format(sim.trials) }} trials{% else %}not run yet{% endif %}
+    </span>
+  </div>
+</div>
+
+<div class="stat-grid mb-3">
+  <div class="stat">
+    <div class="label">Money lasts to age</div>
+    <div class="value">{{ view.depleted_age|round(0)|int if view.depleted_age else plan.persons[0].age + plan.horizon }}</div>
+    <div class="note">deterministic projection</div>
+  </div>
+  <div class="stat {{ 'good' if sim and sim.kpis.success_probability >= plan.policy.confidence else ('bad' if sim else '') }}">
+    <div class="label">Success probability</div>
+    <div class="value">{{ (sim.kpis.success_probability * 100)|round(1) if sim else '&mdash;'|safe }}{% if sim %}%{% endif %}</div>
+    <div class="note">
+      {% if sim %}&plusmn;{{ (1.96 * sim.kpis.success_se * 100)|round(1) }} pts at 95% &middot; {{ '{:,}'.format(sim.trials) }} trials
+      {% else %}press Run{% endif %}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="label">Funded ratio</div>
+    <div class="value">{{ view.funded|round(2) }}</div>
+    <div class="note">assets + future income &divide; future spending</div>
+  </div>
+  <div class="stat">
+    <div class="label">Median terminal wealth</div>
+    <div class="value">{{ (sim.kpis.terminal_real_p50 if sim else view.terminal)|compact }}</div>
+    <div class="note">{{ 'simulated median' if sim else 'deterministic' }}, today's money</div>
+  </div>
+  <div class="stat">
+    <div class="label">First-year spending</div>
+    <div class="value">{{ view.first_year_spend|compact }}</div>
+    <div class="note">including debt service</div>
+  </div>
+  <div class="stat">
+    <div class="label">Lifetime tax</div>
+    <div class="value">{{ view.total_tax|compact }}</div>
+    <div class="note">deterministic path, today's money</div>
+  </div>
+  {% if sim and sim.has_solvers %}
+  <div class="stat">
+    <div class="label">Max sustainable spend</div>
+    <div class="value">{{ sim.max_spend|compact }}</div>
+    <div class="note">at {{ (plan.policy.confidence * 100)|round(0)|int }}% confidence</div>
+  </div>
+  <div class="stat">
+    <div class="label">Earliest retirement</div>
+    <div class="value">{{ sim.earliest_age|round(1) }}</div>
+    <div class="note">age, at the same confidence</div>
+  </div>
+  {% endif %}
+</div>
+
+{% macro chart_card(title, svg, rows=None, headers=None, note=None, wide=False) %}
+<div class="col-12 {{ '' if wide else 'col-xl-6' }}">
+  <div class="card h-100">
+    <div class="card-header plain"><span>{{ title }}</span></div>
+    <div class="card-body">
+      {{ svg|safe }}
+      {% if note %}<p class="form-hint mt-2 mb-0">{{ note }}</p>{% endif %}
+      {% if rows %}
+      <details class="table-twin">
+        <summary>Table view</summary>
+        <div class="table-scroll mt-2" style="max-height:260px">
+          <table class="table table-sm">
+            <thead><tr>{% for h in headers %}<th class="{{ 'num' if not loop.first }}">{{ h }}</th>{% endfor %}</tr></thead>
+            <tbody>
+              {% for r in rows %}<tr>{% for c in r %}<td class="{{ 'num' if not loop.first }}">{{ c }}</td>{% endfor %}</tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="row g-3">
+  {% if sim %}
+    {% set fan_rows = [] %}
+    {% for i in range(0, view.years|length, 5) %}
+      {% set _ = fan_rows.append([view.years[i], sim.bands[0][0][i]|money, sim.bands[1][0][i]|money,
+                                  sim.median[i]|money, sim.bands[1][1][i]|money, sim.bands[0][1][i]|money]) %}
+    {% endfor %}
+    {{ chart_card('Range of outcomes', sim.chart_fan, fan_rows,
+                  ['Year','P5','P10','Median','P90','P95'],
+                  'Percentile bands of net worth across ' ~ '{:,}'.format(sim.trials) ~ ' simulated futures.') }}
+    {{ chart_card('A sample of individual futures', sim.chart_paths, none, none,
+                  'Twenty trials drawn at random. Sequence matters: two paths with the same average return can end very differently.') }}
+  {% else %}
+    {{ chart_card('Net worth', view.chart_networth, none, none,
+                  'Deterministic projection. Press Run for the range of outcomes.') }}
+  {% endif %}
+
+  {{ chart_card('Where the money sits', view.chart_accounts, none, none,
+                'Closing balance by tax wrapper. Which pot the money is in decides what it costs to spend.') }}
+  {{ chart_card('Money in, money out', view.chart_flows, none, none,
+                'Income, spending, tax, withdrawals and contributions, all in today\'s money.') }}
+
+  {% if sim %}
+    {{ chart_card('Where you end up', sim.chart_terminal, none, none,
+                  'Distribution of terminal net worth. The long right tail is why the mean is a poor summary - the median is the honest one.') }}
+    {{ chart_card('Chance the money has run out', sim.chart_depletion, none, none,
+                  'Cumulative probability of an unmet need by each age.') }}
+    {% if sim.has_solvers %}
+      {{ chart_card('Success against spending', sim.chart_sweep,
+                    sim.sweep|map('list')|list, ['Spending','Success'],
+                    'The most useful chart here: it prices each extra unit of spending in probability.') }}
+      {{ chart_card('What moves the answer', sim.chart_tornado,
+                    sim.tornado|map('list')|list, ['Driver','Downside','Upside'],
+                    'Success probability when each driver is moved down and up on its own.') }}
+    {% endif %}
+  {% endif %}
+</div>
+
+{% if sim %}
+<div class="row g-3 mt-0">
+  <div class="col-xl-6">
+    <div class="card">
+      <div class="card-header plain"><span>What you are actually assuming</span></div>
+      <div class="card-body">
+        <p class="form-hint">Regimes and crashes change the realised distribution. These are
+           the statistics the simulation actually produced, next to the numbers you typed.</p>
+        <table class="table table-sm">
+          <thead><tr><th>Asset</th><th class="num">Typed</th><th class="num">Effective</th>
+            <th class="num">Compound</th><th class="num">Typed vol</th><th class="num">Effective vol</th></tr></thead>
+          <tbody>
+            {% for e in sim.effective %}
+            <tr><td>{{ e.label }}</td>
+              <td class="num">{{ e.target|pct }}</td><td class="num">{{ e.effective|pct }}</td>
+              <td class="num">{{ e.compound|pct }}</td>
+              <td class="num">{{ e.target_sd|pct }}</td><td class="num">{{ e.effective_sd|pct }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if sim.shrinkage > 0 %}
+        <p class="form-hint mb-0">Correlation matrix was shrunk toward the identity by
+           {{ sim.shrinkage|pct }} to make it valid.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6">
+    <div class="card">
+      <div class="card-header plain"><span>Market regimes</span></div>
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Regime</th><th class="num">Long-run share</th>
+            <th class="num">Simulated share</th><th class="num">Expected length</th></tr></thead>
+          <tbody>
+            {% for r in sim.regimes %}
+            <tr><td>{{ r.label }}</td><td class="num">{{ r.stationary|pct }}</td>
+              <td class="num">{{ r.share|pct }}</td>
+              <td class="num">{{ r.duration|round(1) }} yrs</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="form-hint mb-0">Worst drawdown across all trials:
+           {{ sim.kpis.worst_drawdown|pct }}. Median total shortfall:
+           {{ sim.kpis.total_shortfall_p50|money }}.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

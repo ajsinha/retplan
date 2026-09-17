@@ -1,0 +1,20 @@
+{% extends "results/_layout.html" %}
+{% set title = "Tax" %}
+{% set blurb = "Taxable income and tax paid each year. The effective rate is total tax over income plus withdrawals - the number that actually describes the cost of funding a year." %}
+{% block table %}
+<div class="table-scroll">
+<table class="table table-sm">
+  <thead><tr><th class="num">Year</th><th class="num">Age</th><th class="num">Taxable income</th>
+    <th class="num">Tax</th><th class="num">Withdrawals</th><th class="num">Effective rate</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr><td class="num">{{ r.year }}</td><td class="num">{{ r.age|round(0)|int }}</td>
+      <td class="num">{{ r.taxable|money }}</td><td class="num">{{ r.tax|money }}</td>
+      <td class="num">{{ r.withdrawal|money }}</td>
+      <td class="num">{{ (r.tax / (r.income + r.withdrawal))|pct if (r.income + r.withdrawal) > 1 else '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

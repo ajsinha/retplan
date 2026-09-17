@@ -1,4 +1,7 @@
 __pycache__/
+.venv/
+data/plans/
+*.log
 *.pyc
 .venv/
 .idea/

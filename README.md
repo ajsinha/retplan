@@ -20,6 +20,9 @@ person is data the user edits in tables, not logic baked into formulas.
 ## Quick start
 
 ```bash
+./scripts/setup.sh                      # venv + dependencies
+.venv/bin/python run_retplan_web.py     # the web app on port 5007
+
 make test        # 91 assertions, no LibreOffice needed        (~3 s)
 make build       # generate RetPlan.ods through the UNO API    (~80 s)
 make verify      # prove the sheet and the engine agree exactly
@@ -108,13 +111,56 @@ python3 tools/simulate.py RetPlan.ods --trials 10000 --full
 
 Priority uses MoSCoW: **M**ust / **S**hould / **C**ould / **W**on't (this release).
 
+
+## The web application
+
+A FastAPI application over the same engine, so the browser and the workbook can
+never disagree about a number.
+
+```bash
+./scripts/setup.sh                      # venv + dependencies
+.venv/bin/python run_retplan_web.py     # http://127.0.0.1:5007
+```
+
+`--host`, `--port`, `--reload` and `--log-level` are all flags; `RETPLAN_PORT`
+and `RETPLAN_DATA` work as environment variables.
+
+| | |
+|---|---|
+| **Dashboard** | verdict, stat tiles, and up to eight charts; run 500–25,000 trials from the page |
+| **Plan editor** | nine sections — household, income, spending, debt, wrappers, accounts, markets, tax, policy |
+| **Reports** | year-by-year cash flow, balance sheet and tax |
+| **Audit** | the same discipline as the workbook's audit sheet, including the roll-forward identity |
+| **Import / export** | a plan is portable JSON; download it, edit it, upload it |
+
+Charts are **server-rendered inline SVG** — no charting library, no CDN, nothing to
+load. The categorical palette is validated for colour-vision separation against
+both the light and dark surfaces, every chart with two or more series carries a
+legend, and each one ships a table view so no value is reachable only by hovering.
+Themes (light / dark / blue) swap through CSS custom properties, including the
+chart palette, without re-rendering.
+
+Your plan is stored server-side as JSON keyed by an opaque session id, so the
+cookie never carries your finances.
+
+### Layout
+
+```
+web/         the application: app singleton, templating, charts, view model, store
+web/static/  vendored Bootstrap, Bootstrap Icons, fonts (no CDN)
+routes/      one handler class per area, registered by the app singleton
+run_retplan_web.py   launcher (port 5007 by default)
+```
+
 ## Repository layout
 
 ```
-retplan/     the engine - rng, tax, markets, engine, metrics, solvers, reader
+retplan/     the engine - rng, tax, markets, engine, metrics, solvers, reader, samples
+web/         the FastAPI application - app, templating, charts, view model, store
+routes/      one route handler class per area of the web application
 build/       the workbook generator (UNO): spec, theme, sheet builders
-macros/      in-document Python macros
-tools/       installer, simulation runner, cross-check, inspectors
+macros/      in-document Python macros for LibreOffice
+tools/       installer, trust helper, simulation runner, cross-check, inspectors
 tests/       91 assertions covering units, golden scenarios and statistics
 docs/        specification and delivery notes
 ```

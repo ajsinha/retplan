@@ -1,0 +1,8 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar with context %}
+{% set title = "Income" %}{% set icon = "bi-arrow-down-circle" %}
+{% set blurb = "Every stream of money coming in, per year and before tax. A 'real' basis keeps pace with inflation; 'nominal' is a fixed number of future currency units." %}
+{% block form %}
+  {{ table_editor('income', income_fields, plan.income) }}
+  {{ save_bar('income', plan.income|length) }}
+{% endblock %}

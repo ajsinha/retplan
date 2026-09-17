@@ -1,0 +1,62 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import scalar with context %}
+{% set title = "Household" %}{% set icon = "bi-people" %}
+{% set blurb = "Who the plan covers, how long it runs, and how spending drifts with age." %}
+{% block form %}
+  <div class="row">
+    {{ scalar('label', 'Plan name', plan.label, 'text') }}
+    {{ scalar('horizon', 'Years to project', plan.horizon, 'number', 'Capped at 80.') }}
+    {{ scalar('timing', 'Cash-flow timing', plan.timing, 'select',
+              'When within the year flows land.',
+              [('begin','begin'),('mid','mid'),('end','end')]) }}
+    {{ scalar('seed', 'Random seed', plan.seed, 'number',
+              'Same seed and inputs always give the same answer.') }}
+  </div>
+  <h6 class="mt-3 mb-2">People</h6>
+  <div class="table-scroll">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Name</th><th class="num">Age now</th><th class="num">Retires at</th>
+      <th class="num">Plan to age</th></tr></thead>
+    <tbody>
+      {% for p in plan.persons %}
+      <tr>
+        <td><input class="form-control form-control-sm" name="person-{{ loop.index0 }}-label" value="{{ p.label }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ loop.index0 }}-age" value="{{ '%.6g'|format(p.age) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ loop.index0 }}-retire_age" value="{{ '%.6g'|format(p.retire_age) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ loop.index0 }}-death_age" value="{{ '%.6g'|format(p.death_age) }}"></td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td><input class="form-control form-control-sm" name="person-{{ plan.persons|length }}-label" placeholder="Add a person"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ plan.persons|length }}-age" placeholder="age"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ plan.persons|length }}-retire_age" value="65"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="person-{{ plan.persons|length }}-death_age" value="95"></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="form-hint">Planning age matters more than most inputs: plan to life expectancy
+     and roughly half the outcomes outlive the money. Leave a person's age blank to drop them.</p>
+
+  <h6 class="mt-3 mb-2">Spending smile</h6>
+  <p class="form-hint">Real spending typically drifts down through retirement, then ticks
+     up if care is needed. Applies only to rows flagged <em>Age curve</em>.</p>
+  <div class="table-scroll" style="max-width:640px">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Age</th>{% for a in plan.smile.ages %}<th class="num">{{ a|int }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      <tr><td class="muted">Age</td>
+        {% for a in plan.smile.ages %}
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="smile_age" value="{{ '%.6g'|format(a) }}"></td>
+        {% endfor %}
+      </tr>
+      <tr><td class="muted">Multiplier</td>
+        {% for m in plan.smile.mult %}
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="smile_mult" value="{{ '%.6g'|format(m) }}"></td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="mt-3"><button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button></div>
+{% endblock %}

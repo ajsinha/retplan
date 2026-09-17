@@ -1,0 +1,26 @@
+{% extends "results/_layout.html" %}
+{% set title = "Cash flow" %}
+{% set blurb = "Every inflow and outflow, year by year. Forced draws are minimum distributions a wrapper mandates; a shortfall is need the plan could not meet." %}
+{% block table %}
+<div class="table-scroll">
+<table class="table table-sm">
+  <thead><tr><th class="num">Year</th><th class="num">Age</th><th class="num">Income</th>
+    <th class="num">Forced draws</th><th class="num">Spending</th><th class="num">Tax</th>
+    <th class="num">Withdrawals</th><th class="num">Paid in</th><th class="num">Fees</th>
+    <th class="num">Shortfall</th><th class="num">Portfolio</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr {% if r.shortfall > 1 %}class="table-danger"{% endif %}>
+      <td class="num">{{ r.year }}</td><td class="num">{{ r.age|round(0)|int }}</td>
+      <td class="num">{{ r.income|money }}</td><td class="num">{{ r.mrd|money }}</td>
+      <td class="num">{{ r.spend|money }}</td><td class="num">{{ r.tax|money }}</td>
+      <td class="num">{{ r.withdrawal|money }}</td><td class="num">{{ r.contribution|money }}</td>
+      <td class="num">{{ r.fees|money }}</td>
+      <td class="num">{{ r.shortfall|money if r.shortfall > 0.5 else '' }}</td>
+      <td class="num">{{ r.portfolio|money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ app_name }} - {{ app_tagline }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card">
+      <div class="card-body p-4">
+        <h1 class="mb-2">Retirement planning you can audit</h1>
+        <p class="lede mb-3">
+          RetPlan projects a household's income, spending, debt, tax and investments
+          year by year, then stress-tests the plan against thousands of simulated
+          market histories. Nothing is country-specific: tax is a table of bands you
+          type, and account types are wrappers that say <em>when</em> money is taxed.
+        </p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <a class="btn btn-accent" href="{{ url_for('dashboard') }}">
+            <i class="bi bi-speedometer2"></i> Open the dashboard
+          </a>
+          <a class="btn btn-outline-secondary" href="{{ url_for('plan') }}">
+            <i class="bi bi-pencil-square"></i> Edit the plan
+          </a>
+          <a class="btn btn-outline-secondary" href="{{ url_for('method') }}">
+            <i class="bi bi-braces"></i> How it works
+          </a>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <h6><i class="bi bi-percent"></i> Tax that inverts exactly</h6>
+            <p class="form-hint">An allowance is a 0% band; a taper is a band with the
+              higher effective rate. Keeping the schedule piecewise linear means
+              "how much must I withdraw to spend X after tax" is solved in one pass,
+              not by a circular reference.</p>
+          </div>
+          <div class="col-md-4">
+            <h6><i class="bi bi-activity"></i> Markets in three layers</h6>
+            <p class="form-hint">A Markov regime (bear / normal / bull), correlated
+              shocks that can be fat-tailed, and a separate jump process for crashes
+              with per-asset transmission - so bonds can gain while equities fall.</p>
+          </div>
+          <div class="col-md-4">
+            <h6><i class="bi bi-clipboard-check"></i> Checked, not asserted</h6>
+            <p class="form-hint">The same engine backs a LibreOffice workbook whose
+              formulas agree with it to 7&times;10<sup>-12</sup> over 61 years. Every
+              page carries an audit view and a table twin for every chart.</p>
+          </div>
+        </div>
+        <p class="muted small mt-4 mb-0">
+          A worked sample household is loaded so you can look around immediately.
+          Educational model &mdash; not financial advice.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

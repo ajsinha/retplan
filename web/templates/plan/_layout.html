@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "plan/_macros.html" import save_bar with context %}
+{% block title %}{{ title }} - Plan - {{ app_name }}{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-2">
+    <div class="card">
+      <div class="card-header"><span><i class="bi bi-pencil-square"></i>Plan</span></div>
+      <div class="card-body p-2">
+        <nav class="nav flex-column section-nav">
+          {% for key, label, icon, blurb in sections %}
+            <a class="nav-link {{ 'active' if key == section }}"
+               href="{{ url_for('plan_section', section=key) }}" title="{{ blurb }}">
+              <i class="bi {{ icon }}"></i> {{ label }}
+            </a>
+          {% endfor %}
+        </nav>
+        <hr class="my-2">
+        <div class="d-grid gap-1">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('export_plan') }}">
+            <i class="bi bi-download"></i> Download plan
+          </a>
+          <form method="post" action="{{ url_for('plan_reset') }}">
+            <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+              <i class="bi bi-arrow-counterclockwise"></i> Load sample
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('plan_clear') }}">
+            <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+              <i class="bi bi-eraser"></i> Start empty
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-10">
+    <div class="card">
+      <div class="card-header">
+        <span><i class="bi {{ icon }}"></i>{{ title }}</span>
+        <a class="btn btn-sm btn-accent" href="{{ url_for('dashboard') }}">
+          <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+      </div>
+      <div class="card-body">
+        <p class="lede">{{ blurb }}</p>
+        <form method="post" action="{{ url_for('plan_save', section=section) }}">
+          {% block form %}{% endblock %}
+        </form>
+      </div>
+    </div>
+    {% block extra %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

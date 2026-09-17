@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} - {{ app_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:720px;margin:3rem auto">
+  <div class="card-header"><span><i class="bi bi-exclamation-triangle"></i>{{ code }}</span></div>
+  <div class="card-body">
+    <p class="lede">{{ message }}</p>
+    {% if detail %}<pre class="small muted" style="white-space:pre-wrap">{{ detail }}</pre>{% endif %}
+    <a class="btn btn-sm btn-accent" href="{{ url_for('dashboard') }}">Back to the dashboard</a>
+  </div>
+</div>
+{% endblock %}

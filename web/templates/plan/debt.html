@@ -1,0 +1,8 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar with context %}
+{% set title = "Debt" %}{% set icon = "bi-bank" %}
+{% set blurb = "Mortgages and loans, amortised year by year in nominal terms. Leave empty if you have none." %}
+{% block form %}
+  {{ table_editor('debt', loan_fields, plan.loans) }}
+  {{ save_bar('debt', plan.loans|length) }}
+{% endblock %}

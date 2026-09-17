@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <!-- Vendored locally: no CDN, so the UI renders fully offline / air-gapped. -->
+    <link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/inter.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/landing-fonts.css') }}" rel="stylesheet">
+    <style>
+        /* ==========================================================
+           THEME TOKENS
+           Chrome follows the house identity (deep indigo, brass accent).
+           The --viz-* slots are the chart palette: a categorical set
+           validated for colour-vision separation against BOTH surfaces,
+           plus a single-hue blue ramp for magnitude and confidence.
+           ========================================================== */
+        :root, [data-theme="light"] {
+            --primary-gradient: linear-gradient(135deg, #0c1022 0%, #181f3d 50%, #0c1022 100%);
+            --primary-dark: #0c1022;
+            --primary-medium: #181f3d;
+            --accent-color: #e3a44a;
+            --brass: #e3a44a;
+            --tick: #4a6fb0;
+
+            --bg-body: #f6f7fb;
+            --bg-card: #ffffff;
+            --bg-card-header: var(--primary-gradient);
+            --bg-table-header: linear-gradient(135deg, #eef0f7, #e2e6f2);
+            --bg-table-stripe: rgba(12, 16, 34, 0.02);
+            --bg-table-hover: #f0f2fa;
+            --bg-input: #ffffff;
+            --bg-subtle: #f0f2f8;
+
+            --text-primary: #14182e;
+            --text-secondary: #4f5878;
+            --text-muted: #616a8c;
+            --text-on-primary: #eef0f8;
+            --text-link: #b07a22;
+
+            --border-color: #e2e6f2;
+            --border-light: #eef0f7;
+            --card-shadow: 0 4px 16px -6px rgba(12,16,34,.18), 0 2px 4px -1px rgba(12,16,34,.08);
+
+            --success-color: #0ca30c;
+            --warning-color: #fab219;
+            --danger-color: #d03b3b;
+            --info-color: #0aa2c0;
+
+            /* chart palette - light surface (#ffffff) */
+            --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+            --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #4a3aa7; --viz-8: #e34948;
+            --viz-seq-150: #b7d3f6; --viz-seq-250: #86b6ef; --viz-seq-350: #5598e7;
+            --viz-seq-450: #2a78d6; --viz-seq-550: #1c5cab; --viz-seq-650: #104281;
+            --viz-grid: #e8eaf2;
+            --viz-axis: #c3c8da;
+            --viz-ink: #14182e;
+            --viz-muted: #6c7490;
+        }
+        [data-theme="dark"] {
+            --primary-gradient: linear-gradient(135deg, #0c1022 0%, #171d38 50%, #0c1022 100%);
+            --primary-dark: #0c1022;
+            --primary-medium: #171d38;
+            --accent-color: #e3a44a;
+            --brass: #e3a44a;
+            --tick: #7fb4ff;
+
+            --bg-body: #0c1022;
+            --bg-card: #11162e;
+            --bg-card-header: linear-gradient(135deg, #171d38, #11162e);
+            --bg-table-header: linear-gradient(135deg, #1b2244, #151b38);
+            --bg-table-stripe: rgba(255, 255, 255, 0.025);
+            --bg-table-hover: #1a2144;
+            --bg-input: #161c38;
+            --bg-subtle: #151b36;
+
+            --text-primary: #eef0f8;
+            --text-secondary: #aeb6cf;
+            --text-muted: #8e97b6;
+            --text-on-primary: #eef0f8;
+            --text-link: #e3a44a;
+
+            --border-color: #28304f;
+            --border-light: #222a46;
+            --card-shadow: 0 6px 20px -8px rgba(0,0,0,.6);
+
+            --success-color: #0ca30c;
+            --warning-color: #fab219;
+            --danger-color: #e06060;
+            --info-color: #22b8cf;
+
+            /* chart palette - dark surface (#11162e), stepped for that band */
+            --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500;
+            --viz-5: #d55181; --viz-6: #008300; --viz-7: #9085e9; --viz-8: #e66767;
+            --viz-seq-150: #1c5cab; --viz-seq-250: #256abf; --viz-seq-350: #2a78d6;
+            --viz-seq-450: #3987e5; --viz-seq-550: #5598e7; --viz-seq-650: #86b6ef;
+            --viz-grid: #232a49;
+            --viz-axis: #38416a;
+            --viz-ink: #eef0f8;
+            --viz-muted: #98a0be;
+        }
+        [data-theme="blue"] {
+            --primary-gradient: linear-gradient(135deg, #0b2545 0%, #0a4d86 55%, #0079c0 100%);
+            --primary-dark: #0b2545; --primary-medium: #0a4d86;
+            --accent-color: #e11b22; --brass: #0079c0; --tick: #0079c0;
+            --bg-body: #f1f5f9; --bg-card: #ffffff;
+            --bg-card-header: var(--primary-gradient);
+            --bg-table-header: linear-gradient(135deg, #e8f1f8, #d8e8f4);
+            --bg-table-stripe: rgba(0,121,192,.035); --bg-table-hover: #eaf3fb;
+            --bg-input: #ffffff; --bg-subtle: #eef4fa;
+            --text-primary: #0b2545; --text-secondary: #3f5a7a; --text-muted: #5b6b82;
+            --text-on-primary: #eaf3fb; --text-link: #0068a8;
+            --border-color: #d5e3ef; --border-light: #e8f1f8;
+            --card-shadow: 0 4px 16px -6px rgba(11,37,69,.18);
+            --success-color: #0ca30c; --warning-color: #fab219;
+            --danger-color: #d03b3b; --info-color: #0aa2c0;
+            --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+            --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #4a3aa7; --viz-8: #e34948;
+            --viz-seq-150: #b7d3f6; --viz-seq-250: #86b6ef; --viz-seq-350: #5598e7;
+            --viz-seq-450: #2a78d6; --viz-seq-550: #1c5cab; --viz-seq-650: #104281;
+            --viz-grid: #e3ecf5; --viz-axis: #bed3e6; --viz-ink: #0b2545;
+            --viz-muted: #5b6b82;
+        }
+
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--bg-body);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            padding-top: 62px;
+            transition: background-color .2s ease, color .2s ease;
+        }
+        h1, h2, h3, .navbar-brand, .hero h1 {
+            font-family: 'Instrument Serif', Georgia, serif;
+            letter-spacing: .1px;
+        }
+        a { color: var(--text-link); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* ---------- navbar ---------- */
+        .navbar {
+            background: var(--primary-gradient);
+            box-shadow: 0 2px 10px rgba(12,16,34,.25);
+            padding: .45rem 0;
+        }
+        .navbar-brand {
+            font-size: 1.32rem; font-weight: 500; color: var(--text-on-primary) !important;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .navbar-brand .mark { color: var(--accent-color); font-size: 1.15rem; }
+        .navbar .nav-link {
+            color: var(--text-on-primary) !important; opacity: .82;
+            font-size: .88rem; padding: .35rem .7rem; border-radius: 6px;
+        }
+        .navbar .nav-link:hover, .navbar .nav-link.active {
+            opacity: 1; background: rgba(255,255,255,.08); text-decoration: none;
+        }
+        .navbar .nav-link.active { box-shadow: inset 0 -2px 0 var(--accent-color); }
+        .theme-pick {
+            background: rgba(255,255,255,.1); color: var(--text-on-primary);
+            border: 1px solid rgba(255,255,255,.2); border-radius: 6px;
+            font-size: .78rem; padding: .22rem .5rem;
+        }
+        .theme-pick option { color: #14182e; }
+
+        /* ---------- cards ---------- */
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 10px; box-shadow: var(--card-shadow); margin-bottom: 1.1rem;
+        }
+        .card-header {
+            background: var(--bg-card-header); color: var(--text-on-primary);
+            border-bottom: none; border-radius: 10px 10px 0 0 !important;
+            padding: .7rem 1rem; font-weight: 500; font-size: .95rem;
+            display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+        }
+        .card-header .bi { color: var(--accent-color); margin-right: .4rem; }
+        .card-header.plain {
+            background: transparent; color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .card-body { padding: 1rem; }
+
+        /* ---------- stat tiles ---------- */
+        .stat-grid {
+            display: grid; gap: .85rem;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        }
+        .stat {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 10px; padding: .85rem 1rem; box-shadow: var(--card-shadow);
+        }
+        .stat .label {
+            font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+            color: var(--text-muted); margin-bottom: .3rem;
+        }
+        .stat .value {
+            font-size: 1.72rem; line-height: 1.15; font-weight: 600;
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, sans-serif;   /* never a display face */
+        }
+        .stat .note { font-size: .76rem; color: var(--text-secondary); margin-top: .25rem; }
+        .stat.good .value { color: var(--success-color); }
+        .stat.bad .value { color: var(--danger-color); }
+
+        /* ---------- tables ---------- */
+        .table { color: var(--text-primary); font-size: .84rem; margin-bottom: 0; }
+        .table > :not(caption) > * > * { background: transparent; }
+        .table thead th {
+            background: var(--bg-table-header); color: var(--text-primary);
+            font-weight: 600; font-size: .75rem; text-transform: uppercase;
+            letter-spacing: .04em; border-bottom: 1px solid var(--border-color);
+            position: sticky; top: 0; z-index: 2; white-space: nowrap;
+        }
+        .table tbody tr:nth-child(odd) { background: var(--bg-table-stripe); }
+        .table tbody tr:hover { background: var(--bg-table-hover); }
+        .table td, .table th { border-color: var(--border-light); padding: .4rem .55rem; }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .table-scroll { max-height: 70vh; overflow: auto; border-radius: 8px; }
+
+        /* ---------- forms ---------- */
+        .form-control, .form-select {
+            background: var(--bg-input); color: var(--text-primary);
+            border: 1px solid var(--border-color); font-size: .84rem;
+            border-radius: 6px; padding: .3rem .5rem;
+        }
+        .form-control:focus, .form-select:focus {
+            background: var(--bg-input); color: var(--text-primary);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 .18rem rgba(227,164,74,.2);
+        }
+        .form-label { font-size: .8rem; font-weight: 500; color: var(--text-secondary); }
+        .form-hint { font-size: .74rem; color: var(--text-muted); }
+        .input-narrow { max-width: 130px; }
+        .btn { font-size: .85rem; border-radius: 7px; }
+        .btn-primary {
+            background: var(--primary-medium); border-color: var(--primary-medium);
+        }
+        .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+        .btn-accent {
+            background: var(--accent-color); border-color: var(--accent-color); color: #1a1405;
+            font-weight: 600;
+        }
+        .btn-accent:hover { filter: brightness(1.06); color: #1a1405; }
+
+        /* ---------- charts ---------- */
+        .viz { width: 100%; height: auto; display: block; overflow: visible; }
+        .viz-grid { stroke: var(--viz-grid); stroke-width: 1; shape-rendering: crispEdges; }
+        .viz-axis { stroke: var(--viz-axis); stroke-width: 1; shape-rendering: crispEdges; }
+        .viz-tick { fill: var(--viz-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+        .viz-label { fill: var(--viz-ink); font-size: 11.5px; font-weight: 600; }
+        .viz-line { stroke-width: 2; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+        .viz-line-alt { stroke-dasharray: 5 4; }
+        .viz-thread { stroke-width: 1; stroke-opacity: .30; }
+        .viz-band { stroke: var(--bg-card); stroke-width: 2; }   /* 2px surface gap */
+        .viz-bar { stroke: var(--bg-card); stroke-width: 1; }
+        .viz-empty { color: var(--text-muted); font-size: .85rem; padding: 2rem 0; text-align: center; }
+        .viz-legend {
+            display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-bottom: .5rem;
+            font-size: .78rem; color: var(--text-secondary);
+        }
+        .viz-key { display: inline-flex; align-items: center; gap: .35rem; }
+        .viz-swatch {
+            width: 11px; height: 11px; border-radius: 3px; display: inline-block;
+            box-shadow: 0 0 0 1px rgba(0,0,0,.08);
+        }
+        details.table-twin { margin-top: .6rem; }
+        details.table-twin > summary {
+            cursor: pointer; font-size: .78rem; color: var(--text-secondary);
+            list-style: none; display: inline-flex; align-items: center; gap: .35rem;
+        }
+        details.table-twin > summary::-webkit-details-marker { display: none; }
+        details.table-twin > summary::before { content: "\F4FE"; font-family: 'bootstrap-icons'; }
+        details.table-twin[open] > summary::before { content: "\F2E6"; }
+
+        /* ---------- status ---------- */
+        .pill {
+            display: inline-flex; align-items: center; gap: .3rem; font-size: .74rem;
+            font-weight: 600; padding: .16rem .55rem; border-radius: 999px;
+            border: 1px solid transparent;
+        }
+        .pill-good { color: var(--success-color); border-color: var(--success-color); background: rgba(12,163,12,.08); }
+        .pill-warn { color: #8a6100; border-color: var(--warning-color); background: rgba(250,178,25,.12); }
+        .pill-bad  { color: var(--danger-color); border-color: var(--danger-color); background: rgba(208,59,59,.08); }
+        [data-theme="dark"] .pill-warn { color: var(--warning-color); }
+
+        .flash-messages { position: fixed; top: 70px; right: 18px; z-index: 1080; width: min(380px, 90vw); }
+        .section-nav .nav-link {
+            color: var(--text-secondary); font-size: .85rem; border-radius: 7px;
+            padding: .4rem .7rem; display: flex; align-items: center; gap: .5rem;
+        }
+        .section-nav .nav-link:hover { background: var(--bg-subtle); text-decoration: none; }
+        .section-nav .nav-link.active {
+            background: var(--bg-subtle); color: var(--text-primary); font-weight: 600;
+            box-shadow: inset 2px 0 0 var(--accent-color);
+        }
+        .footer {
+            border-top: 1px solid var(--border-color); margin-top: 2rem; padding: 1.1rem 0;
+            color: var(--text-muted); font-size: .78rem;
+        }
+        .muted { color: var(--text-muted); }
+        .lede { color: var(--text-secondary); font-size: .92rem; }
+        code, pre { font-family: 'Spline Sans Mono', ui-monospace, monospace; }
+        code { color: var(--text-link); }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<nav class="navbar navbar-expand-lg fixed-top">
+    <div class="container-fluid px-3">
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+            <i class="bi bi-compass mark"></i>{{ app_name }}
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#nav" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link {{ 'active' if current_path.startswith('/dashboard') }}" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link {{ 'active' if current_path.startswith('/plan') }}" href="{{ url_for('plan') }}"><i class="bi bi-pencil-square"></i> Plan</a></li>
+                <li class="nav-item"><a class="nav-link {{ 'active' if current_path.startswith('/reports') }}" href="{{ url_for('reports') }}"><i class="bi bi-table"></i> Reports</a></li>
+                <li class="nav-item"><a class="nav-link {{ 'active' if current_path.startswith('/audit') }}" href="{{ url_for('audit') }}"><i class="bi bi-clipboard-check"></i> Audit</a></li>
+                <li class="nav-item"><a class="nav-link {{ 'active' if current_path.startswith('/method') }}" href="{{ url_for('method') }}"><i class="bi bi-braces"></i> Method</a></li>
+            </ul>
+            <ul class="navbar-nav ms-auto align-items-center gap-2">
+                <li class="nav-item">
+                    <select id="themeSelect" class="theme-pick" aria-label="Choose theme" title="Choose theme">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="blue">Blue</option>
+                    </select>
+                </li>
+                <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="flash-messages">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show py-2 px-3" role="alert">
+            <span class="small">{{ message }}</span>
+            <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    {% endwith %}
+</div>
+
+<div class="container-fluid px-3 py-3">
+    {% block content %}{% endblock %}
+</div>
+
+<footer class="footer">
+    <div class="container-fluid px-3 d-flex flex-wrap justify-content-between gap-2">
+        <span>{{ app_name }} {{ app_version }} &mdash; {{ app_tagline }}.</span>
+        <span class="muted">Educational model. Not financial advice. All figures in today's money unless labelled otherwise.</span>
+    </div>
+</footer>
+
+<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/retplan.js') }}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

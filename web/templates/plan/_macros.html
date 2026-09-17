@@ -1,0 +1,114 @@
+{# Shared form widgets. Every editable table renders from the same field spec the
+   POST handler parses against, so a column cannot drift between the two. #}
+
+{% macro field(name, f, value, wrappers=None) %}
+  {% if f.kind == 'wrapper' %}
+    <select class="form-select form-select-sm" name="{{ name }}">
+      {% for w in wrappers %}
+        <option value="{{ loop.index0 }}" {% if value == loop.index0 %}selected{% endif %}>{{ w.label }}</option>
+      {% endfor %}
+    </select>
+  {% elif f.kind == 'text' %}
+    <input type="text" class="form-control form-control-sm" name="{{ name }}"
+           value="{{ value if value is not none and value is not undefined else '' }}">
+  {% elif f.kind == 'check' %}
+    <div class="form-check d-flex justify-content-center m-0">
+      <input class="form-check-input" type="checkbox" name="{{ name }}" {% if value %}checked{% endif %}>
+    </div>
+  {% elif f.kind == 'select' %}
+    <select class="form-select form-select-sm" name="{{ name }}">
+      {% for v, label in f.options %}
+        <option value="{{ v }}" {% if value == v %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  {% elif f.kind == 'pct' %}
+    <input type="number" step="any" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ '%.6g'|format(value * 100) if value is number else '' }}">
+  {% elif f.kind == 'money' %}
+    <input type="number" step="any" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ '%.2f'|format(value) if value is number else '' }}">
+  {% elif f.kind == 'int' %}
+    <input type="number" step="1" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ value|int if value is number else '' }}">
+  {% else %}
+    <input type="number" step="any" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ '%.6g'|format(value) if value is number else '' }}">
+  {% endif %}
+{% endmacro %}
+
+{% macro table_editor(prefix, fields, rows, wrappers=None) %}
+<div class="table-scroll">
+<table class="table table-sm align-middle">
+  <thead>
+    <tr>
+      <th style="width:30px"></th>
+      {% for f in fields %}
+        <th {% if f.kind in ('money','pct','number','int') %}class="num"{% endif %}
+            {% if f.help %}title="{{ f.help }}"{% endif %}>{{ f.label }}</th>
+      {% endfor %}
+      <th style="width:40px"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set i = loop.index0 %}
+    <tr>
+      <td class="muted num" style="font-size:.74rem">{{ loop.index }}</td>
+      {% for f in fields %}
+        <td>{{ field(prefix ~ '-' ~ i ~ '-' ~ f.name, f, row[f.name], wrappers) }}</td>
+      {% endfor %}
+      <td>
+        <input type="checkbox" class="d-none" name="delete-{{ prefix }}-{{ i }}">
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" data-delete-row
+                title="Mark this row for deletion"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>
+    {% endfor %}
+    {% if not rows %}
+    <tr><td colspan="{{ fields|length + 2 }}" class="muted text-center py-3">
+      Nothing here yet &mdash; use <em>Add row</em>.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro save_bar(section, count=None) %}
+<div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+  <button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button>
+  <button type="submit" class="btn btn-outline-secondary btn-sm"
+          formaction="{{ url_for('plan_add_row', section=section) }}" formnovalidate>
+    <i class="bi bi-plus-lg"></i> Add row
+  </button>
+  {% if count is not none %}<span class="muted small">{{ count }} row{{ '' if count == 1 else 's' }}</span>{% endif %}
+  <span class="muted small ms-auto">Rows marked for deletion are removed when you save.</span>
+</div>
+{% endmacro %}
+
+{% macro scalar(name, label, value, kind='number', help='', options=None, suffix='') %}
+<div class="col-md-3 mb-2">
+  <label class="form-label">{{ label }}</label>
+  <div class="input-group input-group-sm">
+  {% if kind == 'select' %}
+    <select class="form-select form-select-sm" name="{{ name }}">
+      {% for v, l in options %}<option value="{{ v }}" {% if value == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  {% elif kind == 'check' %}
+    <div class="form-check ms-1">
+      <input class="form-check-input" type="checkbox" name="{{ name }}" {% if value %}checked{% endif %}>
+    </div>
+  {% elif kind == 'pct' %}
+    <input type="number" step="any" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ '%.6g'|format(value * 100) if value is number else '' }}">
+    <span class="input-group-text">%</span>
+  {% elif kind == 'text' %}
+    <input type="text" class="form-control form-control-sm" name="{{ name }}" value="{{ value }}">
+  {% else %}
+    <input type="number" step="any" class="form-control form-control-sm num" name="{{ name }}"
+           value="{{ '%.6g'|format(value) if value is number else value }}">
+    {% if suffix %}<span class="input-group-text">{{ suffix }}</span>{% endif %}
+  {% endif %}
+  </div>
+  {% if help %}<div class="form-hint mt-1">{{ help }}</div>{% endif %}
+</div>
+{% endmacro %}

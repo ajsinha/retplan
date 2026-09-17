@@ -1,0 +1,52 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar, scalar with context %}
+{% set title = "Accounts" %}{% set icon = "bi-wallet2" %}
+{% set blurb = "Balances and how they are invested. Each account points at a wrapper for its tax treatment, and the draw order decides which is spent first." %}
+{% block form %}
+  {{ table_editor('accounts', ledger_fields, plan.ledgers, plan.wrappers) }}
+
+  <h6 class="mt-4 mb-2">Allocation and glidepath</h6>
+  <p class="form-hint">Weights now, weights at the end of the glide, and the ages the
+     glide runs between. Leave the end weights at zero for a fixed allocation.</p>
+  <div class="table-scroll">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr><th>Account</th>
+        {% for a in plan.market.assets %}<th class="num">{{ a.label }}</th>{% endfor %}
+        <th class="num">Sum</th><th class="num">Glide from</th><th class="num">Glide to</th></tr>
+    </thead>
+    <tbody>
+      {% for lg in plan.ledgers %}
+      {% set i = loop.index0 %}
+      <tr>
+        <td class="muted" style="white-space:nowrap">{{ lg.label }}<br><span class="form-hint">now</span></td>
+        {% for j in range(plan.market.assets|length) %}
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="accounts-{{ i }}-w{{ j }}"
+                   value="{{ '%.4g'|format((lg.weights[j] if j < lg.weights|length else 0) * 100) }}"></td>
+        {% endfor %}
+        <td class="num muted">{{ '%.0f'|format(lg.weights|sum * 100) }}%</td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="accounts-{{ i }}-glide_start_age" value="{{ '%.6g'|format(lg.glide_start_age) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="accounts-{{ i }}-glide_end_age" value="{{ '%.6g'|format(lg.glide_end_age) }}"></td>
+      </tr>
+      <tr>
+        <td class="form-hint">end</td>
+        {% for j in range(plan.market.assets|length) %}
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="accounts-{{ i }}-v{{ j }}"
+                   value="{{ '%.4g'|format((lg.glide_to[j] if j < lg.glide_to|length else 0) * 100) }}"></td>
+        {% endfor %}
+        <td colspan="3"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="row mt-2">
+    {{ scalar('sweep_ledger', 'Surplus sweeps into account #', plan.policy.sweep_ledger,
+              'number', 'Row number above. Unspent income lands here.') }}
+  </div>
+  {{ save_bar('accounts', plan.ledgers|length) }}
+{% endblock %}

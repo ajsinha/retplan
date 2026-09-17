@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Authorship of this repository is Ashutosh Sinha's alone.
+# Refuse any commit message carrying an assistant attribution trailer.
+if grep -qiE 'Co-Authored-By: *Claude|Claude-Session:|Generated with \[Claude' "$1"; then
+    echo "commit-msg: refusing an assistant attribution trailer." >&2
+    echo "Authorship of this repository is Ashutosh Sinha's alone." >&2
+    exit 1
+fi
+exit 0

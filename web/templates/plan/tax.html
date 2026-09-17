@@ -1,0 +1,51 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import scalar with context %}
+{% set title = "Tax" %}{% set icon = "bi-percent" %}
+{% set blurb = "A table of bands in gross-income space. A tax-free allowance is simply a 0% first band; an allowance taper is a band carrying the higher effective rate. Kept this way the schedule stays exactly invertible, which is what lets the model answer 'how much must I withdraw to spend X after tax' in one pass instead of iterating." %}
+{% block form %}
+  <div class="table-scroll" style="max-width:640px">
+  <table class="table table-sm align-middle">
+    <thead><tr><th style="width:40px">#</th><th class="num">Income from</th>
+      <th class="num">Marginal rate</th><th style="width:40px"></th></tr></thead>
+    <tbody>
+      {% for lo in plan.tax.ordinary.lowers %}
+      {% set i = loop.index0 %}
+      <tr>
+        <td class="muted num">{{ loop.index }}</td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="band-{{ i }}-lower" value="{{ '%.2f'|format(lo) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="band-{{ i }}-rate" value="{{ '%.6g'|format(plan.tax.ordinary.rates[i] * 100) }}"></td>
+        <td>
+          <input type="checkbox" class="d-none" name="delete-band-{{ i }}">
+          <button type="button" class="btn btn-sm btn-link text-danger p-0" data-delete-row>
+            <i class="bi bi-trash"></i></button>
+        </td>
+      </tr>
+      {% endfor %}
+      {% for k in range(3) %}
+      {% set i = plan.tax.ordinary.lowers|length + k %}
+      <tr>
+        <td class="muted num">{{ i + 1 }}</td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="band-{{ i }}-lower" placeholder="new band"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num"
+                   name="band-{{ i }}-rate" placeholder="%"></td>
+        <td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="row mt-3">
+    {{ scalar('index_bands', 'Index bands to inflation', plan.tax.index_bands, 'check',
+              'Unticked, the bands freeze and fiscal drag emerges on its own.') }}
+    {{ scalar('cg_inclusion', 'Capital gains inclusion', plan.tax.cg_inclusion, 'pct',
+              'Share of a realised gain that enters taxable income. 100% taxes gains at ordinary rates; 0% exempts them.') }}
+    {{ scalar('surtax_rate', 'Surtax / social contribution', plan.tax.surtax_rate, 'pct') }}
+    {{ scalar('surtax_threshold', 'Surtax threshold',
+              plan.tax.surtax_threshold if plan.tax.surtax_threshold < 1e17 else 0, 'number',
+              '0 = no surtax.') }}
+  </div>
+  <div class="mt-2"><button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button></div>
+{% endblock %}

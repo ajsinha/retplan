@@ -418,7 +418,11 @@ class Projection:
             out["fees"][:, k] = fee
             nb = S.sum(axis=(1, 2))
             bal_close[:, k] = nb
-            ob = np.maximum(tot - wd_total + contrib - fee, EPS)
+            # Forced distributions leave the portfolio too, so they belong in the
+            # base the implied return is measured against; omitting them made the
+            # reported rate - and the reconciliation built on it - drift once a
+            # wrapper started mandating draws.
+            ob = np.maximum(tot - mrd_total - wd_total + contrib - fee, EPS)
             out["ret_rate"][:, k] = nb / ob - 1.0
             prev_ret = out["ret_rate"][:, k]
             gm = self._guardrails(k, tot, spend, gm, pol, prev_ret, infl[:, k],

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Method - {{ app_name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-9">
+<div class="card"><div class="card-body p-4">
+  <h2>How it works</h2>
+  <p class="lede">The parts worth understanding before you trust a number.</p>
+
+  <h6 class="mt-4">Everything is computed in today's money</h6>
+  <p class="small">Nominal figures are produced by multiplying by each trial's own
+     realised inflation path, so a "real" result is correct path by path rather than
+     deflated by an average. Tax bands are handled by homogeneity: a progressive
+     schedule scaled by <code>s</code> satisfies
+     <code>Tax_s(x) = s &middot; Tax_1(x/s)</code>, so indexed bands need no adjustment
+     in real terms and frozen bands &mdash; the fiscal drag case &mdash; are exact with
+     <code>s = 1/CPI</code>.</p>
+
+  <h6 class="mt-4">Tax inverts exactly</h6>
+  <p class="small">The naive way to answer "how much must I withdraw to spend X after
+     tax" is a circular reference. Because a stacked progressive tax is piecewise
+     linear and strictly increasing, it can be inverted in one pass instead: find the
+     band the answer lands in by comparing the net achievable at each band bound, then
+     solve within that band. Penalties fold into the same solve by substitution, and a
+     partially taxable withdrawal is just a different slope.</p>
+
+  <h6 class="mt-4">Markets come in three layers</h6>
+  <ul class="small">
+    <li><strong>Regime.</strong> A Markov chain over bear / normal / bull, each with its
+        own drift, volatility multiplier and correlation tightening &mdash; because
+        diversification fails exactly when you need it.</li>
+    <li><strong>Diffusion.</strong> Correlated shocks via a Cholesky factor, drawn
+        lognormal, normal, or variance-matched Student-t for fat tails.</li>
+    <li><strong>Jumps.</strong> An independent crash process: a Bernoulli occurrence, a
+        triangular depth, a multi-year drawdown shape, per-asset transmission betas
+        (bonds can be negative and gain), and partial recovery.</li>
+  </ul>
+  <p class="small">Adding regimes and crashes would otherwise quietly lower every
+     expected return you typed, so the engine re-centres the drift and the crash drag
+     to hold the long-run mean at your input. The dashboard reports what the
+     simulation actually produced next to what you asked for.</p>
+
+  <h6 class="mt-4">Random numbers are reproducible</h6>
+  <p class="small">L'Ecuyer's combined generator, seeded per trial and per dimension, so
+     the same seed gives the same answer on any machine, changing the trial count does
+     not reshuffle unrelated draws, and a single trial can be reproduced alone.
+     <code>RAND()</code> appears nowhere.</p>
+
+  <h6 class="mt-4">What "success" means</h6>
+  <p class="small">Terminal real wealth at or above your legacy target, with no year in
+     which an essential need went unmet. The probability is reported with its standard
+     error, because "82%" from 200 trials is really 82% &plusmn; 5 and a false
+     precision is worse than no number.</p>
+</div></div>
+</div></div>
+{% endblock %}

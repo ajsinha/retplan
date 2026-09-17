@@ -3,10 +3,15 @@
 PY      ?= python3
 OUT     ?= RetPlan.ods
 TRIALS  ?= 5000
+PORT    ?= 5007
 
-.PHONY: all build install trust untrust test verify simulate clean check setup
+.PHONY: all build install trust untrust test verify simulate clean check setup web
 
 all: check
+
+## run the web application on port 5007
+web:
+	.venv/bin/python run_retplan_web.py --port $(PORT)
 
 ## build the workbook from source
 build:

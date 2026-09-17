@@ -1,0 +1,24 @@
+{% extends "results/_layout.html" %}
+{% set title = "Balance sheet" %}
+{% set blurb = "Closing balances by tax wrapper, debt outstanding, and net worth." %}
+{% block table %}
+<div class="table-scroll">
+<table class="table table-sm">
+  <thead><tr><th class="num">Year</th><th class="num">Age</th>
+    {% for w in plan.wrappers %}<th class="num">{{ w.label }}</th>{% endfor %}
+    <th class="num">Portfolio</th><th class="num">Debt</th><th class="num">Net worth</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr><td class="num">{{ r.year }}</td><td class="num">{{ r.age|round(0)|int }}</td>
+      {% for w in plan.wrappers %}
+        <td class="num">{{ (r.wrappers[loop.index0] if loop.index0 < r.wrappers|length else 0)|money }}</td>
+      {% endfor %}
+      <td class="num">{{ r.portfolio|money }}</td>
+      <td class="num">{{ r.debt|money if r.debt > 0.5 else '' }}</td>
+      <td class="num"><strong>{{ r.net_worth|money }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

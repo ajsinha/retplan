@@ -1,0 +1,8 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar with context %}
+{% set title = "Spending" %}{% set icon = "bi-arrow-up-circle" %}
+{% set blurb = "What the money is for. Essential rows form a floor that no flexible withdrawal policy is allowed to cut - that distinction is what makes guardrails safe." %}
+{% block form %}
+  {{ table_editor('expenses', expense_fields, plan.expenses) }}
+  {{ save_bar('expenses', plan.expenses|length) }}
+{% endblock %}

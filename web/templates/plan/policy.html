@@ -1,0 +1,38 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import scalar with context %}
+{% set title = "Policy" %}{% set icon = "bi-sliders" %}
+{% set blurb = "How much you take out, how it flexes when markets misbehave, and what counts as success." %}
+{% block form %}
+  <div class="row">
+    {{ scalar('method', 'Withdrawal policy', plan.policy.method, 'select',
+              'fixed_real spends the same purchasing power every year; guardrails cuts after bad markets and raises after good ones, which historically supports a higher starting spend at the same risk.',
+              policy_options) }}
+    {{ scalar('pct', 'Percentage of portfolio', plan.policy.pct, 'pct',
+              'Used by the pct_portfolio policy. Never runs out, but income swings with markets.') }}
+    {{ scalar('vpw_rate', 'Amortisation rate', plan.policy.vpw_rate, 'pct',
+              'Used by the VPW policy to spread the portfolio over the remaining years.') }}
+    {{ scalar('cash_buffer_years', 'Cash buffer', plan.policy.cash_buffer_years, 'number',
+              'Years of spending held in cash.') }}
+  </div>
+  <h6 class="mt-3 mb-2">Guardrails</h6>
+  <div class="row">
+    {{ scalar('guard_up', 'Upper trigger', plan.policy.guard_up, 'pct',
+              'If the withdrawal rate rises this far above its starting level, spending is cut.') }}
+    {{ scalar('guard_down', 'Lower trigger', plan.policy.guard_down, 'pct') }}
+    {{ scalar('guard_cut', 'Cut', plan.policy.guard_cut, 'pct') }}
+    {{ scalar('guard_raise', 'Raise', plan.policy.guard_raise, 'pct') }}
+    {{ scalar('guard_final_years', 'No cuts in the last N years', plan.policy.guard_final_years, 'number',
+              'Late in a plan a high withdrawal rate is expected, not a warning sign.') }}
+    {{ scalar('inflation_skip', 'Skip the inflation rise after a loss', plan.policy.inflation_skip, 'check',
+              'The cheapest form of flexibility: hold spending flat for one year.') }}
+  </div>
+  <h6 class="mt-3 mb-2">Goals</h6>
+  <div class="row">
+    {{ scalar('legacy_target', 'Legacy target', plan.policy.legacy_target, 'number',
+              "Real terminal wealth you want left. Success is redefined against it.") }}
+    {{ scalar('confidence', 'Confidence level', plan.policy.confidence, 'pct',
+              'What the solvers aim at. 100% is not a goal - it is a guarantee of underspending.') }}
+    {{ scalar('discount_rate', 'Funded-ratio discount rate', plan.policy.discount_rate, 'pct') }}
+  </div>
+  <div class="mt-2"><button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button></div>
+{% endblock %}

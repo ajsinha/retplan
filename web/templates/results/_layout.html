@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - {{ app_name }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <ul class="nav nav-pills">
+    {% for key, label in reports %}
+      <li class="nav-item">
+        <a class="nav-link btn-sm py-1 px-3 {{ 'active' if key == active }}"
+           href="{{ url_for('report', name=key) }}">{{ label }}</a>
+      </li>
+    {% endfor %}
+    <li class="nav-item"><a class="nav-link btn-sm py-1 px-3" href="{{ url_for('audit') }}">Audit</a></li>
+  </ul>
+  <span class="muted small ms-auto">All figures in today's money. Deterministic projection.</span>
+</div>
+<div class="card">
+  <div class="card-header"><span><i class="bi bi-table"></i>{{ title }}</span></div>
+  <div class="card-body">
+    <p class="lede">{{ blurb }}</p>
+    {% block table %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

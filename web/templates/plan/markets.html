@@ -1,0 +1,113 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import scalar with context %}
+{% set title = "Markets" %}{% set icon = "bi-graph-up-arrow" %}
+{% set blurb = "Returns, how they behave in different market regimes, how crashes strike, inflation, and fees. Expected returns are arithmetic and nominal; the compound figure a portfolio actually earns is lower by roughly half the variance, and the dashboard reports both." %}
+{% block form %}
+  <h6 class="mb-2">Asset classes</h6>
+  <div class="table-scroll">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Asset</th><th class="num">Expected return</th><th class="num">Volatility</th>
+      <th class="num">Income yield</th><th class="num">Fund cost</th>
+      <th class="num" title="How a crash is transmitted to this asset. Government bonds can be negative - they gain in a flight to quality.">Crash beta</th></tr></thead>
+    <tbody>
+      {% for a in plan.market.assets %}
+      {% set j = loop.index0 %}
+      <tr>
+        <td><input class="form-control form-control-sm" name="asset-{{ j }}-label" value="{{ a.label }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="asset-{{ j }}-mu" value="{{ '%.4g'|format(a.mu * 100) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="asset-{{ j }}-sigma" value="{{ '%.4g'|format(a.sigma * 100) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="asset-{{ j }}-income_yield" value="{{ '%.4g'|format(a.income_yield * 100) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="asset-{{ j }}-ter" value="{{ '%.4g'|format(a.ter * 100) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="asset-{{ j }}-crash_beta" value="{{ '%.4g'|format(a.crash_beta) }}"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h6 class="mt-4 mb-2">Correlations</h6>
+  <p class="form-hint">Symmetric, 1 on the diagonal. If the matrix is not positive
+     semi-definite the engine shrinks it toward the identity and says by how much.</p>
+  <div class="table-scroll">
+  <table class="table table-sm align-middle">
+    <thead><tr><th></th>{% for a in plan.market.assets %}<th class="num">{{ a.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for i in range(plan.market.assets|length) %}
+      <tr><td class="muted" style="white-space:nowrap">{{ plan.market.assets[i].label }}</td>
+        {% for j in range(plan.market.assets|length) %}
+        <td>{% if i == j %}<span class="muted num d-block">1.00</span>
+            {% else %}<input type="number" step="any" class="form-control form-control-sm num"
+                   name="corr-{{ i }}-{{ j }}" value="{{ '%.3g'|format(plan.market.corr[i][j]) }}"
+                   {% if j < i %}readonly{% endif %}>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h6 class="mt-4 mb-2">Market regimes</h6>
+  <p class="form-hint">A Markov chain over market states. The mean offset shifts every
+     asset in proportion to its volatility, the multiplier scales it, and
+     "correlation tightening" pulls everything toward moving as one - which is what
+     actually happens in a crisis.</p>
+  <div class="table-scroll">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Regime</th><th class="num">Mean offset</th><th class="num">Vol multiplier</th>
+      <th class="num">Correlation tightening</th>
+      {% for r in plan.market.regimes %}<th class="num">P(&rarr; {{ r.label }})</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for r in plan.market.regimes %}
+      {% set k = loop.index0 %}
+      <tr>
+        <td><input class="form-control form-control-sm" name="regime-{{ k }}-label" value="{{ r.label }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="regime-{{ k }}-mean_offset" value="{{ '%.4g'|format(r.mean_offset * 100) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="regime-{{ k }}-vol_mult" value="{{ '%.4g'|format(r.vol_mult) }}"></td>
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="regime-{{ k }}-corr_tighten" value="{{ '%.4g'|format(r.corr_tighten * 100) }}"></td>
+        {% for j in range(plan.market.regimes|length) %}
+        <td><input type="number" step="any" class="form-control form-control-sm num" name="regime-{{ k }}-p{{ j }}" value="{{ '%.4g'|format(r.trans[j] * 100) }}"></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h6 class="mt-4 mb-2">Crashes</h6>
+  <p class="form-hint">A jump process independent of the regimes, so a crash can strike
+     in any of them. Depth is drawn from a triangular distribution and spread over the
+     chosen number of years; part of the fall is then recovered.</p>
+  <div class="row">
+    {{ scalar('crash_enabled', 'Model random crashes', plan.market.crash.enabled, 'check') }}
+    {{ scalar('crash_prob', 'Probability a crash starts', plan.market.crash.prob, 'pct', '4% a year is roughly one crash per 25 years.') }}
+    {{ scalar('crash_min', 'Depth: minimum', plan.market.crash.depth_min, 'pct') }}
+    {{ scalar('crash_mode', 'Depth: most likely', plan.market.crash.depth_mode, 'pct') }}
+    {{ scalar('crash_max', 'Depth: maximum', plan.market.crash.depth_max, 'pct') }}
+    {{ scalar('crash_duration', 'Years the fall is spread over', plan.market.crash.duration, 'number') }}
+    {{ scalar('crash_recovery', 'Fraction recovered', plan.market.crash.recovery_fraction, 'pct') }}
+    {{ scalar('crash_recovery_years', 'Years the recovery takes', plan.market.crash.recovery_periods, 'number') }}
+  </div>
+
+  <h6 class="mt-3 mb-2">Inflation, distribution and fees</h6>
+  <div class="row">
+    {{ scalar('inflation_mode', 'Inflation mode', plan.market.inflation.mode, 'select', '',
+              [('fixed','fixed'),('stochastic','stochastic'),('path','path')]) }}
+    {{ scalar('inflation_mean', 'Inflation, long run', plan.market.inflation.mean, 'pct') }}
+    {{ scalar('inflation_sd', 'Inflation volatility', plan.market.inflation.sd, 'pct', 'Stochastic mode only.') }}
+    {{ scalar('inflation_phi', 'Inflation persistence', plan.market.inflation.persistence, 'number', 'How much of last year\'s surprise carries over.') }}
+    {{ scalar('inflation_corr', 'Inflation / equity correlation', plan.market.inflation.corr_equity, 'number') }}
+    {{ scalar('dist', 'Return distribution', plan.market.dist, 'select',
+              'lognormal cannot produce a return below -100%. t adds fat tails.',
+              [('lognormal','lognormal'),('normal','normal'),('t','student-t')]) }}
+    {{ scalar('nu', 'Student-t degrees of freedom', plan.market.nu, 'number', 'Lower = fatter tails; below 2 the variance is undefined.') }}
+    {{ scalar('start_regime', 'Starting regime', plan.market.start_regime, 'select', '',
+              [('stationary','stationary'),('random','random'),('0','first'),('1','second'),('2','third')]) }}
+    {{ scalar('platform_fee', 'Platform / custody fee', plan.platform_fee, 'pct') }}
+    {{ scalar('adviser_fee', 'Adviser fee', plan.adviser_fee, 'pct', '1% a year for 30 years is roughly a quarter of the final portfolio.') }}
+    {{ scalar('calibrate', 'Calibrate to stated returns', plan.market.calibrate, 'check',
+              'Keeps the long-run average equal to the returns you typed, so adding a bear regime does not silently lower every assumption.') }}
+    {{ scalar('antithetic', 'Antithetic variates', plan.market.antithetic, 'check',
+              'Pairs each trial with its mirror image to cut sampling noise.') }}
+  </div>
+  <div class="mt-2"><button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button></div>
+{% endblock %}

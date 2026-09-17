@@ -1,0 +1,8 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar with context %}
+{% set title = "Tax wrappers" %}{% set icon = "bi-shield-lock" %}
+{% set blurb = "The generic part of the model. A wrapper says when money is taxed: going in, while it grows, or coming out. EET, TEE, TTE and ETT are all just settings of these columns - no jurisdiction is assumed anywhere." %}
+{% block form %}
+  {{ table_editor('wrappers', wrapper_fields, plan.wrappers) }}
+  {{ save_bar('wrappers', plan.wrappers|length) }}
+{% endblock %}

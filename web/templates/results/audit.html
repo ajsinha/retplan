@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Audit - {{ app_name }}{% endblock %}
+{% block content %}
+{% set failures = checks|selectattr('status','equalto','FAIL')|list %}
+{% set reviews = checks|selectattr('status','equalto','REVIEW')|list %}
+<div class="card">
+  <div class="card-header">
+    <span><i class="bi bi-clipboard-check"></i>Audit</span>
+    <span class="pill {{ 'pill-bad' if failures else ('pill-warn' if reviews else 'pill-good') }}">
+      {% if failures %}{{ failures|length }} blocking
+      {% elif reviews %}{{ reviews|length }} to review
+      {% else %}all {{ checks|length }} checks pass{% endif %}
+    </span>
+  </div>
+  <div class="card-body">
+    <p class="lede">If anything here fails, do not trust the dashboard until it is
+       resolved. The roll-forward check is the important one: it proves that closing
+       balances equal opening balances plus every flow, independently of how they
+       were computed.</p>
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Check</th><th style="width:110px">Result</th>
+        <th style="width:110px">Severity</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for c in checks %}
+        <tr>
+          <td>{{ c.label }}</td>
+          <td><span class="pill {{ 'pill-good' if c.status == 'PASS' else ('pill-bad' if c.status == 'FAIL' else 'pill-warn') }}">
+            <i class="bi {{ 'bi-check-lg' if c.status == 'PASS' else ('bi-x-lg' if c.status == 'FAIL' else 'bi-exclamation-triangle') }}"></i>
+            {{ c.status }}</span></td>
+          <td class="muted small">{{ c.severity if c.status != 'PASS' else '-' }}</td>
+          <td class="muted small">{{ c.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
