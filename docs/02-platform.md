@@ -1,0 +1,93 @@
+# RetPlan — Platform, Portability and Macro Architecture
+
+## 1. Tiers
+
+| | **Tier A (reference)** | **Tier B (portable core)** |
+|---|---|---|
+| Engine | LibreOffice Calc 7.4+ | Excel 2016+ / other ODF apps |
+| File | `RetPlan.ods` | `RetPlan-portable.xlsx` |
+| Deterministic model | Formulas | Formulas (identical) |
+| Simulation | Python + numpy macro, 50k trials | Formula grid, ≤ 500 trials |
+| Solvers | Python bisection macro | Pre-computed grid + interpolation |
+| Controls | Form controls + buttons | Validation dropdowns + stepper cells |
+
+Tier A is authoritative. Tier B must match Tier A's deterministic numbers exactly
+(`1e-9` relative) and must display a banner naming the features it lacks.
+
+## 2. Why Python and not Basic
+
+LibreOffice's script provider for Python runs on the system CPython that ships
+`python3-uno`; on this machine that interpreter has `numpy` available. A vectorised numpy
+Monte Carlo is two to three orders of magnitude faster than the equivalent Basic loop, and
+the same module is unit-testable outside LibreOffice with ordinary `pytest`. Basic is used
+only where an event binding demands it, and any such shim must be a one-line delegation to
+Python.
+
+- **CR-1 (M).** All non-trivial in-document logic MUST be Python. Basic shims MUST contain
+  no business logic.
+- **CR-2 (M).** The Python macro package MUST import cleanly and pass its tests *outside*
+  LibreOffice, with UNO access confined to a thin adapter layer.
+- **CR-3 (M).** Macros MUST degrade safely: if numpy is unavailable, the engine MUST fall
+  back to a pure-Python loop and say so, not crash.
+
+## 3. Formula constructs — allowed and banned
+
+**Banned everywhere (both tiers):**
+
+| Construct | Reason |
+|---|---|
+| `RAND()`, `RANDBETWEEN()` | Not reproducible, volatile, differs across engines |
+| `OFFSET()`, `INDIRECT()` in the calculation core | Volatile; full-column recalculation cost |
+| `NOW()`, `TODAY()` in the core | Makes the model non-deterministic across days |
+| Dynamic arrays / implicit spilling | Not available in older LO and Excel 2016 |
+| `LAMBDA`, `LET` | Version-dependent availability |
+| `XLOOKUP`, `FILTER`, `SORT`, `TEXTSPLIT` | Version-dependent availability |
+| Structured table references (`Table1[Col]`) | Not supported in LibreOffice formulas |
+| Excel What-If Data Tables (`TABLE()`) | No LibreOffice equivalent on round-trip |
+| Slicers, timelines | Not supported in LibreOffice |
+| Sparkline objects | Round-trip is lossy; use `REPT()` bars instead |
+| Circular references + iterative calculation | Setting does not survive round-trip; non-deterministic |
+| External links, DDE, web queries | Offline requirement |
+| Merged cells in data regions | Breaks sorting, ranges and screen readers |
+
+**Preferred constructs:** `INDEX`+`MATCH`, `SUMPRODUCT`, `SUMIFS`/`COUNTIFS`,
+`IFERROR`, `CHOOSE`, `MIN`/`MAX` clamping instead of nested `IF`, named ranges for every
+input block, and explicit helper columns instead of mega-formulas.
+
+- **CR-4 (M).** Every intermediate quantity that a reviewer would need to check MUST have
+  its own cell. No formula may exceed 256 characters.
+- **CR-5 (M).** Named ranges MUST be used for every input the engine reads; the engine MUST
+  NOT contain raw cross-sheet cell addresses outside of its own contiguous blocks.
+- **CR-6 (M).** Sheet names MUST be ≤ 31 characters and MUST avoid `[ ] * ? / \ :`.
+- **CR-7 (M).** Formulas MUST be written in locale-independent English function names with
+  `;`-safe generation (the builder emits via the UNO API, which stores them canonically).
+- **CR-8 (M).** Number formats MUST avoid locale-specific currency codes; the currency
+  symbol MUST come from an input cell and be applied as a format string at build time.
+- **CR-9 (S).** Conditional formatting MUST use formula conditions and fixed RGB colours,
+  not theme colours.
+- **CR-10 (M).** Charts MUST use only line, bar/column, stacked area, scatter and pie types,
+  which round-trip reliably.
+
+## 4. Macro security and installation
+
+- **CR-11 (M).** The document MUST work with macro security at High and macros blocked:
+  everything except simulation, solving and buttons still functions.
+- **CR-12 (M).** Macros MUST be installed as a *user-level* Python script
+  (`~/.config/libreoffice/4/user/Scripts/python/retplan_macros.py`) by an installer script,
+  rather than embedded in the document, so the user can read and audit the source and so the
+  document itself carries no executable payload.
+- **CR-13 (M).** Buttons MUST bind to
+  `vnd.sun.star.script:retplan_macros.py$<fn>?language=Python&location=user`.
+- **CR-14 (M).** Macros MUST NOT read or write any file outside the open document, MUST NOT
+  open network connections, and MUST NOT execute shell commands.
+- **CR-15 (M).** Every macro entry point MUST be wrapped in an error handler that reports
+  failure into a status cell and leaves the document consistent.
+
+## 5. Build reproducibility
+
+- **CR-16 (M).** The `.ods` MUST be generated by `build/build_ods.py` through the UNO API
+  against a headless LibreOffice; no manual editing of the delivered file.
+- **CR-17 (M).** The build MUST be verifiable: a post-build script reopens the file
+  headless, forces a full recalculation, and asserts the golden KPI values.
+- **CR-18 (S).** The build MUST fail if any banned construct appears in any generated
+  formula (static check over the formula strings before writing).

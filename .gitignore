@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.idea/
+*.ods#
+.~lock.*#
+/build_out/
+/*.ods.bak
