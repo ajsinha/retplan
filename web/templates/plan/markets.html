@@ -99,6 +99,9 @@
     {{ scalar('dist', 'Return distribution', plan.market.dist, 'select',
               'lognormal cannot produce a return below -100%. t adds fat tails.',
               [('lognormal','lognormal'),('normal','normal'),('t','student-t')]) }}
+    {{ scalar('fixed_basis', 'Fixed-return projection uses', plan.market.fixed_basis, 'select',
+              'Typical = median growth after volatility drag (e.g. 7% average at 17% volatility compounds at about 5.6%). Average overstates the middle future.',
+              [('typical','typical (median) growth'),('average','average (arithmetic) return')]) }}
     {{ scalar('nu', 'Student-t degrees of freedom', plan.market.nu, 'number', 'Lower = fatter tails; below 2 the variance is undefined.') }}
     {{ scalar('start_regime', 'Starting regime', plan.market.start_regime, 'select', '',
               [('stationary','stationary'),('random','random'),('0','first'),('1','second'),('2','third')]) }}

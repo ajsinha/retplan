@@ -1,0 +1,97 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the markets editor', 'markets') }}</p>
+<p>Returns are built in three independent layers, so you can reason about each on its
+own: a market <strong>regime</strong>, correlated <strong>shocks</strong>, and a
+separate <strong>crash</strong> process.</p>
+
+<h2>Asset classes</h2>
+{{ field_table([
+  ('Expected return', 'Arithmetic mean nominal return per year.',
+   'Arithmetic, not compound. See the warning below.'),
+  ('Volatility', 'Annualised standard deviation.',
+   'Equities 15-20%, bonds 5-8%, cash 1-2%. This drives the entire spread of outcomes.'),
+  ('Income yield', 'The share of return arriving as taxable income.',
+   'Used for taxable drag. Informational in the current engine.'),
+  ('Fund cost', 'Annual fund charge for this asset class.',
+   'Charged on the balance every year, on top of the platform and adviser fees below.'),
+  ('Crash beta', 'How a crash is transmitted to this asset.',
+   'Equity 1.0, credit ~0.4, property ~0.6, cash 0. Government bonds NEGATIVE (about -0.15): they gain in a flight to quality. This is what makes diversification show up properly in the bad paths.'),
+]) }}
+
+{% call note('trap', 'Arithmetic versus compound') %}
+<p>7% expected with 17% volatility does not compound at 7%. It compounds at roughly
+7% &minus; &frac12;&nbsp;&times;&nbsp;17%&sup2; &asymp; 5.6%. After a run, the
+dashboard shows both figures side by side under "what you are actually assuming".
+Check it: if the compound number is far below what you intended, your volatility is
+too high, not your return too low.</p>
+{% endcall %}
+
+<h2>Correlations</h2>
+<p>A symmetric matrix with 1 on the diagonal. Only the upper triangle is editable;
+the lower half mirrors it. If the matrix you type is not mathematically valid
+(not positive semi-definite &mdash; easy to produce by hand), the engine shrinks it
+toward the identity by the smallest amount that makes it valid, and the dashboard
+reports how much it had to shrink. A large shrinkage means your matrix is telling an
+impossible story.</p>
+
+<h2>Regimes</h2>
+<p>A Markov chain over market states. Each year the market is in one regime, and the
+transition matrix decides where it goes next.</p>
+{{ field_table([
+  ('Mean offset', 'Added to every asset’s return while in this regime.',
+   'Scaled by each asset’s volatility, so a bear market hits equities harder than cash. Bear about -22%, bull about +8%.'),
+  ('Vol multiplier', 'Scales volatility in this regime.', 'Bear markets are more volatile: 1.9x is a reasonable default.'),
+  ('Correlation tightening', 'Pulls all correlations toward 1.',
+   'Diversification fails exactly when you need it. 55% in a bear regime encodes that; 0% leaves your matrix alone.'),
+  ('P(-> regime)', 'Transition probabilities. Each row must sum to 100%.',
+   'The diagonal is persistence: a bear with 50% on its own diagonal lasts about two years on average.'),
+]) }}
+<p>After a run the dashboard shows the long-run share of each regime, the share the
+simulation actually produced, and the expected length of each. Those three should
+agree closely; if they do not, the trial count is too low.</p>
+
+<h2>Crashes</h2>
+<p>A jump process layered on top, independent of the regime &mdash; so a crash can
+strike in a bull market, which is what actually happens.</p>
+{{ field_table([
+  ('Probability a crash starts', 'Chance per year.', '4% is roughly one crash per 25 years.'),
+  ('Depth minimum / most likely / maximum', 'A triangular distribution of the fall.',
+   '20% / 35% / 60% spans "a bad year" to "1929". The mean is the average of the three.'),
+  ('Years the fall is spread over', 'A crash need not happen in one year.',
+   '2 splits it across two years, which is closer to how drawdowns actually unfold.'),
+  ('Fraction recovered / Years the recovery takes', 'Partial mean reversion afterwards.',
+   '45% recovered over 3 years is a moderate assumption. Set recovery to 0 for a permanent loss.'),
+]) }}
+
+<h2>Calibration &mdash; read this before changing regimes</h2>
+<p>Adding a bear regime and a crash process would, left alone, quietly lower every
+expected return you typed: the realised average would drift well below your input.
+With <em>Calibrate to stated returns</em> ticked (the default), the engine
+re-centres the regime drift and the crash drag so the long-run mean still equals
+what you asked for. Untick it only if you deliberately want the regimes to reduce
+your assumptions.</p>
+
+<h2>Distribution, inflation and fees</h2>
+<ul>
+  <li><strong>lognormal</strong> (default) cannot produce a return below &minus;100%.
+      <strong>normal</strong> can, and is floored. <strong>t</strong> adds fat tails
+      with the same volatility &mdash; more extreme years, same average spread.
+      Degrees of freedom 4&ndash;6 is a realistic range; below 2 the variance is
+      undefined.</li>
+  <li><strong>Inflation</strong> can be fixed, or stochastic with persistence and a
+      correlation to equities (usually negative: inflation shocks hurt both stocks
+      and bonds). Stochastic inflation matters most for plans with large nominal
+      pensions.</li>
+  <li><strong>Fees</strong> compound against you with total certainty. A 1% adviser
+      fee over thirty years is roughly a quarter of the final portfolio. Enter them
+      honestly: platform, adviser, and each fund's own cost.</li>
+</ul>
+
+<h2>What "mode" means</h2>
+<p>The projection you see on the dashboard always uses fixed returns &mdash; it is
+the deterministic backbone. The regime and crash machinery only runs when you press
+<em>Run simulation</em>. That is why editing a market assumption changes the charts
+immediately but the success probability only after a re-run.</p>
+{% endblock %}

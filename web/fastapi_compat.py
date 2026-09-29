@@ -28,8 +28,21 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 APP_TEMPLATE_PROPS: dict = {
     "app_name": "RetPlan",
     "app_tagline": "Retirement planning you can audit",
+    "app_slogan": "Every number traceable, every assumption yours.",
     "app_version": VERSION,
+    "copyright": "© 2026 Ashutosh Sinha",
 }
+
+
+def asset_version() -> str:
+    """Cache-buster: the newest mtime among our own CSS and JS (not vendored)."""
+    newest = 0.0
+    for sub in ("css", "js"):
+        folder = os.path.join(STATIC_DIR, sub)
+        if os.path.isdir(folder):
+            for name in os.listdir(folder):
+                newest = max(newest, os.path.getmtime(os.path.join(folder, name)))
+    return str(int(newest))
 
 FLASH_KEY = "_flashes"
 
@@ -89,6 +102,27 @@ def url_for(request: Request, name: str, /, **params) -> str:
 # --------------------------------------------------------------------------- #
 # Templates
 # --------------------------------------------------------------------------- #
+def _workspace(request: Request) -> dict:
+    """What the navbar shows about this browser's workspace: the active plan,
+    its sibling scenarios and the portfolios. Never fatal - a page renders even
+    if the database is unreachable."""
+    ws = {"plan_name": None, "scenarios": [], "portfolios": [], "active_id": None}
+    try:
+        from web.store import session_id
+        sid = session_id(request)
+        state = request.app.state
+        rows = state.store.scenarios(sid)
+        ws["scenarios"] = rows
+        active = next((r for r in rows if r["is_active"]), None)
+        if active:
+            ws["plan_name"], ws["active_id"] = active["name"], active["id"]
+        if getattr(state, "portfolios", None) is not None:
+            ws["portfolios"] = state.portfolios.list(sid)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("workspace summary unavailable: %s", exc)
+    return ws
+
+
 def _inject_globals(request: Request) -> dict:
     context = dict(APP_TEMPLATE_PROPS)
     context["session"] = request.session
@@ -97,8 +131,18 @@ def _inject_globals(request: Request) -> dict:
         lambda with_categories=False, category_filter=():
         get_flashed_messages(request, with_categories, category_filter))
     context["current_path"] = request.url.path
+    context["path"] = request.url.path
+    context["asset_v"] = ASSET_V
+    context["workspace"] = _workspace(request)
+    from web.admin import is_admin
+    try:
+        context["is_admin"] = is_admin(request)
+    except Exception:  # noqa: BLE001 - a page must render even if config is odd
+        context["is_admin"] = False
     return context
 
+
+ASSET_V = asset_version()
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR,
                             context_processors=[_inject_globals])
@@ -137,7 +181,33 @@ def _compact(value):
     return f"{sign}{v:,.0f}"
 
 
+def _signed_pct(value, decimals=1):
+    try:
+        return f"{float(value) * 100:+.{decimals}f}%"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _signed_money(value):
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ""
+    return f"{'+' if v >= 0 else '-'}{abs(v):,.0f}"
+
+
+def _dt(value):
+    """ISO timestamp -> '2026-09-29 14:03' (UTC); dates pass through."""
+    if not value:
+        return ""
+    text = str(value)
+    return text[:16].replace("T", " ") if "T" in text else text
+
+
 templates.env.filters["money"] = _money
+templates.env.filters["spct"] = _signed_pct
+templates.env.filters["smoney"] = _signed_money
+templates.env.filters["dt"] = _dt
 templates.env.filters["pct"] = _pct
 templates.env.filters["compact"] = _compact
 

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Review import{% endblock %}
+{% block content %}
+{% set c = d.counts %}
+{% call ui.page_head('Review: ' ~ d.filename, 'Check each line, fix anything flagged, untick what you do not want, and choose where it goes. Nothing is saved until you import.', eyebrow='Portfolio builder', help=url_for('help_portfolios') ~ '#builder') %}
+  <form method="post" action="{{ url_for('builder_discard', did=d.id) }}" data-confirm="Discard this import?"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Discard</button></form>
+{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Positions found', d.lines|length, 'after merging repeats', 'list-check') }}
+  {{ ui.kpi('Identified', (c.high + c.medium + c.cash) ~ ' of ' ~ d.lines|length, c.high ~ ' certain · ' ~ c.medium ~ ' likely · ' ~ c.cash ~ ' cash', 'check2-circle', 'good' if (c.low + c.none) == 0 else '') }}
+  {{ ui.kpi('Need a look', c.low + c.none, c.low ~ ' uncertain · ' ~ c.none ~ ' not found', 'exclamation-triangle', 'warn' if (c.low + c.none) else 'good') }}
+  {% if d.file_value %}{{ ui.kpi('Value in the file', d.file_value|money, 'sum of the value column', 'cash-stack') }}{% endif %}
+</div>
+<details class="table-twin mb-3"><summary>How the file was read</summary>
+  <ul class="small mt-2 mb-0">{% for m in d.messages %}<li>{{ m }}</li>{% endfor %}</ul></details>
+
+<form method="post" action="{{ url_for('builder_confirm', did=d.id) }}" data-busy="Importing…">
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-check" aria-hidden="true"></i> Proposed holdings
+    <span class="ms-auto small-muted fw-normal">green: certain · amber: check · red: not found (untick, or type the right symbol)</span></div>
+  <div class="card-body p-0"><div class="table-scroll" style="max-height:none">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th><span class="visually-hidden">Import</span></th><th>In the file</th><th>Match</th><th>Symbol</th><th class="num">Quantity</th><th class="num">Cost (total)</th><th>Account</th><th>Class</th></tr></thead>
+    <tbody>
+    {% for l in d.lines %}{% set k = 'l' ~ loop.index0 ~ '-' %}
+      {% set st = {'high': ('ok', 'certain'), 'cash': ('ok', 'cash'), 'medium': ('warn', 'likely'), 'low': ('warn', 'uncertain'), 'none': ('bad', 'not found')}[l.confidence] %}
+      <tr>
+        <td><input class="form-check-input" type="checkbox" name="{{ k }}include" value="1" {% if l.include %}checked{% endif %} aria-label="Import line {{ loop.index }}"></td>
+        <td style="max-width:18rem"><span class="fw-semibold">{{ l.raw_symbol or l.raw_id or '-' }}</span>
+          <span class="cell-sub text-truncate">{{ l.raw_name }}</span>
+          <span class="cell-sub">{{ l.sheet }} row {{ l.row }}{% if l.merged > 1 %} · {{ l.merged }} lines merged{% endif %}{% if l.value %} · value {{ l.value|money }}{% endif %}</span></td>
+        <td>{{ ui.pill(st[0], st[1]) }}<span class="cell-sub">{{ l.how }}</span>
+          {% for n in l.notes %}<span class="cell-sub {{ 'down' if 'check' in n or 'no match' in n or '100×' in n }}"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ n }}</span>{% endfor %}</td>
+        <td style="min-width:13rem"><div class="ticker-box">
+          <input class="form-control form-control-sm mono" name="{{ k }}symbol" value="{{ l.symbol }}" list="alt-{{ loop.index0 }}" data-ticker aria-label="Symbol for line {{ loop.index }}"></div>
+          {% if l.alternatives|length > 1 %}<datalist id="alt-{{ loop.index0 }}">{% for a in l.alternatives %}<option value="{{ a.symbol }}">{{ a.name }} · {{ a.type }} · {{ a.exchange }}</option>{% endfor %}</datalist>
+            <span class="cell-sub">or: {% for a in l.alternatives if a.symbol != l.symbol %}{{ a.symbol }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+          <span class="cell-sub text-truncate" style="max-width:14rem">{{ l.name if l.name != l.raw_name else '' }}{% if l.yahoo_price %} · {{ '%.2f'|format(l.yahoo_price) }} {{ l.yahoo_currency }}{% endif %}</span></td>
+        <td><input class="form-control form-control-sm num" name="{{ k }}quantity" type="number" step="any" value="{{ '%g'|format(l.quantity) if l.quantity is not none else '' }}" aria-label="Quantity"></td>
+        <td><input class="form-control form-control-sm num" name="{{ k }}cost" type="number" step="any" value="{{ '%.2f'|format(l.cost) if l.cost is not none else '' }}" aria-label="Total cost"></td>
+        <td><input class="form-control form-control-sm" name="{{ k }}account" value="{{ l.account }}" aria-label="Account" style="min-width:8rem"></td>
+        <td><select class="form-select form-select-sm" name="{{ k }}asset_class" aria-label="Asset class">
+            <option value="">Auto</option>{% for key, lab in classes %}<option value="{{ key }}" {% if key == l.asset_class %}selected{% endif %}>{{ lab }}</option>{% endfor %}</select></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+
+<div class="card"><div class="card-header"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Where it goes</div>
+  <div class="card-body">
+    <div class="choice-grid mb-3" role="radiogroup">
+      <label class="choice"><input type="radio" name="mode" value="new" checked><span class="t">A new portfolio</span><span class="d">Named below.</span></label>
+      {% if portfolios %}
+      <label class="choice"><input type="radio" name="mode" value="merge"><span class="t">Add to an existing one</span><span class="d">Existing holdings stay.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="replace"><span class="t">Replace an existing one</span><span class="d">Its current holdings are removed first.</span></label>
+      {% endif %}
+    </div>
+    <div class="row g-3">
+      <div class="col-md-5"><label class="form-label" for="b-name">New portfolio name</label><input class="form-control" id="b-name" name="name" value="{{ default_name }}" maxlength="80"></div>
+      <div class="col-md-2"><label class="form-label" for="b-cur">Currency</label><select class="form-select" id="b-cur" name="currency">{% for cur in currencies %}<option {% if cur == default_currency %}selected{% endif %}>{{ cur }}</option>{% endfor %}{% if default_currency not in currencies %}<option selected>{{ default_currency }}</option>{% endif %}</select></div>
+      {% if portfolios %}<div class="col-md-5"><label class="form-label" for="b-pf">Existing portfolio (to add to or replace)</label>
+        <select class="form-select" id="b-pf" name="portfolio">{% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }} ({{ p.n_holdings }} holdings)</option>{% endfor %}</select></div>{% endif %}
+    </div>
+    <p class="form-hint mt-2">Costs are taken to be in the portfolio's currency. Holdings quoted in another currency are converted daily.</p>
+    <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i> Import ticked holdings</button>
+  </div></div>
+</form>
+{% endblock %}

@@ -1,0 +1,207 @@
+/*
+ * RetPlan design tokens - the ONLY place colours are defined.
+ *
+ * Adopted from MAYA's token set: four themes over one design (Crimson - stored as
+ * "light" - Dark, Blue and Green). Every theme redefines the same --rp-* roles; the
+ * names say "crimson" because they name the accent's *role*, not its hue.
+ *
+ * RetPlan adds --viz-*: the chart palette. The categorical slots were validated for
+ * colour-vision separation against the light and the dark surface; the sequential
+ * ramp carries magnitude and confidence bands.
+ *
+ * Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
+ */
+:root {
+  --rp-crimson: #A51C30;
+  --rp-crimson-strong: #8A1626;
+  --rp-crimson-deep: #6E1120;
+  --rp-crimson-tint: #FBEEF0;
+  --rp-ink: #1A1A1A;
+  --rp-slate: #6B7480;
+  --rp-surface: #FFFFFF;
+  --rp-canvas: #F7F5F2;
+  --rp-indigo: #293352;
+  --rp-on-crimson: #FFFFFF;
+  --rp-border: #E3DED7;
+  --rp-ok: #1E6B3A;
+  --rp-warn: #7A5200;
+  --rp-bad: #8A1626;
+  --rp-highlight: #F4DDA0;
+  --rp-heading: #6E1120;
+  /* the navigation gradient: crimson-deep → crimson → indigo, white text on all three */
+  --rp-nav-from: #5C0E1B;
+  --rp-nav-via: #A51C30;
+  --rp-nav-to: #293352;
+  --rp-on-nav: #FFFFFF;
+  --rp-glow: #F3C6CF;
+
+  --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+  --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #4a3aa7; --viz-8: #e34948;
+  --viz-seq-150: #b7d3f6; --viz-seq-250: #86b6ef; --viz-seq-350: #5598e7;
+  --viz-seq-450: #2a78d6; --viz-seq-550: #1c5cab; --viz-seq-650: #104281;
+  --viz-grid: #e9e5df; --viz-axis: #c9c2b8; --viz-ink: #1A1A1A; --viz-muted: #6B7480;
+  color-scheme: light;
+}
+
+
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500;
+  --viz-5: #d55181; --viz-6: #2f9e2f; --viz-7: #9085e9; --viz-8: #e66767;
+  --viz-seq-150: #1c5cab; --viz-seq-250: #256abf; --viz-seq-350: #2a78d6;
+  --viz-seq-450: #3987e5; --viz-seq-550: #5598e7; --viz-seq-650: #86b6ef;
+  --viz-grid: #2c2c32; --viz-axis: #45454d; --viz-ink: #ECECEF; --viz-muted: #8996A0;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --rp-crimson: #DE6B81;
+    --rp-crimson-strong: #D4526A;
+    --rp-crimson-deep: #E07A8E;  /* spec §16.6 says #A51C30: 2.20:1 on the dark surface, fails the gate */
+    --rp-crimson-tint: #2A1A1E;
+    --rp-ink: #ECECEF;
+    --rp-slate: #8996A0;
+    --rp-surface: #1F1F23;
+    --rp-canvas: #151517;
+    --rp-indigo: #A9B6D6;
+    --rp-on-crimson: #151517;
+    --rp-border: #34343A;
+    --rp-ok: #7FD39B;
+    --rp-warn: #E8C26A;
+    --rp-bad: #F08A9C;
+  --rp-highlight: #5A4712;
+  --rp-heading: #DE6B81;
+  --rp-nav-from: #2E0810;
+  --rp-nav-via: #6E1120;
+  --rp-nav-to: #1B2138;
+  --rp-on-nav: #FFFFFF;
+  --rp-glow: #4A2530;
+
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500;
+  --viz-5: #d55181; --viz-6: #2f9e2f; --viz-7: #9085e9; --viz-8: #e66767;
+  --viz-seq-150: #1c5cab; --viz-seq-250: #256abf; --viz-seq-350: #2a78d6;
+  --viz-seq-450: #3987e5; --viz-seq-550: #5598e7; --viz-seq-650: #86b6ef;
+  --viz-grid: #2c2c32; --viz-axis: #45454d; --viz-ink: #ECECEF; --viz-muted: #8996A0;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --rp-crimson: #DE6B81;
+  --rp-crimson-strong: #D4526A;
+  --rp-crimson-deep: #E07A8E;  /* spec §16.6 says #A51C30: 2.20:1 on the dark surface, fails the gate */
+  --rp-crimson-tint: #2A1A1E;
+  --rp-ink: #ECECEF;
+  --rp-slate: #8996A0;
+  --rp-surface: #1F1F23;
+  --rp-canvas: #151517;
+  --rp-indigo: #A9B6D6;
+  --rp-on-crimson: #151517;
+  --rp-border: #34343A;
+  --rp-ok: #7FD39B;
+  --rp-warn: #E8C26A;
+  --rp-bad: #F08A9C;
+  --rp-highlight: #5A4712;
+  --rp-heading: #DE6B81;
+  --rp-nav-from: #2E0810;
+  --rp-nav-via: #6E1120;
+  --rp-nav-to: #1B2138;
+  --rp-on-nav: #FFFFFF;
+  --rp-glow: #4A2530;
+
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500;
+  --viz-5: #d55181; --viz-6: #2f9e2f; --viz-7: #9085e9; --viz-8: #e66767;
+  --viz-seq-150: #1c5cab; --viz-seq-250: #256abf; --viz-seq-350: #2a78d6;
+  --viz-seq-450: #3987e5; --viz-seq-550: #5598e7; --viz-seq-650: #86b6ef;
+  --viz-grid: #2c2c32; --viz-axis: #45454d; --viz-ink: #ECECEF; --viz-muted: #8996A0;
+  color-scheme: dark;
+}
+
+/*
+ * Two further themes. Each redefines the same tokens and nothing else, so the gradients,
+ * the glow, the type and every layout stay exactly as the crimson theme has them: only the
+ * colour changes. The token names still say "crimson" because they name a role -- the
+ * accent -- rather than a hue; renaming them would touch every stylesheet for no gain.
+ *
+ * Blue is taken from the SAJHA server's palette: #0079C1 as the accent, #003168 as the deep
+ * navy it hovers to, #00A3E0 in the glow. Green follows Rolex: #006039 as the accent, a
+ * warm cream ground, and the house gold carried in the highlight and the glow. The semantic
+ * colours keep their meaning in both -- "bad" stays a red in a blue theme and "ok" is a
+ * yellower green than the accent in the green one, so a status is never mistaken for
+ * decoration.
+ */
+:root[data-theme="blue"] {
+  --rp-crimson: #0079C1;
+  --rp-crimson-strong: #00609A;
+  --rp-crimson-deep: #003168;
+  --rp-crimson-tint: #E6F2FA;
+  --rp-ink: #1E293B;
+  --rp-slate: #536578;
+  --rp-surface: #FFFFFF;
+  --rp-canvas: #F0F5FA;
+  --rp-indigo: #003168;
+  --rp-on-crimson: #FFFFFF;
+  --rp-border: #DCE4EE;
+  --rp-ok: #1E6B3A;
+  --rp-warn: #7A5200;
+  --rp-bad: #B42318;
+  --rp-highlight: #CDE8F7;
+  --rp-heading: #003168;
+  --rp-nav-from: #002654;
+  --rp-nav-via: #0079C1;
+  --rp-nav-to: #003168;
+  --rp-on-nav: #FFFFFF;
+  --rp-glow: #CBE6F7;
+
+  --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+  --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #4a3aa7; --viz-8: #e34948;
+  --viz-seq-150: #b7d3f6; --viz-seq-250: #86b6ef; --viz-seq-350: #5598e7;
+  --viz-seq-450: #2a78d6; --viz-seq-550: #1c5cab; --viz-seq-650: #104281;
+  --viz-grid: #e9e5df; --viz-axis: #c9c2b8; --viz-ink: #1A1A1A; --viz-muted: #6B7480;
+  color-scheme: light;
+}
+
+:root[data-theme="green"] {
+  --rp-crimson: #006039;
+  --rp-crimson-strong: #004D2E;
+  --rp-crimson-deep: #00331F;
+  --rp-crimson-tint: #E8F3EC;
+  --rp-ink: #1A1A1A;
+  --rp-slate: #5E6A64;
+  --rp-surface: #FFFFFF;
+  --rp-canvas: #F7F5EF;
+  --rp-indigo: #1C3A2E;
+  --rp-on-crimson: #FFFFFF;
+  --rp-border: #E3DECF;
+  --rp-ok: #3A6B1E;
+  --rp-warn: #7A5200;
+  --rp-bad: #A4161A;
+  --rp-highlight: #EBDDB2;
+  --rp-heading: #004D2E;
+  --rp-nav-from: #00261A;
+  --rp-nav-via: #006039;
+  --rp-nav-to: #1C3A2E;
+  --rp-on-nav: #FFFFFF;
+  --rp-glow: #E6D7A8;
+
+  --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+  --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #4a3aa7; --viz-8: #e34948;
+  --viz-seq-150: #b7d3f6; --viz-seq-250: #86b6ef; --viz-seq-350: #5598e7;
+  --viz-seq-450: #2a78d6; --viz-seq-550: #1c5cab; --viz-seq-650: #104281;
+  --viz-grid: #e9e5df; --viz-axis: #c9c2b8; --viz-ink: #1A1A1A; --viz-muted: #6B7480;
+  color-scheme: light;
+}
+
+/* Aliases for the names RetPlan's templates used before the MAYA port, so a page not
+   yet rewritten still renders in whichever theme is chosen. New code uses --rp-*. */
+:root, :root[data-theme] {
+  --bg-body: var(--rp-canvas); --bg-card: var(--rp-surface); --bg-input: var(--rp-surface);
+  --bg-subtle: var(--rp-crimson-tint); --bg-card-header: var(--rp-crimson-tint);
+  --bg-table-header: var(--rp-crimson-tint); --bg-table-stripe: transparent;
+  --bg-table-hover: var(--rp-crimson-tint);
+  --text-primary: var(--rp-ink); --text-secondary: var(--rp-slate); --text-muted: var(--rp-slate);
+  --text-on-primary: var(--rp-on-nav); --text-link: var(--rp-crimson);
+  --border-color: var(--rp-border); --border-light: var(--rp-border);
+  --accent-color: var(--rp-crimson); --primary-dark: var(--rp-nav-from);
+  --primary-medium: var(--rp-nav-via);
+  --primary-gradient: linear-gradient(120deg, var(--rp-nav-from), var(--rp-nav-via) 50%, var(--rp-nav-to));
+  --card-shadow: 0 1px 2px rgba(26,26,26,.04), 0 8px 24px -14px rgba(41,51,82,.28);
+  --success-color: var(--rp-ok); --warning-color: var(--rp-warn); --danger-color: var(--rp-bad);
+  --info-color: var(--rp-indigo);
+}

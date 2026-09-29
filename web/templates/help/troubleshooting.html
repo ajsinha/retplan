@@ -1,0 +1,120 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>The usual symptoms, the usual cause of each, and what to do. Start with the audit:
+a surprising number of &ldquo;wrong&rdquo; answers are an input the audit has already
+flagged. {{ goto('audit', 'Open the audit') }}</p>
+
+<h2>My edit does not show up</h2>
+<ul>
+  <li><strong>It was not saved.</strong> Each editor page has a <em>Save changes</em>
+      button, and leaving the page without pressing it discards the edit without a
+      warning. Rows marked for deletion also go only when you save.</li>
+  <li><strong>The simulation results vanished.</strong> That is deliberate: saving a
+      change throws away that plan&rsquo;s simulation results, because they described
+      the old plan. The dashboard falls back to the fixed-return view until you press
+      <em>Run simulation</em> again.</li>
+  <li><strong>You edited a different scenario.</strong> The editor, dashboard and reports
+      all show the <em>active</em> scenario, named in the top bar. Switch to the one you
+      meant. {{ goto('scenarios', 'Open scenarios') }}</li>
+  <li><strong>The change has no effect by design.</strong> A later retirement age does
+      little if the salary row still ends at the old age; its &ldquo;To age&rdquo; is
+      separate. Likewise a planning age beyond the horizon changes nothing until the
+      horizon is raised.</li>
+</ul>
+
+<h2>The numbers look wrong</h2>
+<ul>
+  <li><strong>A blocking audit check is failing.</strong> The dashboard shows a red banner.
+      Fix that first.</li>
+  <li><strong>Net instead of gross income.</strong> Income is entered before tax; entering
+      take-home pay makes the model tax it again.</li>
+  <li><strong>Nominal instead of real.</strong> A nominal row with 3% growth is roughly flat
+      in real terms, and a nominal pension shrinks every year.</li>
+  <li><strong>The deterministic view looks too rosy.</strong> It grows every asset at its
+      arithmetic average; the simulated median is the more honest number.</li>
+  <li><strong>Maximum spend is lower than first-year spending.</strong> The solver figure
+      excludes debt payments; the tile includes them.</li>
+</ul>
+
+<h2>Different numbers from run to run</h2>
+<p>Nothing is random between identical runs: the same plan, seed and trial count always
+give the same answer. If a number moved, one of these changed:</p>
+<ul>
+  <li>the <strong>trial count</strong> &mdash; more trials add futures, so the estimate
+      moves within its error bar;</li>
+  <li>the <strong>seed</strong> on the household page;</li>
+  <li>the <strong>plan</strong> itself, including a scenario switch;</li>
+  <li>the <strong>page</strong>: the compare page uses 1,500 trials on a fixed seed, and
+      the solvers use half your trial count capped at 1,500, so their success figures
+      differ slightly from the dashboard headline.</li>
+</ul>
+<p>See {{ goto('help_simulation', 'Running a simulation') }}.</p>
+
+<h2>A run fails or the dashboard shows an error</h2>
+<ul>
+  <li><strong>Regime transition rows must sum to 1.</strong> A regime row that is out by
+      even a hundredth of a point stops the market engine, and with it the dashboard,
+      the reports and the audit. Make each row exactly 100%.
+      {{ goto('plan_section', 'Open markets', 'markets') }}</li>
+  <li><strong>Historical mode needs at least 2 rows of data.</strong> Add history or switch
+      the market mode back to <code>mc</code>.</li>
+  <li><strong>Very long runs.</strong> A full analysis at 25,000 trials runs the model many
+      times; allow a few minutes, or use fewer trials.</li>
+</ul>
+
+<h2>The wizard will not move on</h2>
+<p>Each step checks its answers before continuing. The messages mean:</p>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:45%">Message</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr><td>Your age should be between 16 and 100.</td><td>The same range applies to a partner.</td></tr>
+    <tr><td>Retirement age can&rsquo;t be before your current age</td><td>If you have already retired, enter your current age.</td></tr>
+    <tr><td>Plan-to age must be after retirement.</td><td>It must be later than both your age and your retirement age.</td></tr>
+    <tr><td>Balances can&rsquo;t be negative.</td><td>Enter debts on the debt page later, not as negative savings.</td></tr>
+    <tr><td>Enter what you spend in a year</td><td>A rough figure is fine; it must be above zero.</td></tr>
+    <tr><td>The essential share is a percentage between 0 and 100.</td><td>Type 60, not 0.6.</td></tr>
+    <tr><td>Choose an investment mix.</td><td>Pick one of the named mixes.</td></tr>
+    <tr><td>Inflation should be between -2% and 15%.</td><td>Type 2.5 for 2.5%.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Portfolio prices</h2>
+<ul>
+  <li><strong>A holding shows as unpriced.</strong> Yahoo does not know the symbol as typed.
+      Check the exchange suffix (<code>VOD.L</code>, not <code>VOD</code>) and use the
+      symbol search. Until it prices, the holding counts as zero in every total.</li>
+  <li><strong>Prices are stale.</strong> Collection runs once a day at the configured time
+      (18:30 local by default) and at start-up if the last run is old. If
+      <code>[prices] enabled</code> is false, or <code>RETPLAN_PRICES_ENABLED</code>
+      turns it off, nothing is collected; the prices page can also run a collection on
+      demand.</li>
+  <li><strong>&ldquo;request failed: HTTP Error 429&rdquo;.</strong> Yahoo is throttling.
+      The collector already backs off and retries twice; wait an hour and run again.</li>
+</ul>
+<p>More in {{ goto('help_prices', 'Daily prices') }}.</p>
+
+<h2>My plans have disappeared</h2>
+<p>Your browser finds your workspace through an opaque id in its session cookie. Clear
+cookies, switch browser or use a private window, and you arrive in a new, empty
+workspace. The old plans are still in the database, but this browser no longer has the
+key to them. The same happens to everyone if the session secret changes (a new
+<code>RETPLAN_SECRET</code>, or the <code>.session-secret</code> file in the data folder
+deleted).</p>
+{% call note('tip', 'Keep a copy you control') %}
+<p>Export each plan as JSON now and then (<em>Download plan</em> in the plan editor, or
+<em>Export plan</em> in the plan menu at the top). Importing the file on the scenarios
+page brings the plan back into any workspace, as the active plan or as a new scenario.
+{{ goto('scenarios', 'Open scenarios') }}</p>
+{% endcall %}
+
+<h2>The server will not start: database schema error</h2>
+<p>RetPlan creates its tables from <code>schema/sqlite.sql</code> or
+<code>schema/postgres.sql</code> when the database is empty, but it never migrates. If
+the database has some RetPlan tables but not all, start-up stops with a message naming
+the missing tables. Either create them from the schema file, or point the configuration
+at a fresh database (and copy the data across with <code>tools/copy_db.py</code>).
+See {{ goto('help_system', 'System and database') }}.</p>
+{% endblock %}

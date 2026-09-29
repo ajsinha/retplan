@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Compare scenarios{% endblock %}
+{% block content %}
+{% call ui.page_head('Compare scenarios', 'Every plan in this workspace, side by side. Run them together so each gets the same trials and the same random seed - then the differences are the plans\' and not the dice\'s.', eyebrow='Results', help=url_for('help_scenarios')) %}
+  <button class="btn btn-sm btn-primary" data-sim="{{ url_for('api_compare_run') }}"><i class="bi bi-play-fill" aria-hidden="true"></i> Simulate all ({{ '{:,}'.format(trials) }} trials each)</button>
+  <span id="simStatus" class="pill" aria-live="polite">{{ cols|rejectattr('success', 'none')|list|length }} of {{ cols|length }} simulated</span>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scenarios') }}"><i class="bi bi-layers" aria-hidden="true"></i> Manage</a>
+{% endcall %}
+{% if cols|length < 2 %}
+<div class="card"><div class="card-body">
+  {% call ui.empty('layers', 'Only one plan so far', 'Copy it, change one thing (retire later, spend less, save more), and come back to see the difference.') %}
+    <form method="post" action="{{ url_for('scenario_duplicate', plan_id=cols[0].id) if cols else '#' }}"><button class="btn btn-primary"><i class="bi bi-copy" aria-hidden="true"></i> Copy the current plan</button></form>
+  {% endcall %}
+</div></div>
+{% endif %}
+{% if cols %}
+{% set sims = cols|rejectattr('success', 'none')|list %}{% set best = sims|map(attribute='success')|max if sims else None %}
+<div class="table-wrap mb-3"><div class="table-scroll">
+<table class="table align-middle mb-0">
+  <thead><tr><th></th>{% for c in cols %}<th class="num">{{ c.name }}{% if c.active %} <span class="small-muted">(active)</span>{% endif %}</th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr><td class="fw-semibold">Chance of success</td>{% for c in cols %}<td class="num">{% if c.success is not none %}<strong>{{ c.success|pct(0) }}</strong> <span class="small-muted">±{{ (1.96 * c.success_se * 100)|round(0)|int }}</span>{% if c.success == best and cols|length > 1 %} {{ ui.pill('ok', 'best') }}{% endif %}{% else %}<span class="small-muted">run to see</span>{% endif %}</td>{% endfor %}</tr>
+    <tr><td>Median final wealth</td>{% for c in cols %}<td class="num">{{ c.p50|money if c.p50 is not none else '-' }}</td>{% endfor %}</tr>
+    <tr><td>Bad-luck final wealth (P5)</td>{% for c in cols %}<td class="num">{{ c.p5|money if c.p5 is not none else '-' }}</td>{% endfor %}</tr>
+    <tr><td>Verdict at fixed returns</td>{% for c in cols %}<td class="num">{{ ui.pill('ok' if c.verdict == 'Fully funded' else 'bad', c.verdict) }}</td>{% endfor %}</tr>
+    <tr><td>Money lasts to</td>{% for c in cols %}<td class="num">{{ c.depleted_age|round(0)|int if c.depleted_age else 'the end' }}</td>{% endfor %}</tr>
+    <tr><td>Funded ratio</td>{% for c in cols %}<td class="num">{{ '%.2f'|format(c.funded) }}</td>{% endfor %}</tr>
+    <tr><td>Retire at</td>{% for c in cols %}<td class="num">{{ c.retire|round(0)|int if c.retire else '-' }}</td>{% endfor %}</tr>
+    <tr><td>Savings today</td>{% for c in cols %}<td class="num">{{ c.assets|money }}</td>{% endfor %}</tr>
+    <tr><td>First-year spending</td>{% for c in cols %}<td class="num">{{ c.spend|money }}</td>{% endfor %}</tr>
+    <tr><td>Lifetime tax</td>{% for c in cols %}<td class="num">{{ c.total_tax|money }}</td>{% endfor %}</tr>
+    <tr><td>Final wealth at fixed returns</td>{% for c in cols %}<td class="num">{{ c.terminal|money }}</td>{% endfor %}</tr>
+    <tr><td>Withdrawal policy</td>{% for c in cols %}<td class="num">{{ c.policy }}</td>{% endfor %}</tr>
+  </tbody>
+</table></div></div>
+<div class="row g-3">
+  {% set yrs = cols[0].years %}
+  {% if chart_mc %}<div class="col-xl-6">
+    {% call ui.chart_card('Median net worth, simulated', 'graph-up', chart_mc, "today's money") %}
+      <table class="table table-sm"><thead><tr><th>Year</th>{% for c in cols %}<th class="num">{{ c.name }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for i in range(0, yrs|length, 5) %}<tr><td>{{ yrs[i] }}</td>{% for c in cols %}<td class="num">{{ c.median[i]|money if i < c.median|length else '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    {% endcall %}</div>{% endif %}
+  <div class="col-xl-6">
+    {% call ui.chart_card('Net worth at fixed returns', 'graph-up-arrow', chart, "today's money") %}
+      <table class="table table-sm"><thead><tr><th>Year</th>{% for c in cols %}<th class="num">{{ c.name }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for i in range(0, yrs|length, 5) %}<tr><td>{{ yrs[i] }}</td>{% for c in cols %}<td class="num">{{ c.net_worth[i]|money if i < c.net_worth|length else '' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    {% endcall %}</div>
+</div>
+{% endif %}
+{% endblock %}

@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from retplan.plan import (CATEGORIES, ExpenseRow, IncomeRow, Ledger, Loan, Person,
                           Wrapper)
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
+from web.help_catalog import CONTEXT_HELP
 from web.store import session_id
 
 logger = logging.getLogger(__name__)
@@ -40,32 +41,32 @@ INCOME_FIELDS = [
     F("owner", "Owner", "select", options=[(0, "Person 1"), (1, "Person 2")]),
     F("category", "Category", "select", options=[(c, c.replace("_", " ")) for c in CATEGORIES]),
     F("amount", "Amount / year", "money"),
-    F("basis", "Basis", "select", options=[(b, b) for b in BASIS],
+    F("basis", "Basis", "select", options=[(b, b) for b in BASIS], adv=True,
       help="real keeps pace with inflation; nominal is a fixed future amount"),
-    F("growth", "Growth", "pct", help="growth in the chosen basis, per year"),
+    F("growth", "Growth", "pct", help="growth in the chosen basis, per year", adv=True),
     F("start_age", "From age", "number"),
     F("end_age", "To age", "number"),
-    F("taxable_fraction", "Taxable", "pct",
-      help="1 = fully taxable, 0 = tax free, 0.75 = a 25% tax-free element"),
-    F("survivor_fraction", "Survivor", "pct",
+    F("taxable_fraction", "Taxable", "pct", adv=True,
+      help="100 = fully taxable, 0 = tax free, 75 = a 25% tax-free element"),
+    F("survivor_fraction", "Survivor", "pct", adv=True,
       help="share that continues after the owner dies"),
-    F("probability", "Probability", "pct"),
+    F("probability", "Probability", "pct", adv=True),
 ]
 
 EXPENSE_FIELDS = [
     F("label", "Label", "text", width="wide"),
     F("amount", "Amount / year", "money"),
-    F("basis", "Basis", "select", options=[(b, b) for b in BASIS]),
+    F("basis", "Basis", "select", options=[(b, b) for b in BASIS], adv=True),
     F("essential", "Essential", "check",
       help="essential spending is a floor no flexible policy may cut"),
-    F("infl_delta", "Above CPI", "pct",
+    F("infl_delta", "Above CPI", "pct", adv=True,
       help="care and education typically run 1-3% above general inflation"),
-    F("smile", "Age curve", "check",
+    F("smile", "Age curve", "check", adv=True,
       help="apply the spending smile - real spending drifts down with age"),
     F("start_age", "From age", "number"),
     F("end_age", "To age", "number"),
-    F("recur_years", "Every N years", "int", help="0 or 1 = every year"),
-    F("probability", "Probability", "pct"),
+    F("recur_years", "Every N years", "int", help="0 or 1 = every year", adv=True),
+    F("probability", "Probability", "pct", adv=True),
 ]
 
 LOAN_FIELDS = [
@@ -73,10 +74,10 @@ LOAN_FIELDS = [
     F("balance", "Balance", "money"),
     F("rate", "Rate", "pct"),
     F("term_years", "Years left", "int"),
-    F("kind", "Type", "select",
+    F("kind", "Type", "select", adv=True,
       options=[(k, k.replace("_", " ")) for k in ("amortising", "interest_only", "bullet")]),
-    F("extra_payment", "Overpayment / year", "money"),
-    F("start_year", "Starts in year", "int"),
+    F("extra_payment", "Overpayment / year", "money", adv=True),
+    F("start_year", "Starts in year", "int", adv=True),
 ]
 
 WRAPPER_FIELDS = [
@@ -87,13 +88,13 @@ WRAPPER_FIELDS = [
       help="1 = taxed in full on the way out; 0 = never taxed again"),
     F("realises_capital_gains", "Realises gains", "check",
       help="withdrawals are taxable only to the extent they are gain"),
-    F("cap_type", "Cap", "select", options=[(c, c.replace("_", " ")) for c in CAPTYPE]),
-    F("cap_value", "Cap value", "money"),
-    F("early_age", "Penalty before age", "number"),
-    F("early_penalty", "Penalty", "pct"),
-    F("mrd_age", "Forced draws from", "number", help="999 = never"),
-    F("lock_age", "Locked until", "number"),
-    F("liquid", "Liquid", "check",
+    F("cap_type", "Cap", "select", options=[(c, c.replace("_", " ")) for c in CAPTYPE], adv=True),
+    F("cap_value", "Cap value", "money", adv=True),
+    F("early_age", "Penalty before age", "number", adv=True),
+    F("early_penalty", "Penalty", "pct", adv=True),
+    F("mrd_age", "Forced draws from", "number", help="999 = never", adv=True),
+    F("lock_age", "Locked until", "number", adv=True),
+    F("liquid", "Liquid", "check", adv=True,
       help="illiquid holdings are excluded from drawdown unless sold"),
 ]
 
@@ -102,14 +103,14 @@ LEDGER_FIELDS = [
     F("wrapper", "Wrapper", "wrapper"),
     F("owner", "Owner", "select", options=[(0, "Person 1"), (1, "Person 2")]),
     F("opening", "Balance", "money"),
-    F("basis", "Cost basis", "money"),
-    F("withdraw_priority", "Draw order", "int"),
-    F("contribute_priority", "Pay-in order", "int"),
+    F("basis", "Cost basis", "money", adv=True),
+    F("withdraw_priority", "Draw order", "int", adv=True),
+    F("contribute_priority", "Pay-in order", "int", adv=True),
     F("contribution", "Contribution / year", "money"),
     F("contribution_pct_income", "% of earnings", "pct"),
     F("employer_match_pct", "Employer match", "pct"),
-    F("employer_match_cap_pct", "Match cap", "pct"),
-    F("rebalance", "Rebalance", "select", options=[(r, r) for r in REBAL]),
+    F("employer_match_cap_pct", "Match cap", "pct", adv=True),
+    F("rebalance", "Rebalance", "select", options=[(r, r) for r in REBAL], adv=True),
 ]
 
 SECTIONS = [
@@ -123,6 +124,28 @@ SECTIONS = [
     ("tax", "Tax", "bi-percent", "A table of bands. No jurisdiction is assumed."),
     ("policy", "Policy", "bi-sliders", "How much you take out, and what counts as success."),
 ]
+
+
+def completeness(plan) -> dict:
+    """One short line per section for the editor's rail: what is in it."""
+    def n(k, word):
+        if k == 1:
+            return f"{k} {word}"
+        return f"{k} {word}es" if word.endswith("s") else f"{k} {word}s"
+    active = [l for l in plan.ledgers if l.enabled]
+    return {
+        "household": " · ".join(f"{p.label} {p.age:.0f}→{p.retire_age:.0f}"
+                                for p in plan.persons[:2]),
+        "income": n(len(plan.income), "stream") if plan.income else "none yet",
+        "expenses": (f"{sum(e.amount for e in plan.expenses if not e.recur_years):,.0f} / yr"
+                     if plan.expenses else "none yet"),
+        "debt": n(len(plan.loans), "loan") if plan.loans else "none",
+        "wrappers": n(len(plan.wrappers), "wrapper"),
+        "accounts": f"{sum(l.opening for l in active):,.0f} in {n(len(active), 'account')}",
+        "markets": n(len(plan.market.assets), "asset class"),
+        "tax": n(len(plan.tax.ordinary.lowers), "band"),
+        "policy": plan.policy.method.replace("_", " "),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -216,7 +239,12 @@ class PlanRoutes:
         known = {s[0] for s in SECTIONS}
         if section not in known:
             section = "household"
+        fields_for = {"income": INCOME_FIELDS, "expenses": EXPENSE_FIELDS,
+                      "debt": LOAN_FIELDS, "wrappers": WRAPPER_FIELDS,
+                      "accounts": LEDGER_FIELDS}
         ctx = dict(plan=plan, section=section, sections=SECTIONS,
+                   context_help=CONTEXT_HELP, completeness=completeness(plan),
+                   has_advanced=any(f.get("adv") for f in fields_for.get(section, [])),
                    income_fields=INCOME_FIELDS, expense_fields=EXPENSE_FIELDS,
                    loan_fields=LOAN_FIELDS, wrapper_fields=WRAPPER_FIELDS,
                    ledger_fields=LEDGER_FIELDS, policies=POLICIES,
@@ -259,12 +287,15 @@ class PlanRoutes:
         if not hasattr(self, f"_save_{section}"):
             flash(request, f"There is no plan section called '{section}'.", "error")
             return redirect_to(request, "plan_section", section="household")
+        self._notes = []
         try:
             getattr(self, f"_save_{section}")(plan, form)
         except Exception as exc:  # noqa: BLE001
             flash_error_and_log(request, f"Could not save {section}", exc)
             return redirect_to(request, "plan_section", section=section)
         self.store.put(sid, plan)
+        for note in self._notes:
+            flash(request, note, "warning")
         return redirect_to(request, "plan_section",
                            flash_message=f"{section.title()} saved.",
                            section=section)
@@ -362,6 +393,17 @@ class PlanRoutes:
             rg.corr_tighten = _pct(form, f"regime-{k}-corr_tighten", rg.corr_tighten)
             rg.trans = [_pct(form, f"regime-{k}-p{j}", rg.trans[j])
                         for j in range(len(plan.market.regimes))]
+            # The market model refuses rows that do not sum to one, which would
+            # break every results page; rescale here and say so instead.
+            total = sum(rg.trans)
+            if total <= 0:
+                rg.trans = [1.0 if j == k else 0.0 for j in range(len(rg.trans))]
+                self._notes.append(f"'{rg.label}' had no transition probabilities; "
+                                   "it now stays in itself.")
+            elif abs(total - 1.0) > 1e-9:
+                rg.trans = [t / total for t in rg.trans]
+                self._notes.append(f"'{rg.label}' transition row summed to "
+                                   f"{total:.1%}; rescaled to 100%.")
         c = plan.market.crash
         c.enabled = bool(form.get("crash_enabled"))
         c.prob = _pct(form, "crash_prob", c.prob)
@@ -379,6 +421,8 @@ class PlanRoutes:
         inf.persistence = _num(form, "inflation_phi", inf.persistence)
         inf.corr_equity = _num(form, "inflation_corr", inf.corr_equity)
         plan.market.dist = form.get("dist") or plan.market.dist
+        if form.get("fixed_basis") in ("typical", "average"):
+            plan.market.fixed_basis = form.get("fixed_basis")
         plan.market.nu = _num(form, "nu", plan.market.nu)
         plan.market.antithetic = bool(form.get("antithetic"))
         plan.market.calibrate = bool(form.get("calibrate"))

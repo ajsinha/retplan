@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Quick start{% endblock %}
+{% macro money_in(name, label, hint='', suffix=None, prefix=None, step='any', col='col-md-4') -%}
+<div class="{{ col }}">
+  <label class="form-label" for="f-{{ name }}">{{ label }}</label>
+  <div class="input-group">
+    {% if prefix %}<span class="input-group-text">{{ prefix }}</span>{% endif %}
+    <input class="form-control num" id="f-{{ name }}" name="{{ name }}" type="number" step="{{ step }}" inputmode="decimal" value="{{ a[name] }}">
+    {% if suffix %}<span class="input-group-text">{{ suffix }}</span>{% endif %}
+  </div>
+  {% if hint %}<div class="form-hint mt-1">{{ hint }}</div>{% endif %}
+</div>
+{%- endmacro %}
+{% block content %}
+{% call ui.page_head('Quick start', 'A few honest numbers now, a first answer in two minutes. Every assumption the wizard makes can be changed later in the editor.', eyebrow='New plan', help=url_for('help_quick_start')) %}
+  <form method="post" action="{{ url_for('wizard_reset') }}" data-confirm="Clear your answers and start over?">
+    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Start over</button></form>
+{% endcall %}
+
+<ol class="wizard-steps" aria-label="Steps">
+  {% for key, label, icon in steps %}
+  <li class="{{ 'current' if key == step else ('done' if key in done else '') }}" {% if key == step %}aria-current="step"{% endif %}>{{ label }}</li>
+  {% endfor %}
+</ol>
+
+<div class="card wizard-card">
+<div class="card-header"><i class="bi bi-{{ steps[idx][2] }}" aria-hidden="true"></i> {{ steps[idx][1] }}
+  <span class="ms-auto small-muted fw-normal">step {{ idx + 1 }} of {{ steps|length }}</span></div>
+<div class="card-body">
+{% if step != 'review' %}
+<form method="post" action="{{ url_for('wizard_save', step=step) }}">
+{% endif %}
+
+{% if step == 'you' %}
+  <div class="row g-3">
+    <div class="col-md-8"><label class="form-label" for="f-name">Name this plan</label>
+      <input class="form-control" id="f-name" name="name" value="{{ a.name }}" maxlength="80">
+      <div class="form-hint mt-1">You can keep several plans and compare them - e.g. "Retire at 60".</div></div>
+  </div>
+  <div class="row g-3 mt-1">
+    {{ money_in('age', 'Your age', step='1', suffix='years') }}
+    {{ money_in('retire_age', 'Retire at', 'Already retired? Use your age.', step='1', suffix='years') }}
+    {{ money_in('plan_to', 'Plan to age', 'Plan past average life expectancy; 95 is a common choice.', step='1', suffix='years') }}
+  </div>
+  <div class="form-check form-switch mt-3">
+    <input class="form-check-input" type="checkbox" role="switch" id="f-partner" name="partner" value="1" {% if a.partner %}checked{% endif %} data-toggle-show="partner">
+    <label class="form-check-label fw-semibold" for="f-partner">I'm planning with a partner</label>
+  </div>
+  <div class="row g-3 mt-1" data-show-group="partner" data-show-when="on 1" {% if not a.partner %}hidden{% endif %}>
+    {{ money_in('p2_age', "Partner's age", step='1', suffix='years') }}
+    {{ money_in('p2_retire_age', 'Partner retires at', step='1', suffix='years') }}
+    {{ money_in('p2_plan_to', 'Partner plan to age', step='1', suffix='years') }}
+  </div>
+
+{% elif step == 'income' %}
+  <p class="lead-slate">Before tax, per year, in today's money. Leave anything that doesn't apply at 0.</p>
+  <div class="row g-3">
+    {{ money_in('salary', 'Your pay', 'Salary or self-employment income until you retire.') }}
+    {{ money_in('salary_growth', 'Real pay growth', 'Raises above inflation; 1% is typical.', suffix='%') }}
+    {% if a.partner %}{{ money_in('p2_salary', "Partner's pay") }}{% endif %}
+  </div>
+  <h3 class="h6 mt-4">Public or state pension</h3>
+  <div class="row g-3">
+    {{ money_in('pension', 'Your pension', 'Social Security, State Pension, CPP… per year.') }}
+    {{ money_in('pension_age', 'Starts at age', step='1', suffix='years') }}
+    {% if a.partner %}
+    {{ money_in('p2_pension', "Partner's pension") }}
+    {{ money_in('p2_pension_age', 'Starts at age', step='1', suffix='years') }}
+    {% endif %}
+  </div>
+  <details class="advanced"><summary>Other income (rent, a part-time job, an annuity)</summary>
+    <div class="row g-3">
+      {{ money_in('other_income', 'Other income per year') }}
+      {{ money_in('other_income_end', 'Stops at your age', 'Blank = for life.', step='1', suffix='years') }}
+    </div>
+  </details>
+
+{% elif step == 'savings' %}
+  <p class="lead-slate">What you have today, grouped by how it is taxed. Rough is fine.</p>
+  <div class="row g-3">
+    {{ money_in('deferred', 'Retirement accounts', 'Taxed when you take it out: 401(k), IRA, workplace pension, RRSP, SIPP.', col='col-md-6') }}
+    {{ money_in('taxfree', 'Tax-free accounts', 'Never taxed again: Roth, ISA, TFSA.', col='col-md-6') }}
+    {{ money_in('taxable', 'Taxable investments', 'A regular brokerage account.', col='col-md-6') }}
+    {{ money_in('cash', 'Cash savings', 'Bank and savings accounts, emergency fund.', col='col-md-6') }}
+  </div>
+  {% if portfolios %}
+  <div class="mt-3 p-3 rounded-3" style="background: var(--rp-crimson-tint)">
+    <label class="form-label" for="f-usepf"><i class="bi bi-briefcase" aria-hidden="true"></i> Or take the taxable figure from a portfolio you track here</label>
+    <select class="form-select" id="f-usepf" name="use_portfolio"><option value="">- keep the number above -</option>
+      {% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }} ({{ p.n_holdings }} holdings)</option>{% endfor %}</select>
+  </div>
+  {% endif %}
+  <h3 class="h6 mt-4">Saving each year until you retire</h3>
+  <div class="row g-3">
+    {{ money_in('save_pct', 'You put in', 'Share of your pay into the retirement account.', suffix='% of pay') }}
+    {{ money_in('employer_pct', 'Employer matches up to', 'They match what you put in, up to this share - so it needs your own saving.', suffix='% of pay') }}
+    {{ money_in('save_amount', 'Plus a fixed amount', 'Into taxable investments, per year.') }}
+  </div>
+
+{% elif step == 'spending' %}
+  <div class="row g-3">
+    {{ money_in('spend', 'You spend per year', 'Everything except saving and tax. Your bank statements know.', col='col-md-6') }}
+    {{ money_in('retire_spend_pct', 'In retirement, as a share of that', 'Commuting and saving stop; travel may start. 70-90% is common.', suffix='%', col='col-md-6') }}
+    {{ money_in('essential_pct', 'Essential share', "Housing, food, bills - the part you couldn't cut in a bad year.", suffix='%', col='col-md-6') }}
+    {{ money_in('legacy', 'Leave at least', 'Money you want left at the end, in today\'s money. 0 = none.', col='col-md-6') }}
+  </div>
+  <details class="advanced" {% if a.mortgage|float > 0 %}open{% endif %}><summary>A mortgage or loan</summary>
+    <div class="row g-3">
+      {{ money_in('mortgage', 'Balance') }}
+      {{ money_in('mortgage_rate', 'Interest rate', suffix='%') }}
+      {{ money_in('mortgage_years', 'Years left', step='1', suffix='years') }}
+    </div>
+  </details>
+
+{% elif step == 'assumptions' %}
+  <h3 class="h6">How your savings are invested</h3>
+  <div class="choice-grid mb-4" role="radiogroup">
+    {% for key, r in risk.items() %}
+    <label class="choice"><input type="radio" name="risk" value="{{ key }}" {% if a.risk == key %}checked{% endif %}>
+      <span class="t">{{ r.label }}</span><span class="d">{{ r.blurb }}</span></label>
+    {% endfor %}
+  </div>
+  <p class="form-hint">Each mix shifts gradually toward bonds, from ten years before retirement to five years after. You can set exact allocations per account later.</p>
+  <h3 class="h6 mt-3">Tax</h3>
+  <div class="choice-grid" role="radiogroup">
+    {% for key, t in tax.items() %}
+    <label class="choice"><input type="radio" name="tax" value="{{ key }}" {% if a.tax == key %}checked{% endif %}>
+      <span class="t">{{ t.label }}</span><span class="d">{{ t.blurb }}</span></label>
+    {% endfor %}
+  </div>
+  <div class="row g-3 mt-1">
+    {{ money_in('flat_rate', 'Flat rate (if chosen)', suffix='%') }}
+    {{ money_in('inflation', 'Inflation', 'Long-run average; 2-3% is typical.', suffix='%') }}
+  </div>
+
+{% elif step == 'review' %}
+  <p class="lead-slate">This is what the plan will contain. Everything else - market model, tax wrappers, spending curve - starts from sensible defaults you can change in the editor.</p>
+  <div class="row g-3">
+    {% for group, rows in summary %}
+    <div class="col-md-6"><div class="p-3 rounded-3 h-100" style="border:1px solid var(--rp-border)">
+      <div class="d-flex"><h3 class="h6 me-auto">{{ group }}</h3>
+        <a class="small" href="{{ url_for('wizard', step=['you','income','savings','spending','assumptions'][loop.index0]) }}">Change</a></div>
+      {{ ui.kv(rows) }}</div></div>
+    {% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('wizard_finish') }}" class="mt-4" data-busy="Building your plan…">
+    <div class="choice-grid mb-3" role="radiogroup">
+      <label class="choice"><input type="radio" name="mode" value="new" checked>
+        <span class="t">Save as a new scenario</span><span class="d">Your current plan ("{{ workspace.plan_name }}") stays as it is.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="replace">
+        <span class="t">Replace the current plan</span><span class="d">Overwrites "{{ workspace.plan_name }}".</span></label>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('wizard', step='assumptions') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>
+      <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i> Build my plan</button>
+    </div>
+  </form>
+{% endif %}
+
+{% if step != 'review' %}
+  <div class="d-flex gap-2 mt-4">
+    {% if prev %}<button class="btn btn-outline-secondary" type="submit" name="go" value="back"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</button>{% endif %}
+    <button class="btn btn-primary" type="submit" name="go" value="next">Continue <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+  </div>
+</form>
+{% endif %}
+</div></div>
+{% endblock %}

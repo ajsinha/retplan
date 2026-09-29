@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Portfolios{% endblock %}
+{% block content %}
+{% call ui.page_head('Portfolios', 'Your real holdings, priced every day from Yahoo Finance, with allocation, risk checks and a Monte Carlo projection ten or more years ahead.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Build from a spreadsheet</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> New portfolio</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prices') }}"><i class="bi bi-cloud-download" aria-hidden="true"></i> Prices</a>
+{% endcall %}
+{% if not cards %}
+<div class="card"><div class="card-body">
+  {% call ui.empty('briefcase', 'No portfolios yet', 'Type a few holdings or paste them from your broker\'s export. Prices arrive in seconds and are refreshed every day.') %}
+    <a class="btn btn-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Upload your positions</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Or type them in</a>
+  {% endcall %}
+</div></div>
+{% else %}
+<div class="stat-grid">
+  {{ ui.kpi('Total value', total|money, cards|length ~ ' portfolio' ~ ('' if cards|length == 1 else 's') ~ (' · mixed currencies' if cards|map(attribute='currency')|unique|list|length > 1 else ''), 'briefcase') }}
+  {{ ui.kpi('Prices collected', last_run.started_at|dt if last_run else 'never', 'next run ' ~ (scheduler.next_run|replace('T', ' ') if scheduler.next_run else ('off' if not scheduler.enabled else 'pending')), 'cloud-download', '' if last_run else 'warn', url_for('prices')) }}
+</div>
+<div class="row g-3">
+  {% for c in cards %}
+  <div class="col-md-6 col-xxl-4">
+    <a class="card h-100 text-decoration-none" href="{{ url_for('portfolio_view', pid=c.id) }}" style="color:inherit">
+      <div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> {{ c.name }} <span class="ms-auto small-muted fw-normal">{{ c.currency }}</span></div>
+      <div class="card-body">
+        <div class="d-flex align-items-baseline gap-2 mb-2">
+          <span class="fs-3 fw-bold tabular">{{ c.val.total|money }}</span>
+          {% if c.val.day_change_pct is not none %}<span class="{{ 'up' if c.val.day_change >= 0 else 'down' }} small fw-semibold">{{ c.val.day_change|smoney }} ({{ c.val.day_change_pct|spct(2) }}) today</span>{% endif %}
+        </div>
+        {% if c.by_class %}{{ ui.allocation(c.by_class[:5], money_fmt=False) }}{% else %}<p class="small-muted mb-0">No holdings yet.</p>{% endif %}
+        <div class="small-muted mt-2">{{ c.n_holdings }} holding{{ '' if c.n_holdings == 1 else 's' }}{% if c.val.as_of %} · priced {{ c.val.as_of }}{% endif %}{% if c.val.unpriced %} · <span class="down">{{ c.val.unpriced|length }} unpriced</span>{% endif %}</div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}{{ h.symbol }}{% endblock %}
+{% block content %}
+{% call ui.page_head(h.symbol ~ (' · ' ~ h.name if h.name else ''), (h.quote_type ~ ' · ' if h.quote_type else '') ~ (h.exchange ~ ' · ' if h.exchange else '') ~ 'quoted in ' ~ (h.currency or 'an unknown currency') ~ ' · live from Yahoo, nothing stored', eyebrow='Look-up', help=url_for('help_prices')) %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('securities') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Securities</a>
+{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Last price', ('%.2f'|format(h.price) ~ ' ' ~ h.currency) if h.price else '-', h.bars[-1].date if h.bars else '', 'tag') }}
+  {% if stats %}
+  {{ ui.kpi('Past year', stats.ret_1y|spct, 'total return, dividends included', 'calendar3', 'good' if stats.ret_1y >= 0 else 'bad') }}
+  {{ ui.kpi('Volatility', stats.vol|pct, 'annualised from daily closes', 'activity') }}
+  {{ ui.kpi('Worst fall in the year', stats.max_dd|pct, 'peak to trough', 'graph-down-arrow', 'warn' if stats.max_dd < -0.2 else '') }}
+  {% endif %}
+  {% if lt.lt_return is defined %}{{ ui.kpi('Long run', lt.lt_return|pct ~ ' / yr', 'volatility ' ~ lt.lt_vol|pct ~ ' over ' ~ lt.lt_years|round(0)|int ~ ' years', 'hourglass') }}{% endif %}
+  {% if div_yield %}{{ ui.kpi('Dividend yield', div_yield|pct(2), 'trailing twelve months', 'cash-stack') }}{% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-xl-8">
+    {% call ui.chart_card('A year of closes', 'graph-up', chart, h.currency) %}
+      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Close</th><th class="num">Adjusted</th></tr></thead>
+        <tbody>{% for b in h.bars|reverse %}{% if loop.index0 < 40 %}<tr><td>{{ b.date }}</td><td class="num">{{ '%.2f'|format(b.close) }}</td><td class="num">{{ '%.2f'|format(b.adj_close) }}</td></tr>{% endif %}{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  <div class="col-xl-4">
+    <div class="card"><div class="card-header"><i class="bi bi-info-circle" aria-hidden="true"></i> About it</div>
+      <div class="card-body">{{ ui.kv([('Name', h.name or '-'), ('Type', h.quote_type or '-'), ('Exchange', h.exchange or '-'), ('Currency', h.currency or '-'), ('RetPlan would class it as', guess)]) }}</div></div>
+    <div class="card"><div class="card-header"><i class="bi bi-plus-square" aria-hidden="true"></i> Use it</div>
+      <div class="card-body">
+        {% if portfolios %}
+        <p class="small-muted">Add it to one of your portfolios from the portfolio's <em>Add</em> form - search for <code>{{ h.symbol }}</code>.</p>
+        <div class="d-grid gap-1">{% for p in portfolios %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_view', pid=p.id) }}#holdings">{{ p.name }}</a>{% endfor %}</div>
+        {% else %}<a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_new') }}">Create a portfolio</a>{% endif %}
+        {% if admin and not tracked %}
+        <hr><form method="post" action="{{ url_for('security_create') }}" data-busy="Adding…">
+          <input type="hidden" name="symbol" value="{{ h.symbol }}"><input type="hidden" name="source" value="yahoo">
+          <input type="hidden" name="name" value="{{ h.name }}"><input type="hidden" name="currency" value="{{ h.currency }}">
+          <input type="hidden" name="quote_type" value="{{ h.quote_type }}"><input type="hidden" name="exchange" value="{{ h.exchange }}">
+          <label class="form-label small" for="lk-cls">Track it daily, as</label>
+          <div class="d-flex gap-1"><select class="form-select form-select-sm" id="lk-cls" name="asset_class">{% for k, v in [('equity','Equity'),('intl_equity','Intl equity'),('em_equity','Emerging equity'),('bond','Bonds'),('cash','Cash'),('property','Property / REIT'),('commodity','Commodities'),('crypto','Crypto'),('other','Other')] %}<option value="{{ k }}" {% if v == guess %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-primary text-nowrap" type="submit">Track</button></div></form>
+        {% endif %}
+      </div></div>
+  </div>
+</div>
+{% endblock %}

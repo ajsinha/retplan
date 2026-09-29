@@ -1,0 +1,97 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('scenarios', 'Open scenarios') }} {{ goto('compare', 'Open the comparison') }}</p>
+<p>A scenario is a complete, named copy of the plan. Your workspace can hold as many
+as you like, and exactly one is <strong>active</strong> at a time &mdash; the one the
+editor, the dashboard and the reports show. Scenarios are how you answer "what if?"
+without destroying the plan you already believe.</p>
+
+<h2>The one-change method</h2>
+{% call steps() %}
+<li><strong>Get the base plan right first.</strong> Every scenario you copy from it
+    inherits its mistakes.</li>
+<li><strong>Copy it.</strong> On the scenarios page, press the copy button on its
+    row, or create a new scenario with <em>Copy the active plan</em>. The copy
+    becomes active straight away.</li>
+<li><strong>Change one thing.</strong> Retire two years later, spend 10% less,
+    switch the withdrawal policy. One change per scenario, or you will not know which
+    change moved the answer.</li>
+<li><strong>Name it for the change</strong> &mdash; "Retire at 62", not "Plan 3".</li>
+<li><strong>Compare.</strong> Open the comparison and press <em>Simulate all</em>.</li>
+{% endcall %}
+
+<h2>Managing scenarios</h2>
+{{ field_table([
+  ("Open", "Makes that scenario the active one and takes you to its dashboard.",
+   "Everything under the Plan and Results menus follows the active scenario."),
+  ("Copy", "Duplicates a scenario as “name (copy)” and makes the copy active.",
+   "The original is untouched, so edit the copy freely."),
+  ("Rename", "Changes the name shown everywhere.", "A blank name keeps the old one."),
+  ("Delete", "Removes the scenario permanently, after a confirmation.",
+   "A workspace always keeps at least one plan, so the last one cannot be deleted. Deleting the active one makes the oldest remaining plan active."),
+  ("New scenario", "Creates a plan and opens its household page.",
+   "Copy the active plan (then change one thing), Start empty (default assumptions, no personal numbers), or The sample household."),
+  ("Import a plan file", "Reads a plan JSON downloaded earlier.", "Always added as a new scenario, so nothing is overwritten."),
+]) }}
+<p>The quick-start wizard is also a way to make a scenario: its default is to save
+the result as a new, active scenario. See
+<a href="{{ url_for('help_quick_start') }}">the quick-start wizard</a>.</p>
+
+{% call note('warn', 'Simulation results are not saved') %}
+<p>Plans are stored in the database; simulation results are kept in the server's
+memory only, per scenario. They disappear when you edit that scenario (stale odds
+beside fresh inputs would mislead) and when RetPlan restarts. The "Success" column
+on the scenarios page says <em>not run</em> until you simulate again.</p>
+{% endcall %}
+
+<h2>The comparison page</h2>
+<p>Every scenario in the workspace, one column each, with these rows:</p>
+<ul>
+  <li><strong>Chance of success</strong>, with its &plusmn; margin (1.96 standard
+      errors, a 95% interval), and a <em>best</em> tag on the highest. Blank until
+      simulated.</li>
+  <li><strong>Median final wealth</strong> and <strong>bad-luck final wealth
+      (P5)</strong> from the simulation, in today's money.</li>
+  <li>From the deterministic projection, always current: the <strong>verdict at fixed
+      returns</strong>, the age the <strong>money lasts to</strong>, the <strong>funded
+      ratio</strong>, <strong>lifetime tax</strong> and <strong>final wealth at fixed
+      returns</strong>.</li>
+  <li>Inputs worth checking at a glance: retirement age, savings today, first-year
+      spending, and the withdrawal policy.</li>
+</ul>
+<p>Below the table, a chart of net worth at fixed returns for every scenario, and
+&mdash; once <em>all</em> of them have been simulated &mdash; a chart of the median
+simulated net worth.</p>
+
+<h2>Why "Simulate all" exists</h2>
+<p><em>Simulate all</em> runs every scenario with <strong>1,500 trials</strong> and
+the <strong>same random seed (20260916)</strong>. That means every scenario faces
+exactly the same sequence of simulated markets: the same crash in the same year of
+trial 417, the same bull run in trial 1,002. The differences between columns are then
+caused by the plans, not by the dice.</p>
+<p>If you simulate scenarios one at a time from their dashboards instead, each run can
+use a different trial count or seed, and two nearly identical plans can differ by a few
+points purely from sampling noise. With a common seed that noise largely cancels in the
+comparison, which is why a 2-point difference between two columns is meaningful here
+even though each figure on its own carries a margin of about &plusmn;2 points.</p>
+{% call note('trap', 'Do not compare a 200-trial run with a 1,500-trial run') %}
+<p>Results from the dashboard stay attached to each scenario until it is edited, so the
+comparison can show a mix of runs. After editing any scenario, press <em>Simulate
+all</em> again so every column comes from the same run.</p>
+{% endcall %}
+
+<h2>Reading the differences</h2>
+<ul>
+  <li><strong>Success moves, median wealth barely moves:</strong> the change mostly
+      affects the bad paths &mdash; typical of retiring later, holding a cash buffer or
+      a flexible withdrawal policy.</li>
+  <li><strong>Median wealth moves, success barely moves:</strong> the change mostly
+      affects the good paths &mdash; typical of a higher equity share.</li>
+  <li><strong>The fixed-return verdict and the simulated odds disagree:</strong> the
+      plan works on average but not in bad sequences. Believe the odds.</li>
+</ul>
+<p>See <a href="{{ url_for('help_simulation') }}">running a simulation</a> for what
+the margins mean, and <a href="{{ url_for('help_recipes') }}">recipes</a> for worked
+questions.</p>
+{% endblock %}

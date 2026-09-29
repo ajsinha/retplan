@@ -1,0 +1,181 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('prices', 'Open the prices page') }}</p>
+<p>Every symbol held in any portfolio is priced once a day from Yahoo Finance. The
+prices page shows what is tracked, how many daily closes are kept for each, the
+long-run statistics, and a log of every collection run.</p>
+
+<h2>Where prices come from</h2>
+<p>RetPlan talks directly to two public Yahoo Finance endpoints: one returns daily or
+monthly bars with <strong>adjusted closes</strong> (restated for dividends and splits,
+so a return computed from them is a total return), the other powers the symbol
+search when you add a holding. No API key is needed.</p>
+{% call note('warn', 'An unofficial source') %}
+<p>These endpoints are not a supported product. Yahoo can change or throttle them
+without notice. RetPlan is defensive about it &mdash; a failure for one symbol is
+recorded against that symbol and never stops the rest of the run, requests are
+retried, and a "too many requests" answer is backed off from &mdash; but a price is
+only as reliable as its source. It is a planning tool, not a trading feed.</p>
+{% endcall %}
+
+<h2>When prices are collected</h2>
+<ul>
+  <li><strong>Daily, on a schedule.</strong> While RetPlan is running, a background
+      thread collects every tracked symbol at <code>run_at</code> local time (18:30 by
+      default, after the US close).</li>
+  <li><strong>At start-up, if stale.</strong> If the last successful run began more
+      than 20 hours ago &mdash; a laptop asleep at 18:30, a server restarted &mdash;
+      a catch-up run starts about five seconds after RetPlan does.</li>
+  <li><strong>When you add a symbol.</strong> A symbol added on its own is priced
+      immediately; a pasted list is priced in the background.</li>
+  <li><strong>On request.</strong> <em>Refresh prices</em> on a portfolio (at once
+      for up to eight symbols, in the background for more), or <em>Collect now</em> on
+      the prices page for everything.</li>
+  <li><strong>From cron</strong>, if RetPlan is not always running. See below.</li>
+</ul>
+<p>Only one collection runs at a time; a second request waits for the first rather
+than fetching twice. There is a short pause between symbols to be polite to the
+endpoint, so a large list takes a little while.</p>
+
+<h3>What a run fetches</h3>
+<p>A symbol seen for the first time gets a year of daily closes. After that, each run
+asks only for the smallest range that covers the gap since the last stored close
+&mdash; five days, one, three or six months, or a year &mdash; and overwrites the
+overlap, because adjusted closes change after every dividend. Exchange-rate pairs
+needed by any portfolio are collected in the same run, including a pair discovered
+during the run itself when a new symbol turns out to be quoted in a new
+currency.</p>
+
+<h2>Why only a year is kept</h2>
+<p>After each run, daily closes older than the retention window
+(<code>retention_days</code>, 365 by default) are deleted. A year of daily data is
+what the projection needs for recent volatility, correlations and the bootstrap, and
+keeping it bounded keeps the database small no matter how long RetPlan runs.</p>
+<p>Long-run behaviour comes from somewhere else: about once every 30 days, each
+security's <strong>20 years of monthly</strong> prices are fetched, reduced to three
+numbers &mdash; annualised return, annualised volatility, and the number of years of
+history &mdash; and the monthly prices are thrown away. Those three numbers are what
+the prices and security pages show as <em>long run</em>, and what the projection
+uses to calibrate. At least 25 months of history are needed; exchange rates get no
+long-run statistics.</p>
+{% call note('why', 'Why not keep twenty years of daily prices?') %}
+<p>They would not improve the projection. Its expected returns come mainly from
+long-run class assumptions (see <a href="{{ url_for('help_projection') }}#assumptions">where
+assumptions come from</a>), and the only use for long history is a return and a
+volatility &mdash; which the three stored numbers already are.</p>
+{% endcall %}
+
+<h2>The configuration</h2>
+<p>In <code>config/retplan.toml</code> under <code>[prices]</code>, or the matching
+environment variable, which wins:</p>
+{{ field_table([
+  ("enabled", "Whether the daily schedule runs. RETPLAN_PRICES_ENABLED.",
+   "true by default. When false, nothing is collected automatically; manual refreshes and the cron tool still work."),
+  ("run_at", "Local time of the daily run, HH:MM. RETPLAN_PRICES_RUN_AT.",
+   "18:30 suits US listings. Pick a time after the close of the market most of your holdings trade on."),
+  ("retention_days", "How long daily closes are kept. RETPLAN_PRICES_RETENTION_DAYS.",
+   "365. Lowering it shrinks the history the projection can use: with fewer than about four months of closes, a holding’s own volatility, its correlations and the bootstrap fall back to assumptions. Raising it keeps more: a new symbol’s first fetch covers the whole window (up to 2, 5 or 10 years), and older closes are pruned only past it."),
+]) }}
+<p>The effective values are shown on the {{ goto('system', 'system page') }}.
+Changes take effect when RetPlan restarts.</p>
+
+<h2>Collecting from cron instead</h2>
+<p>If RetPlan is not running all day, let the operating system do the collecting.
+From the project directory:</p>
+<pre class="mono">python tools/fetch_prices.py                 # every held symbol, once
+python tools/fetch_prices.py VTI BND         # just these symbols
+python tools/fetch_prices.py --prune-only    # only delete closes past retention
+
+# crontab: weekdays at 18:30
+30 18 * * 1-5  cd /path/to/retplan &amp;&amp; .venv/bin/python tools/fetch_prices.py</pre>
+<p>It uses the same database as the web application (from the configuration file or
+<code>RETPLAN_DATABASE_URL</code>), runs the same collector, records the run in the
+same log (reason <code>cli</code>), prunes old closes and exits &mdash; non-zero if
+every symbol failed. Running it alongside the built-in schedule is harmless.</p>
+
+<h2>Reading the prices page</h2>
+<ul>
+  <li><strong>Schedule</strong>: the daily time and the next run, or <em>off</em>.</li>
+  <li><strong>Symbols tracked</strong>: every held symbol plus the exchange-rate pairs
+      portfolios need.</li>
+  <li><strong>Securities</strong>: the last close and its date, closes kept, the
+      long-run return and volatility, how many portfolios hold it, and a status:
+      <em>ok</em>, <em>pending</em> (never priced yet) or <em>error</em> with Yahoo's
+      reason.</li>
+  <li><strong>Collection runs</strong>: why each run happened (<code>schedule</code>,
+      <code>startup</code>, <code>manual</code>, <code>new-symbol</code>,
+      <code>fx</code>, <code>cli</code>), how many symbols succeeded and failed, rows
+      written and pruned, and any errors.</li>
+</ul>
+<p>Click a symbol for its own page: a year of daily closes, the past year's total
+return, annualised volatility, worst fall, the long-run figures, its asset class
+(which you can change there), and which of your portfolios hold it.</p>
+
+<h2 id="admin">Looking up and managing securities</h2>
+<p>{{ goto('securities', 'Securities') }} looks up any symbol or name on Yahoo -
+a year of prices, volatility, the worst fall, long-run return and dividend yield -
+without storing anything. Everyone can do that.</p>
+<p>Changing the securities list itself is for an <strong>administrator</strong>, because
+securities and prices are shared by every workspace on the server:</p>
+<ul>
+  <li><strong>Add</strong> a security, priced either from Yahoo daily, or
+      <strong>manually</strong> - for a private fund, a property or anything Yahoo does
+      not cover. A manual security's closes are typed or pasted in (<code>date,
+      close[, adjusted close]</code>, one per line) and the daily collector never
+      touches it.</li>
+  <li><strong>Amend</strong> its name, currency, type, exchange, notes, price source,
+      and the asset class every workspace's holdings follow by default.</li>
+  <li><strong>Add or delete individual closes</strong>. The latest stored close becomes
+      the security's price. Typed prices on a Yahoo security are overwritten by the next
+      collection.</li>
+  <li><strong>Delete</strong> the security and all its prices - refused while any
+      holding, in any workspace, still holds it.</li>
+</ul>
+<p>Who is an administrator is set in <code>config/retplan.toml</code> under
+<code>[admin]</code>. With no password (the default), anyone using the app <em>on the
+computer it runs on</em> is an administrator, which suits a personal install. Set a
+password to administer from elsewhere; you then sign in at
+<code>/admin/login</code>. Behind a reverse proxy always set one, because every
+proxied request looks as if it came from the same computer.</p>
+{% call note('warn', 'Manual prices and the retention window') %}
+<p>Typed closes older than the retention window (365 days by default) are not stored,
+and are pruned like any others. A quarterly valuation is fine for the portfolio's value;
+a projection estimates a holding's own volatility only from at least 60 closes and
+otherwise uses its asset class's assumption.</p>
+{% endcall %}
+
+<h2 id="troubleshooting">When a symbol will not price</h2>
+<p>Almost always the symbol is not the one Yahoo uses. Search for the name when
+adding the holding and pick from the list rather than typing a ticker from memory.
+Yahoo's conventions:</p>
+<div class="help-table-wrap"><table class="table table-sm">
+  <thead><tr><th>Market</th><th>Yahoo symbol</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>US</td><td>the plain ticker</td><td><code>VTI</code>, <code>AAPL</code>, <code>BRK-B</code> (a dash, not a dot)</td></tr>
+    <tr><td>London</td><td><code>.L</code> suffix</td><td><code>VOD.L</code>, <code>VWRL.L</code></td></tr>
+    <tr><td>Toronto</td><td><code>.TO</code> suffix</td><td><code>SHOP.TO</code></td></tr>
+    <tr><td>Australia</td><td><code>.AX</code> suffix</td><td><code>VAS.AX</code></td></tr>
+    <tr><td>Germany (Xetra)</td><td><code>.DE</code> suffix</td><td><code>SAP.DE</code></td></tr>
+    <tr><td>Crypto</td><td><code>-USD</code> (or another currency)</td><td><code>BTC-USD</code>, <code>ETH-USD</code></td></tr>
+    <tr><td>Indices</td><td><code>^</code> prefix</td><td><code>^GSPC</code> &mdash; an index is not something you can hold; add the fund that tracks it</td></tr>
+  </tbody>
+</table></div>
+{% call steps() %}
+<li><strong>Read the error</strong> on the holding or the prices page. "Not found" or
+    "no data" means the symbol is wrong or delisted; "request failed" means the
+    network or Yahoo was unavailable &mdash; try again later.</li>
+<li><strong>Fix the symbol.</strong> Delete the holding and add it again with the
+    right symbol; the quantity and cost are yours to re-enter.</li>
+<li><strong>Refresh prices</strong> on the portfolio.</li>
+<li><strong>If Yahoo simply does not carry it</strong> (some pension funds, unit
+    trusts or private assets), hold it as <code>CASH</code> with its value and update
+    the amount by hand, or leave it out of the portfolio and add it to the plan's
+    accounts instead.</li>
+{% endcall %}
+{% call note('trap', 'A missing exchange rate') %}
+<p>If the price is there but the value looks wildly wrong, check for <em>no rate</em>
+under the price: the holding has not been converted yet. And a London price shown in
+the hundreds or thousands is in pence; that is expected, the conversion divides by 100.</p>
+{% endcall %}
+{% endblock %}

@@ -84,7 +84,9 @@ def base_view(plan) -> dict:
 
 
 def plan_start(plan) -> int:
-    return 2026
+    """Calendar year of period 0 - the plan always starts now."""
+    from datetime import date
+    return date.today().year
 
 
 def simulate(plan, trials: int, seed=None) -> dict:
@@ -125,6 +127,8 @@ def simulate(plan, trials: int, seed=None) -> dict:
         trials=trials, kpis=k, years=years, median=median, bands=band_pairs,
         spend_median=sp[3].tolist(), sample=sample,
         terminal=res.terminal.tolist(),
+        terminal_pcts=[(p, float(v)) for p, v in
+                       zip(PCTS, np.percentile(res.terminal, PCTS))],
         depletion_curve=dep_curve,
         effective=effective, regimes=regimes,
         shrinkage=float(mm.shrinkage[0] if mm.shrinkage else 0.0),
@@ -139,7 +143,8 @@ def simulate(plan, trials: int, seed=None) -> dict:
                                         "terminal net worth, today's money"),
         chart_depletion=charts.line_chart(
             [a for a, _ in dep_curve], [("Chance the money has run out", [s for _, s in dep_curve])],
-            "Chance the money has run out by each age", "cumulative"),
+            "Chance the money has run out by each age", "cumulative",
+            y_fmt=charts._pct_fmt, x_name="Age"),
     )
 
 
@@ -160,7 +165,8 @@ def solver_view(plan, trials: int) -> dict:
         tornado=[(r[0], r[1], r[2]) for r in torn],
         chart_sweep=charts.line_chart([a for a, _ in curve],
                                       [("Success probability", [b for _, b in curve])],
-                                      "Success against spending", "probability"),
+                                      "Success against spending", "probability",
+                                      y_fmt=charts._pct_fmt, x_name="Spending"),
         chart_tornado=charts.tornado([(r[0], r[1], r[2]) for r in torn],
                                      "What moves the answer"),
     )
@@ -183,7 +189,8 @@ def audit_checks(plan, view) -> list:
     check("No portfolio balance goes negative", float(res.balance.min()) >= -1e-6)
     check("At least one account holds money",
           sum(l.opening for l in plan.ledgers) > 0)
-    check("At least one spending row is active", len(plan.expenses) > 0)
+    check("At least one spending row is active",
+          any(e.enabled and e.amount > 0 for e in plan.expenses))
     check("Retirement age is after current age",
           all(p.retire_age >= p.age for p in plan.persons))
     check("Planning age is after retirement age",
@@ -192,7 +199,7 @@ def audit_checks(plan, view) -> list:
           plan.persons[0].age + plan.horizon >= plan.persons[0].death_age,
           "the projection stops before the plan does", "Review")
     for i, lg in enumerate(plan.ledgers):
-        if abs(sum(lg.weights) - 1.0) > 0.001 and sum(lg.weights) > 0:
+        if lg.enabled and abs(sum(lg.weights) - 1.0) > 0.001:
             check(f"Allocation sums to 100% ({lg.label})", False,
                   f"sums to {sum(lg.weights):.1%}")
     corr = np.asarray(plan.market.corr, dtype=float)
@@ -215,6 +222,10 @@ def audit_checks(plan, view) -> list:
           -0.02 <= plan.market.inflation.mean <= 0.10, severity="Review")
     check("Total fees are inside a plausible range",
           plan.platform_fee + plan.adviser_fee <= 0.03, severity="Review")
-    check("Spending never falls below the essential floor",
-          bool(np.all(res.spend[0] + 1e-6 >= 0)))
+    # the essential floor is what the plan's essential rows cost; a year that
+    # spends less than that was a shortfall year on the fixed-return path
+    check("Spending is never negative", bool(np.all(res.spend[0] + 1e-6 >= 0)))
+    short_years = int((res.shortfall[0] > 1e-6).sum())
+    check("Every need is met on the fixed-return path", short_years == 0,
+          f"{short_years} year(s) with an unmet need", "Review")
     return out

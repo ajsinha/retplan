@@ -1,0 +1,161 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('system', 'Open the system page') }}</p>
+<p>RetPlan keeps everything in one database &mdash; SQLite by default, PostgreSQL if
+you prefer &mdash; and reads its settings from one small file. This page is for
+whoever installs and looks after it.</p>
+
+<h2>The configuration file</h2>
+<p>Settings live in <code>config/retplan.toml</code>. Point
+<code>RETPLAN_CONFIG</code> at another file to use that instead. Every setting can
+also be given as an environment variable, which wins over the file:</p>
+{{ field_table([
+  ("[app] data_dir", "Where the session secret, old plan files and the default SQLite file live. RETPLAN_DATA, or --data-dir on the launcher.",
+   "Default data. Relative paths are resolved from the project folder, not from wherever you started the app."),
+  ("[database] url", "Which database to use. RETPLAN_DATABASE_URL.",
+   "sqlite:///{data_dir}/retplan.db (the default - {data_dir} is replaced by the setting above, so the database moves with it) or postgresql+psycopg://user:password@host:5432/retplan."),
+  ("[database] echo", "Log every SQL statement.", "Debugging only; it is very noisy."),
+  ("[prices] enabled", "Run the daily price collector. RETPLAN_PRICES_ENABLED.", "true, false, 1, 0, yes, no, on or off."),
+  ("[prices] run_at", "Local time of the daily collection, HH:MM. RETPLAN_PRICES_RUN_AT.", "Default 18:30. An invalid time stops RetPlan from starting, with a message saying so."),
+  ("[prices] retention_days", "Days of daily closes kept. RETPLAN_PRICES_RETENTION_DAYS.", "Default 365. See Daily prices."),
+  ("RETPLAN_SECRET", "The key that signs browser sessions.", "Optional; see below. Environment only."),
+]) }}
+<p>The launcher, <code>python run_retplan_web.py</code>, listens on
+<code>127.0.0.1:5007</code>; change it with <code>--host</code> and
+<code>--port</code> (or <code>RETPLAN_HOST</code> and <code>RETPLAN_PORT</code>).
+Relative paths such as <code>data</code> and <code>sqlite:///data/retplan.db</code>
+are relative to the directory you start RetPlan from, so start it from the project
+directory, or use absolute paths (<code>sqlite:////srv/retplan/retplan.db</code>, with
+four slashes). The {{ goto('system', 'system page') }} shows the file that was read and
+the values in effect. Settings are read once, at start-up.</p>
+
+<h2>Administration</h2>
+<p>The <code>[admin]</code> section decides who may add, amend and delete securities
+and their prices:</p>
+{{ field_table([
+  ("[admin] password", "A password for administrators. RETPLAN_ADMIN_PASSWORD.",
+   "Empty by default. When set, sign in at /admin/login; it is kept only as a flag in that browser's session."),
+  ("[admin] local_is_admin", "With no password, whether a request from this computer is an administrator. RETPLAN_ADMIN_LOCAL.",
+   "true by default - right for a personal install on 127.0.0.1. Set a password instead behind a reverse proxy, where every request looks local."),
+]) }}
+
+<h2>SQLite or PostgreSQL</h2>
+<p><strong>SQLite</strong> needs nothing installed: the database is one file,
+created on first start. It runs in write-ahead-log mode, so the background price
+collector never blocks a page. For one person or a household it is all you need.</p>
+<p><strong>PostgreSQL</strong> suits a shared server, or if you already run it and
+back it up. It needs the <code>psycopg</code> driver, installed from
+<code>requirements.txt</code>.</p>
+{% call steps() %}
+<li>Create an empty database: <code>createdb retplan</code>.</li>
+<li>Set <code>url = "postgresql+psycopg://user:password@host:5432/retplan"</code>
+    under <code>[database]</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
+<li>Restart RetPlan. The tables are created from <code>schema/postgres.sql</code>.</li>
+<li>To bring your existing data across, copy it (next section).</li>
+{% endcall %}
+
+<h2>The two schema files, and no migrations</h2>
+<p>The tables are described twice, by hand: <code>schema/sqlite.sql</code> and
+<code>schema/postgres.sql</code>, one per database, defining the same nine tables
+(<code>plans</code>, <code>portfolios</code>, <code>securities</code>,
+<code>holdings</code>, <code>prices</code>, <code>fetch_runs</code>,
+<code>projections</code>, <code>import_drafts</code>, <code>app_settings</code>). On
+start-up RetPlan checks the database against the file for its dialect:</p>
+<ul>
+  <li><strong>No RetPlan tables at all</strong>: the schema is built from the file.</li>
+  <li><strong>Every table and every column present</strong>: it starts.</li>
+  <li><strong>Some present, some missing</strong>: it refuses to start with a
+      <code>SchemaError</code> naming the missing tables, rather than half-creating
+      them next to data it does not understand.</li>
+  <li><strong>A table missing a column</strong> the file declares (a database made by
+      an older version): it refuses to start and names each missing column. Add them
+      with <code>ALTER TABLE &hellip; ADD COLUMN</code> using the type and default in the
+      schema file - for example
+      <code>ALTER TABLE securities ADD COLUMN source TEXT NOT NULL DEFAULT 'yahoo'</code>
+      - or start a fresh database and copy your data across.</li>
+</ul>
+<p>There is no migration tool. If a future version needs a schema change, create the
+missing tables from the schema file by hand, or point RetPlan at a fresh database and
+copy the data into it.</p>
+
+<h2>Copying between databases</h2>
+<pre class="mono">python tools/copy_db.py --from sqlite:///data/retplan.db \
+    --to postgresql+psycopg://retplan:secret@localhost/retplan</pre>
+<ul>
+  <li><code>--from</code> defaults to the configured database; <code>--to</code> is
+      required. Any two supported URLs work, SQLite to SQLite included.</li>
+  <li>The target is built from its own schema file if empty, and must hold
+      <strong>no rows</strong> in any RetPlan table: the tool refuses rather than
+      merging into live data.</li>
+  <li>Every table is copied, parents before children, with the same ids, so the links
+      between plans, portfolios, holdings and projections survive. On PostgreSQL the id
+      sequences are moved past the copied ids afterwards.</li>
+  <li>Stop RetPlan first, so nothing changes mid-copy.</li>
+</ul>
+<p>Then point the configuration at the new database and restart.</p>
+
+<h2>Where your data lives</h2>
+{{ field_table([
+  ("plans", "Every scenario of every workspace, one row each, the whole plan as JSON.", "Exactly what Download JSON gives you."),
+  ("portfolios, holdings", "Portfolios, their settings (targets, last projection settings) and holdings.", "Scoped to a workspace."),
+  ("projections", "Saved projection runs, the last ten per portfolio.", "Deleted with their portfolio."),
+  ("securities, prices", "Every tracked symbol, its latest quote and long-run statistics, and up to a year of daily closes.",
+   "Shared by all workspaces on the server: a symbol is priced once however many people hold it."),
+  ("fetch_runs", "The log of price collections.", "Shown on the prices page."),
+  ("app_settings", "Internal key/value settings.", "Nothing to edit."),
+]) }}
+<p>Plan simulation results are <em>not</em> stored; they are kept in memory and
+recomputed on demand.</p>
+
+<h2>Workspaces and the session secret</h2>
+<p>RetPlan has <strong>no user accounts</strong>. The first time a browser visits, it
+is given a random <strong>workspace id</strong>, kept in a signed cookie
+(<code>retplan_session</code>, valid for a year). Every plan, scenario and portfolio
+belongs to a workspace, and the cookie is the only key to it. The cookie never
+carries your finances &mdash; only the id.</p>
+{% call note('warn', 'Clearing cookies loses the way back') %}
+<p>A different browser, a private window, or clearing this site's cookies starts a
+new, empty workspace. The old workspace's plans and portfolios are still in the
+database, but nothing in the app can lead you back to them. Download your plans as
+JSON now and then &mdash; that file can be imported into any workspace.</p>
+{% endcall %}
+<p>The cookie is signed with a secret. If <code>RETPLAN_SECRET</code> is set, that is
+used; otherwise one is generated on first start and kept in
+<code>data/.session-secret</code> (readable only by its owner), so restarts do not log
+everyone out of their workspace. <strong>Deleting that file, or changing
+<code>RETPLAN_SECRET</code>, invalidates every cookie at once</strong>: every browser
+gets a new, empty workspace. Treat the file as part of your data.</p>
+{% call note('trap', 'Not for the open internet as it stands') %}
+<p>Anyone who can reach the server gets a workspace. Workspaces keep each other's plans
+and portfolios apart, but there is no password. Keep RetPlan on
+<code>127.0.0.1</code> or a trusted network, or put it behind a reverse proxy that
+asks for one.</p>
+{% endcall %}
+
+<h2>Backing up</h2>
+<ul>
+  <li><strong>SQLite, stopped</strong>: copy <code>data/retplan.db</code>. If
+      <code>retplan.db-wal</code> and <code>retplan.db-shm</code> files are beside it,
+      copy them too.</li>
+  <li><strong>SQLite, running</strong>: use SQLite's own backup, which is consistent
+      while RetPlan writes:
+      <code>sqlite3 data/retplan.db ".backup backup-2026-09-29.db"</code>.</li>
+  <li><strong>PostgreSQL</strong>: <code>pg_dump retplan &gt; retplan.sql</code>, or
+      whatever your server already does.</li>
+  <li><strong>Always</strong>: <code>data/.session-secret</code> (unless you use
+      <code>RETPLAN_SECRET</code>). A restored database without it is intact but every
+      workspace is unreachable from existing browsers.</li>
+</ul>
+<p>Prices need no backup: a year of them is re-collected in one run.</p>
+
+<h2>The system page and the health check</h2>
+<p>The {{ goto('system', 'system page') }} shows the database in use (password
+hidden), the price collector's schedule and next run, how many closes are stored, the
+versions of RetPlan, Python and SQLAlchemy, the row count of every table, and the
+effective configuration.</p>
+<p><code>/healthz</code> returns a small JSON document for monitoring:
+<code>status</code> (<code>ok</code>, or <code>degraded</code> if the database cannot
+be queried), the version, the database dialect, <code>database_ok</code>, and the
+price scheduler's status (enabled, time, whether its thread is alive, next run).</p>
+{% endblock %}

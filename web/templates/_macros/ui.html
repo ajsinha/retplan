@@ -1,0 +1,87 @@
+{# Shared UI pieces, after MAYA's _macros/ui.html. Import with
+   {% import "_macros/ui.html" as ui %}. #}
+
+{# Page header: gradient h1, a standfirst, and actions on the right (caller). #}
+{% macro page_head(title, lead='', eyebrow='', help=None) -%}
+<div class="page-head">
+  <div class="titles">
+    {% if eyebrow %}<div class="eyebrow">{{ eyebrow }}</div>{% endif %}
+    <h1>{{ title }}{% if help %}<a class="help-link" href="{{ help }}" title="Help on this page" aria-label="Help on this page">?</a>{% endif %}</h1>
+    {% if lead %}<p class="lead-slate">{{ lead }}</p>{% endif %}
+  </div>
+  {% if caller %}<div class="actions">{{ caller() }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{# A KPI tile. state: '' | good | warn | bad. href makes it a link. #}
+{% macro kpi(label, value, note='', icon='circle', state='', href=None, title=None) -%}
+{% if href %}<a class="kpi {{ state }}" href="{{ href }}"{% if title %} title="{{ title }}"{% endif %}>{% else %}<div class="kpi {{ state }}"{% if title %} title="{{ title }}"{% endif %}>{% endif %}
+  <span class="ico"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></span>
+  <span class="body"><span class="lbl">{{ label }}</span><span class="val">{{ value }}</span>
+    {% if note %}<span class="note">{{ note }}</span>{% endif %}</span>
+{% if href %}</a>{% else %}</div>{% endif %}
+{%- endmacro %}
+
+{# Status pill: a glyph and a word, never colour alone. #}
+{% set PILLS = {
+  'ok': ('ok', 'check-circle'), 'PASS': ('ok', 'check-circle'), 'good': ('ok', 'check-circle'),
+  'warn': ('warn', 'exclamation-triangle'), 'WARN': ('warn', 'exclamation-triangle'),
+  'bad': ('bad', 'x-octagon'), 'FAIL': ('bad', 'x-octagon'),
+  'info': ('', 'info-circle'), 'brand': ('brand', 'star') } %}
+{% macro pill(state, label=None) -%}
+{% set cls, icon = PILLS.get(state, ('', 'dot')) %}
+<span class="pill {{ cls }}"><i class="bi bi-{{ icon }}" aria-hidden="true"></i>{{ label if label is not none else state }}</span>
+{%- endmacro %}
+
+{# Key/value list #}
+{% macro kv(pairs) -%}
+<dl class="kv mb-0">{% for k, v in pairs %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+{%- endmacro %}
+
+{# An empty state says what to do next (caller holds the action). #}
+{% macro empty(icon, title, text='') -%}
+<div class="empty"><i class="bi bi-{{ icon }}" aria-hidden="true"></i>
+  <h3 class="h5">{{ title }}</h3>{% if text %}<p class="mb-3">{{ text }}</p>{% endif %}
+  {% if caller %}{{ caller() }}{% endif %}</div>
+{%- endmacro %}
+
+{# A chart card: the figure, then its table-view twin (caller renders the table). #}
+{% macro chart_card(title, icon, chart, subtitle='', help=None, table_label='Show the numbers') -%}
+<div class="card">
+  <div class="card-header"><i class="bi bi-{{ icon }}" aria-hidden="true"></i>{{ title }}
+    {% if help %}<a class="help-link" href="{{ help }}" aria-label="Help">?</a>{% endif %}
+    {% if subtitle %}<span class="ms-auto small-muted fw-normal">{{ subtitle }}</span>{% endif %}</div>
+  <div class="card-body">
+    {{ chart|safe }}
+    {% if caller %}
+    <details class="table-twin"><summary>{{ table_label }}</summary>
+      <div class="table-scroll mt-2">{{ caller() }}</div></details>
+    {% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{# Segmented radio control. options: [(value, label)] #}
+{% macro seg(name, options, current, id_prefix=None) -%}
+{% set pfx = id_prefix or name %}
+<span class="seg" role="radiogroup">
+{% for value, label in options %}
+  <input type="radio" id="{{ pfx }}-{{ value }}" name="{{ name }}" value="{{ value }}" {% if value == current %}checked{% endif %}>
+  <label for="{{ pfx }}-{{ value }}">{{ label }}</label>
+{% endfor %}
+</span>
+{%- endmacro %}
+
+{# Allocation: one stacked bar and a legend list. rows: [(label, value, weight)] #}
+{% macro allocation(rows, money_fmt=True) -%}
+{% set colours = ['var(--viz-1)','var(--viz-2)','var(--viz-3)','var(--viz-4)','var(--viz-5)','var(--viz-6)','var(--viz-7)','var(--viz-8)'] %}
+<div class="alloc-bar" role="img" aria-label="Allocation: {% for l, v, w in rows %}{{ l }} {{ w|pct(0) }}{% if not loop.last %}, {% endif %}{% endfor %}">
+  {% for label, value, weight in rows %}<span style="flex: {{ '%.4f'|format(weight) }} 1 0; background: {{ colours[loop.index0 % 8] }}" title="{{ label }} {{ weight|pct }}"></span>{% endfor %}
+</div>
+<ul class="alloc-list">
+  {% for label, value, weight in rows %}
+  <li><span class="viz-swatch" style="background: {{ colours[loop.index0 % 8] }}"></span>{{ label }}
+    <span class="v">{% if money_fmt %}{{ value|money }} · {% endif %}{{ weight|pct }}</span></li>
+  {% endfor %}
+</ul>
+{%- endmacro %}

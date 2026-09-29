@@ -1,0 +1,80 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note with context %}
+{% block help %}
+
+<p>Five ideas explain nearly every design decision in this app. None of them is
+difficult, and understanding them turns the output from a set of numbers into
+something you can argue with.</p>
+
+<h2>1. Real terms, path by path</h2>
+<p>All arithmetic happens in today's money. Where a simulation produces its own
+inflation path, results are deflated by <em>that trial's</em> realised inflation,
+not by an average &mdash; so a run where inflation spiked is penalised in the run
+where it spiked, rather than smeared across all of them.</p>
+<p>The practical consequence: a "4% return" input and a "2.5% inflation" input mean
+your portfolio grows at about 1.5% in purchasing power. If that sounds low, the
+input is the problem, not the model.</p>
+
+<h2>2. A wrapper is <em>when</em> money is taxed</h2>
+<p>Instead of hard-coding account types, the model describes each as a wrapper with
+three decisions: is the contribution deducted, is growth taxed as it arises, and is
+the withdrawal taxable. Those three switches generate every common regime:</p>
+<table class="table table-sm">
+  <thead><tr><th>Pattern</th><th>In</th><th>Growth</th><th>Out</th><th>Typical name</th></tr></thead>
+  <tbody>
+    <tr><td><code>EET</code></td><td>Exempt</td><td>Exempt</td><td>Taxed</td>
+      <td>Workplace pension, 401(k), RRSP</td></tr>
+    <tr><td><code>TEE</code></td><td>Taxed</td><td>Exempt</td><td>Exempt</td>
+      <td>Roth, ISA, TFSA</td></tr>
+    <tr><td><code>TTE</code></td><td>Taxed</td><td>Taxed</td><td>Exempt</td>
+      <td>Ordinary savings account</td></tr>
+    <tr><td><code>ETT</code></td><td>Exempt</td><td>Taxed</td><td>Taxed</td>
+      <td>Rarer; some deferred schemes</td></tr>
+  </tbody>
+</table>
+<p>This is why the app needs no country setting. See
+<a href="{{ url_for('help_wrappers') }}">tax wrappers</a>.</p>
+
+<h2>3. The essential floor</h2>
+<p>Every spending row is either essential or discretionary. The distinction is not
+cosmetic: flexible withdrawal policies are only allowed to cut the discretionary
+part. A plan whose spending is 100% essential cannot flex at all, and guardrails
+will do nothing for it.</p>
+{% call note('why', 'Why this matters more than the withdrawal rate') %}
+<p>Two households with identical portfolios and identical spending can have very
+different failure probabilities purely because one of them can cut 20% of its
+spending in a bad decade and the other cannot. Flexibility is a bigger lever than
+almost any investment decision, and it is free.</p>
+{% endcall %}
+
+<h2>4. Sequence risk</h2>
+<p>The order returns arrive in matters enormously once you are withdrawing. Two
+paths with the same average return over thirty years produce wildly different
+outcomes depending on whether the bad years came first. Selling units to fund
+spending in a fallen market permanently removes the units that would have
+recovered.</p>
+<p>This is why the app simulates whole paths rather than applying an average return,
+why the <a href="{{ url_for('help_charts') }}">spaghetti chart</a> exists, and why a
+crash the year you retire is a different event from the same crash ten years
+later.</p>
+
+<h2>5. Confidence, not certainty</h2>
+<p>A success probability is an estimate from a finite sample, and it comes with an
+error bar. The dashboard always shows it: "91.5% &plusmn; 1.2 points". Two
+consequences:</p>
+<ul>
+  <li>A difference of one or two points between two runs is noise, not a finding.
+      Raise the trial count before concluding anything from a small gap.</li>
+  <li>100% is not the target. A plan built to survive every simulated future is a
+      plan that spends far too little in the overwhelming majority of them. The
+      confidence level on the policy page is the dial for this trade.</li>
+</ul>
+
+{% call note('trap', 'Arithmetic mean is not what you earn') %}
+<p>Expected returns are entered as <em>arithmetic</em> means. What a portfolio
+actually compounds at is lower by roughly half the variance: 7% with 17% volatility
+compounds at about 5.6%. The dashboard reports both after a run, under
+"what you are actually assuming". If the compound figure looks wrong, your
+volatility input is doing something you did not intend.</p>
+{% endcall %}
+{% endblock %}

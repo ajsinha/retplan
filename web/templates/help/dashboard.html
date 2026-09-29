@@ -1,0 +1,114 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('dashboard', 'Open the dashboard') }}</p>
+<p>The dashboard mixes two kinds of number, and the single most useful habit is to
+know which is which. <strong>Deterministic</strong> numbers come from one projection
+with every market return fixed at its average and inflation fixed at its mean. They
+are live the moment you save an edit. <strong>Simulated</strong> numbers come from
+the Monte Carlo and only appear after you press <em>Run simulation</em> or
+<em>Full analysis</em>. Everything is in today&rsquo;s money.</p>
+
+<h2>The verdict</h2>
+<p>The large panel at the top answers one question. What it shows depends on whether
+you have run a simulation.</p>
+<ul>
+  <li><strong>Before a simulation</strong> it reads <em>Fully funded</em> if the
+      fixed-return projection meets every year&rsquo;s need, or <em>Funding gap</em>
+      if any year falls short, and names the age the money runs out.</li>
+  <li><strong>After a simulation</strong> it shows the share of simulated futures that
+      succeed, with its error bar (&plusmn; 1.96 standard errors, a 95% interval) and
+      the number of trials. A future succeeds when no year has an unmet need and the
+      final net worth reaches your legacy target.</li>
+</ul>
+<p>The sentence under the meter compares that probability with the confidence level
+you set on the policy page:</p>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th>Wording</th><th>Rule</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>On track</td><td>Success is at or above your confidence target.</td>
+      <td>Check the audit, then look at the bad-luck tile before relaxing.</td></tr>
+    <tr><td>Close</td><td>Below the target by no more than 15 percentage points.</td>
+      <td>Small changes &mdash; a year later, a little less discretionary spending &mdash; usually close the gap. Run the full analysis to see which.</td></tr>
+    <tr><td>Off track</td><td>More than 15 points below the target.</td>
+      <td>Something structural needs to change. The tornado chart shows which lever moves the answer most.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>After a <em>Full analysis</em> the sentence also names the spending and the
+retirement age that would meet the target. See {{ goto('help_solvers', 'The solvers') }}.</p>
+
+{% call note('trap', 'Close is not a rounding error') %}
+<p>The band is fifteen points wide. A plan at 72% against an 85% target is
+&ldquo;close&rdquo;, but roughly one future in four still fails. Read the wording as
+&ldquo;fixable with small changes&rdquo;, not &ldquo;fine&rdquo;.</p>
+{% endcall %}
+
+<h2>The stat tiles</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:20%">Tile</th><th style="width:16%">Source</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>Money lasts to age</td><td>Deterministic</td>
+      <td>The first person&rsquo;s age in the first year the fixed-return projection cannot meet the need. If it never fails, the tile shows the age at the end of the horizon with a &ldquo;+&rdquo;.</td></tr>
+    <tr><td>Funded ratio</td><td>Deterministic</td>
+      <td>(Today&rsquo;s portfolio + present value of future income from outside the portfolio) &divide; present value of future spending, discounted at the funded-ratio discount rate on the policy page. Spending here includes debt payments. 1.00 or more is shown in green.</td></tr>
+    <tr><td>Median final wealth</td><td>Simulated if run, otherwise deterministic</td>
+      <td>Net worth at the end of the horizon: the median across trials after a run, or the fixed-return figure before one.</td></tr>
+    <tr><td>Bad-luck final wealth</td><td>Simulated only</td>
+      <td>The 5th percentile of final net worth &mdash; one future in twenty ends worse. Turns red at zero or below.</td></tr>
+    <tr><td>First-year spending</td><td>Deterministic</td>
+      <td>What the plan spends this year under your withdrawal policy, including debt payments.</td></tr>
+    <tr><td>Lifetime tax</td><td>Deterministic</td>
+      <td>Every year&rsquo;s tax on the fixed-return path, added up in today&rsquo;s money (not discounted).</td></tr>
+    <tr><td>Max sustainable spend</td><td>Full analysis only</td>
+      <td>The highest first-year spending that still meets your confidence target. Excludes debt payments.</td></tr>
+    <tr><td>Earliest retirement</td><td>Full analysis only</td>
+      <td>The earliest retirement age, applied to everyone in the household, that meets the same target.</td></tr>
+  </tbody>
+</table>
+</div>
+
+{% call note('why', 'Why the funded ratio is not the success probability') %}
+<p>The funded ratio replaces the whole distribution of market returns with one
+discount rate. It is a quick, stable balance-sheet test: below 1.00 the plan needs
+returns above that rate just to break even. It says nothing about sequence risk,
+which is exactly what the simulation measures. Use the ratio to sanity-check,
+and the probability to decide.</p>
+{% endcall %}
+
+{% call note('warn', 'The fixed-return path is one future, not a forecast') %}
+<p>By default the fixed-return projection grows every asset at its <em>typical</em>
+(median) rate: the average return less the drag volatility causes when returns
+compound - 7% with 17% volatility compounds at about 5.6%. You can switch it to the
+arithmetic average on the Markets page, which makes every deterministic tile more
+optimistic. Either way it is a single smooth path; the simulation shows the spread.</p>
+{% endcall %}
+
+<h2>Running from the dashboard</h2>
+{% call steps() %}
+<li>Pick a trial count: 500, 2,000 (the default), 5,000, 10,000 or 25,000.</li>
+<li>Press <em>Run simulation</em> for the odds and the outcome charts, or
+    <em>Full analysis</em> to add the solvers, the spending sweep and the tornado.
+    Full analysis takes several times longer.</li>
+<li>Read the verdict and its &plusmn; figure. If the error bar straddles your target,
+    run again with more trials before drawing a conclusion.</li>
+{% endcall %}
+<p>More on trials and error bars in {{ goto('help_simulation', 'Running a simulation') }}.</p>
+
+<h2>The panels below the charts</h2>
+<p><strong>What you are actually assuming</strong> sets the returns you typed beside
+the ones the simulation produced after regimes and crashes, plus the compound
+(geometric) figure &mdash; the effective mean less half the variance. It is computed
+on a separate sample of between 500 and 4,000 futures. <strong>Market regimes</strong>
+shows each regime&rsquo;s long-run share, the share simulated and its expected
+length, with the worst drawdown across all trials and the median total shortfall.
+The charts themselves are covered in {{ goto('help_charts', 'Reading the charts') }}.</p>
+
+{% call note('trap', 'A red banner overrides everything') %}
+<p>If a blocking audit check fails, a red banner appears above the verdict. Fix that
+first: none of the tiles can be trusted until it clears.
+{{ goto('audit', 'Open the audit') }}</p>
+{% endcall %}
+{% endblock %}

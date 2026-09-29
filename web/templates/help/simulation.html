@@ -1,0 +1,97 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('dashboard', 'Open the dashboard to run one') }}</p>
+<p>A simulation runs your whole plan many times, each time against a different
+simulated future of returns, crashes and inflation. Every trial goes through exactly
+the same year-by-year code as the fixed-return projection &mdash; a single trial is
+just the special case &mdash; so the two can never quietly disagree.</p>
+
+<h2>What one trial does</h2>
+<p>Each year, in this order: income arrives; any forced minimum distributions are
+taken; the withdrawal policy sets the year&rsquo;s spending; tax on income is worked
+out; the remaining need is withdrawn from accounts in your draw order, grossed up for
+the tax each withdrawal triggers; any surplus is paid in; fees are charged; returns
+are applied; accounts set to rebalance annually are rebalanced; guardrails adjust.
+Everything is computed in today&rsquo;s money, using that trial&rsquo;s own
+inflation path, so a real result is correct path by path rather than deflated by an
+average.</p>
+<p>A trial <strong>succeeds</strong> when no year has an unmet need &mdash; the
+spending the policy set for that year, plus debt payments and tax, all paid &mdash;
+and the final real net worth is at least your legacy target.</p>
+
+<h2>Run simulation or Full analysis</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th>Button</th><th>What runs</th><th>Cost</th></tr></thead>
+  <tbody>
+    <tr><td>Run simulation</td><td>The Monte Carlo at your trial count: success, the percentile bands, the sample paths, the final-wealth histogram and the depletion curve.</td><td>Seconds.</td></tr>
+    <tr><td>Full analysis</td><td>All of that, plus the solvers (maximum spend, earliest retirement, extra saving), the spending sweep and the tornado. Each solver re-runs the model many times at half your trial count, capped at 1,500 and never below 200.</td><td>Several times longer; tens of seconds at high trial counts.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The dashboard menu offers 500 to 25,000 trials. The API behind it accepts
+anything from 100 to 50,000 and quietly clamps values outside that range.</p>
+
+<h2>Trials and the error bar</h2>
+<p>A success probability is estimated from a finite sample, so it has a standard
+error of <code>&radic;(p(1&minus;p)/n)</code>, where <em>p</em> is the success rate
+and <em>n</em> the number of trials. The dashboard shows &plusmn; 1.96 of those
+&mdash; a 95% interval. That is why 82% from 200 trials is really 82% give or take
+about five points.</p>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th class="num">Trials</th><th class="num">&plusmn; at 85% success</th><th>Good for</th></tr></thead>
+  <tbody>
+    <tr><td class="num">500</td><td class="num">3.1 pts</td><td>A quick look while you are still entering data.</td></tr>
+    <tr><td class="num">2,000</td><td class="num">1.6 pts</td><td>Most day-to-day work.</td></tr>
+    <tr><td class="num">5,000</td><td class="num">1.0 pt</td><td>Roughly the count needed to pin success to &plusmn;1 point.</td></tr>
+    <tr><td class="num">10,000</td><td class="num">0.7 pts</td><td>A decision you are about to act on.</td></tr>
+    <tr><td class="num">25,000</td><td class="num">0.4 pts</td><td>Comparing two plans that are very close.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The error is largest at 50% and shrinks towards 0% and 100%. To reach &plusmn;1
+point at 95% confidence you need about <code>1.96&sup2; &times; p(1&minus;p) &divide;
+0.01&sup2;</code> trials: roughly 4,900 at 85% success and 9,600 at 50%.</p>
+
+{% call note('trap', 'Differences smaller than the error bar are noise') %}
+<p>If one scenario shows 84% and another 86% at 2,000 trials, you have not shown
+that one is better. Either run both at a much higher count, or run them on the
+same seed so the random draws are shared and only your change differs.</p>
+{% endcall %}
+
+<h2>Seeds and reproducibility</h2>
+<p>The random numbers come from L&rsquo;Ecuyer&rsquo;s combined generator, seeded
+per trial and per dimension (asset shocks, regimes, crashes, inflation and so on).
+Three consequences follow:</p>
+<ul>
+  <li><strong>Same seed, same inputs, same trials: same answer</strong>, on any
+      machine, every time. Nothing is random between runs.</li>
+  <li><strong>More trials add futures rather than reshuffling them.</strong> Trial 1
+      is identical whether you ran 500 or 25,000.</li>
+  <li><strong>Switching a feature on does not reshuffle the others.</strong> Turning
+      the crash process off leaves the asset shocks exactly where they were.</li>
+</ul>
+<p>The seed lives on the household page. Keep it fixed while comparing changes;
+change it once, at the end, to confirm a result is not an artefact of one set of
+draws. {{ goto('plan_section', 'Open household', 'household') }}</p>
+<p>The compare page runs every scenario at 1,500 trials on its own fixed seed, so its
+figures can differ slightly from each scenario&rsquo;s dashboard.</p>
+
+<h2>Market modes</h2>
+{{ field_table([
+  ('mc', 'The full model: regimes, correlated shocks and crashes.', 'The default, and the one to use for decisions.'),
+  ('historical', 'Block bootstrap from a table of past annual returns.', 'Resamples runs of consecutive years, so real sequences are kept. Needs at least two rows of history.'),
+  ('path', 'A fixed sequence of returns you type, repeated if short.', 'Replay one specific story. Inflation is still simulated.'),
+  ('fixed', 'Every year returns exactly the average.', 'What the deterministic tiles and reports always use.'),
+]) }}
+<p>Details of each layer are in {{ goto('help_markets', 'Markets, regimes and crashes') }}.</p>
+
+<h2>Where results live</h2>
+<p>Results are kept in the server&rsquo;s memory, one set per scenario. They are
+thrown away the moment you save a change to that plan, because they no longer
+describe it &mdash; the dashboard then shows the deterministic view until you run
+again. They are also lost when the server restarts. Plans themselves are in the
+database and are never lost this way.</p>
+{% endblock %}

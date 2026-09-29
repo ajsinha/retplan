@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Build a portfolio{% endblock %}
+{% block content %}
+{% call ui.page_head('Build a portfolio from a spreadsheet', 'Upload the positions export from your broker or bank - or any spreadsheet listing what you hold. RetPlan finds the table, works out what each column means, identifies every security on Yahoo Finance, and shows you everything before anything is saved.', eyebrow='Portfolio', help=url_for('help_portfolios') ~ '#builder') %}{% endcall %}
+<div class="row g-3">
+  <div class="col-xl-7">
+    <form class="card" method="post" action="{{ url_for('builder_upload') }}" enctype="multipart/form-data" data-busy="Reading and identifying securities…">
+      <div class="card-header"><i class="bi bi-upload" aria-hidden="true"></i> Upload</div>
+      <div class="card-body">
+        <label class="form-label" for="bf">Spreadsheet</label>
+        <input class="form-control form-control-lg" id="bf" type="file" name="file" required accept=".xlsx,.xlsm,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
+        <div class="form-hint mt-1">Excel (.xlsx, .xlsm) or CSV, up to 10 MB. Every sheet is read; with several sheets and no account column, each sheet becomes an account.</div>
+        <button class="btn btn-primary mt-3" type="submit"><i class="bi bi-magic" aria-hidden="true"></i> Analyse</button>
+        <p class="small-muted mt-2 mb-0">Identifying securities asks Yahoo about each one, so a long list takes a few seconds.</p>
+      </div>
+    </form>
+    {% if drafts %}
+    <div class="card"><div class="card-header"><i class="bi bi-clock-history" aria-hidden="true"></i> Unfinished imports <span class="small-muted fw-normal">kept for a week</span></div>
+      <div class="card-body"><ul class="list-rows">{% for x in drafts %}
+        <li><span class="grow"><a href="{{ url_for('builder_review', did=x.id) }}">{{ x.filename }}</a><span class="cell-sub">{{ x.created_at|dt }}</span></span>
+          <form method="post" action="{{ url_for('builder_discard', did=x.id) }}"><button class="btn btn-sm btn-link text-danger p-0" title="Discard"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden">Discard</span></button></form></li>{% endfor %}</ul></div></div>
+    {% endif %}
+  </div>
+  <div class="col-xl-5">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-lightbulb" aria-hidden="true"></i> What it understands</div>
+      <div class="card-body small">
+        <ul class="cap-list">
+          <li>A title block above the table - the header row is found wherever it is</li>
+          <li>Headers in broker language: <em>Ticker Symbol, Description, Qty held, Market Value (USD), Avg Cost, Cost Basis, Account Name…</em></li>
+          <li>Symbols written <code>NASDAQ:AAPL</code>, <code>AAPL US Equity</code> or <em>Apple Inc (AAPL)</em></li>
+          <li>No symbol at all - an ISIN, CUSIP or just the fund's name is looked up</li>
+          <li>No quantity - worked out from market value and price</li>
+          <li>Cost per share or in total - told apart by size</li>
+          <li>Cash, sweep and money-market lines become cash</li>
+          <li>Totals and subtotals are skipped; repeated lines are merged</li>
+          <li>A price that disagrees with Yahoo's (wrong share class, pence versus pounds) is flagged</li>
+        </ul>
+        <p class="small-muted mb-0">The file itself is not kept - only the proposed holdings, until you confirm or discard them.</p>
+      </div></div>
+  </div>
+</div>
+{% endblock %}

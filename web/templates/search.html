@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Search{% endblock %}
+{% block content %}
+{% call ui.page_head('Search', (total ~ ' result' ~ ('' if total == 1 else 's') ~ ' for “' ~ q ~ '”') if q else 'Pages, help topics, holdings, portfolios and scenarios.') %}{% endcall %}
+<form class="help-search mb-4" style="margin-left:0" method="get" action="{{ url_for('search') }}" role="search">
+  <i class="bi bi-search" aria-hidden="true"></i><label class="visually-hidden" for="sq">Search</label>
+  <input id="sq" name="q" type="search" value="{{ q }}" placeholder="e.g. guardrails, VTI, mortgage, bootstrap" autofocus></form>
+{% if q and not total %}
+<div class="card"><div class="card-body">{% call ui.empty('search', 'Nothing matches', 'Try fewer words, a ticker symbol, or browse the help.') %}<a class="btn btn-primary" href="{{ url_for('help') }}">Browse help</a>{% endcall %}</div></div>
+{% endif %}
+<div class="row g-3">
+  {% if pages %}<div class="col-lg-6"><div class="card"><div class="card-header"><i class="bi bi-window" aria-hidden="true"></i> Pages</div><div class="card-body"><ul class="list-rows">
+    {% for p in pages %}<li><i class="bi bi-{{ p.icon }}" aria-hidden="true"></i><a class="grow" href="{{ p.href }}">{{ p.label }}</a></li>{% endfor %}</ul></div></div></div>{% endif %}
+  {% if topics %}<div class="col-lg-6"><div class="card"><div class="card-header"><i class="bi bi-book" aria-hidden="true"></i> Help</div><div class="card-body"><ul class="list-rows">
+    {% for t in topics %}<li><i class="bi {{ t.icon }}" aria-hidden="true"></i><span class="grow"><a href="{{ url_for('help_' ~ t.slug|replace('-','_')) }}">{{ t.title }}</a><span class="cell-sub">{{ t.summary }}</span></span></li>{% endfor %}</ul></div></div></div>{% endif %}
+  {% if holdings %}<div class="col-lg-6"><div class="card"><div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> Holdings</div><div class="card-body"><ul class="list-rows">
+    {% for h in holdings %}<li><a class="mono fw-bold" href="{{ url_for('security', symbol=h.symbol) }}">{{ h.symbol }}</a><span class="grow">{{ h.name }}<span class="cell-sub">in <a href="{{ url_for('portfolio_view', pid=h.pid) }}">{{ h.portfolio }}</a>{% if h.account %} · {{ h.account }}{% endif %}</span></span><span class="num">{{ '%g'|format(h.quantity) }}</span></li>{% endfor %}</ul></div></div></div>{% endif %}
+  {% if portfolios %}<div class="col-lg-6"><div class="card"><div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> Portfolios</div><div class="card-body"><ul class="list-rows">
+    {% for p in portfolios %}<li><a class="grow" href="{{ url_for('portfolio_view', pid=p.id) }}">{{ p.name }}</a><span class="small-muted">{{ p.n_holdings }} holdings</span></li>{% endfor %}</ul></div></div></div>{% endif %}
+  {% if scenarios %}<div class="col-lg-6"><div class="card"><div class="card-header"><i class="bi bi-layers" aria-hidden="true"></i> Scenarios</div><div class="card-body"><ul class="list-rows">
+    {% for s in scenarios %}<li><span class="grow">{{ s.name }}</span><form method="post" action="{{ url_for('scenario_activate', plan_id=s.id) }}"><input type="hidden" name="next" value="/dashboard"><button class="btn btn-sm btn-outline-primary">Open</button></form></li>{% endfor %}</ul></div></div></div>{% endif %}
+</div>
+{% endblock %}

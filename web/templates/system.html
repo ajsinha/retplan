@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}System{% endblock %}
+{% block content %}
+{% call ui.page_head('System', 'Where your data lives and how RetPlan is configured. Settings come from ' ~ cfg.source ~ ', overridden by RETPLAN_* environment variables.', eyebrow='About', help=url_for('help_system')) %}{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Database', 'PostgreSQL' if dialect == 'postgresql' else 'SQLite', db_url, 'database') }}
+  {{ ui.kpi('Price collector', ('daily at ' ~ scheduler.run_at) if scheduler.enabled else 'off', 'next ' ~ scheduler.next_run|replace('T', ' ') if scheduler.next_run else ('thread running' if scheduler.alive else 'not running'), 'alarm', '' if scheduler.enabled else 'warn', url_for('prices')) }}
+  {{ ui.kpi('Price history', '{:,}'.format(stats.rows) ~ ' closes', 'kept for ' ~ cfg.prices_retention_days ~ ' days', 'calendar-range') }}
+  {{ ui.kpi('Version', versions.app, 'Python ' ~ versions.python ~ ' · SQLAlchemy ' ~ versions.sqlalchemy, 'info-circle') }}
+</div>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Tables</div>
+    <div class="card-body p-0"><table class="table table-sm mb-0"><thead><tr><th>Table</th><th class="num">Rows</th></tr></thead>
+      <tbody>{% for t, n in counts.items() %}<tr><td class="mono">{{ t }}</td><td class="num">{{ '{:,}'.format(n) }}</td></tr>{% endfor %}</tbody></table>
+      <p class="small-muted p-3 mb-0">The schema is <code>schema/{{ 'postgres' if dialect == 'postgresql' else 'sqlite' }}.sql</code>. An empty database is built from it on start-up; there are no migrations.</p></div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-sliders" aria-hidden="true"></i> Effective configuration</div>
+    <div class="card-body">
+      {{ ui.kv([('Config file', cfg.source), ('Data directory', cfg.data_dir), ('Database URL', db_url), ('SQL logging', 'on' if cfg.database_echo else 'off'),
+               ('Collect prices', 'yes' if cfg.prices_enabled else 'no'), ('Daily at', cfg.prices_run_at ~ ' local time'), ('Keep closes for', cfg.prices_retention_days ~ ' days'),
+               ('Administration', 'password set - sign in at /admin/login' if cfg.admin_password else ('from this computer only' if cfg.admin_local else 'off')),
+               ('You are', 'an administrator' if is_admin else 'not an administrator')]) }}
+      <h3 class="h6 mt-4">Switching to PostgreSQL</h3>
+      <ol class="small mb-0">
+        <li>Create an empty database: <code>createdb retplan</code></li>
+        <li>Set <code>url = "postgresql+psycopg://user:password@host:5432/retplan"</code> under <code>[database]</code> in <code>config/retplan.toml</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
+        <li>Restart. The schema is created from <code>schema/postgres.sql</code>.</li>
+        <li>To bring existing data across: <code>python tools/copy_db.py --to postgresql+psycopg://…</code></li>
+      </ol>
+    </div></div></div>
+</div>
+{% endblock %}

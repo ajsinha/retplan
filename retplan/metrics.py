@@ -59,7 +59,9 @@ def funded_ratio(res: Results, discount_rate=0.03):
     T = res.spend.shape[1]
     d = (1.0 + discount_rate) ** -np.arange(T)
     pv_spend = (res.spend * d).sum(axis=1)
-    pv_income = (res.income * d).sum(axis=1)
+    # res.income includes forced distributions (MRDs), which come out of the
+    # portfolio already counted in the opening balance - count them once
+    pv_income = ((res.income - res.mrd) * d).sum(axis=1)
     return (res.balance[:, 0] + pv_income) / np.maximum(pv_spend, 1e-9)
 
 

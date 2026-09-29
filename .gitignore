@@ -9,3 +9,7 @@ data/plans/
 .~lock.*#
 /build_out/
 /*.ods.bak
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/.session-secret

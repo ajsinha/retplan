@@ -1,0 +1,729 @@
+#!/usr/bin/env python3
+"""Tests for the database, portfolios, prices, projections, wizard and web pages.
+
+Plain asserts in the style of run_tests.py, and fully offline: Yahoo is replaced
+by synthetic price histories, so the suite is deterministic and needs no network.
+
+    python3 tests/test_portfolio.py                       # SQLite in memory
+    python3 tests/test_portfolio.py --database URL        # e.g. a PostgreSQL URL
+                                                          #   (must be an EMPTY database)
+
+Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
+"""
+from __future__ import annotations
+
+import io
+import math
+import os
+import re
+import sys
+import tempfile
+import time
+from datetime import date, timedelta
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import numpy as np
+
+from portfolio import yahoo
+from portfolio.assets import CLASSES, classify
+from portfolio.checks import rebalance, run_checks
+from portfolio.db import SCHEMA_DIR, Database, declared_tables, split_sql
+from portfolio.fx import major, pair
+from portfolio.importer import parse
+from portfolio.prices import PriceCollector, _range_for
+from portfolio.projection import (AssetInput, CashFlow, Settings, assets_from_db,
+                                  estimate, replay, simulate)
+from portfolio.repository import NotFound, PortfolioRepo, retention_cutoff
+from portfolio.stress import SCENARIOS, class_path
+
+PASS, FAIL = [], []
+DB_URL = "sqlite://"
+
+
+def check(name, cond, detail=""):
+    (PASS if cond else FAIL).append(name)
+    print(f"  {'ok  ' if cond else 'FAIL'} {name}" + (f"   {detail}" if detail and not cond else ""))
+
+
+def close(a, b, tol=1e-9):
+    return abs(a - b) <= tol * max(1.0, abs(b))
+
+
+# ------------------------------------------------------------------ fakes
+def synthetic(symbol, days=400, mu=0.08, sigma=0.16, seed=1, currency="USD",
+              quote_type="ETF", name=None, start_price=100.0):
+    """A yahoo.History with `days` calendar days of trading-day closes."""
+    rng = np.random.default_rng(seed)
+    bars, px = [], start_price
+    d0 = date.today() - timedelta(days=days)
+    for i in range(days + 1):
+        d = d0 + timedelta(days=i)
+        if d.weekday() >= 5:
+            continue
+        px *= math.exp(rng.normal(mu / 252 - 0.5 * sigma ** 2 / 252, sigma / math.sqrt(252)))
+        bars.append(yahoo.Bar(d.isoformat(), px, px, 1000.0))
+    return yahoo.History(symbol=symbol, name=name or f"{symbol} Total Market Index ETF",
+                         quote_type=quote_type, currency=currency, exchange="TEST",
+                         price=bars[-1].close, prev_close=bars[-2].close, bars=bars,
+                         dividends=[(bars[-10].date, 1.0)])
+
+
+class FakeYahoo:
+    def __init__(self, table):
+        self.table = table          # symbol -> History (or Exception)
+        self.calls = []
+
+    def fetch(self, symbol, range_="1y", interval="1d"):
+        self.calls.append((symbol, range_))
+        h = self.table.get(symbol)
+        if h is None:
+            raise yahoo.YahooError("No data found, symbol may be delisted")
+        if isinstance(h, Exception):
+            raise h
+        return h
+
+    @staticmethod
+    def long_run(symbol):
+        return {"lt_return": 0.09, "lt_vol": 0.15, "lt_years": 20.0}
+
+
+def fresh_db():
+    db = Database(DB_URL)
+    if DB_URL != "sqlite://":
+        # a shared server database: empty every table first, children first
+        with db.tx() as c:
+            for t in ("projections", "holdings", "prices", "portfolios", "plans",
+                      "securities", "fetch_runs", "import_drafts", "app_settings"):
+                Database.run(c, f"DELETE FROM {t}")
+    return db
+
+
+# ------------------------------------------------------------------ schema
+def test_schema_files():
+    def columns(path):
+        text = open(path, encoding="utf-8").read()
+        out = {}
+        for stmt in split_sql(text):
+            m = re.match(r"CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\((.*)\)", stmt, re.S)
+            if not m:
+                continue
+            cols = []
+            for line in m.group(2).split("\n"):
+                line = line.strip().rstrip(",")
+                w = line.split()
+                if w and w[0].upper() not in ("PRIMARY", "UNIQUE", "FOREIGN", "CHECK",
+                                              "CONSTRAINT"):
+                    cols.append(w[0].lower())
+            out[m.group(1)] = cols
+        return out
+
+    lite = columns(os.path.join(SCHEMA_DIR, "sqlite.sql"))
+    pg = columns(os.path.join(SCHEMA_DIR, "postgres.sql"))
+    check("both schema files declare the same tables", sorted(lite) == sorted(pg),
+          f"{sorted(lite)} vs {sorted(pg)}")
+    for t in lite:
+        check(f"schema column lists match: {t}", lite[t] == pg.get(t),
+              f"{lite[t]} vs {pg.get(t)}")
+    idx = lambda p: sorted(re.findall(r"CREATE INDEX IF NOT EXISTS\s+(\w+)",  # noqa: E731
+                                      open(os.path.join(SCHEMA_DIR, p)).read()))
+    check("both schema files declare the same indexes", idx("sqlite.sql") == idx("postgres.sql"))
+    db = fresh_db()
+    from sqlalchemy import inspect
+    live = set(inspect(db.engine).get_table_names())
+    check("an empty database is built from its schema file",
+          set(declared_tables(open(os.path.join(SCHEMA_DIR, "sqlite.sql")).read())) <= live)
+
+
+def test_schema_mismatch_detected():
+    if DB_URL != "sqlite://":
+        return
+    from portfolio.db import SchemaError
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "x.db")
+        Database(f"sqlite:///{path}").dispose()
+        import sqlite3
+        con = sqlite3.connect(path)
+        con.execute("DROP TABLE projections")
+        con.commit()
+        con.close()
+        try:
+            Database(f"sqlite:///{path}")
+            ok = False
+        except SchemaError as exc:
+            ok = "projections" in str(exc)
+        check("a database missing a declared table is refused, not migrated", ok)
+
+
+# ------------------------------------------------------------------ repository
+def test_repository():
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    pid = r.create("alice", "Core", "usd")
+    check("portfolio currency is upper-cased", r.get("alice", pid)["currency"] == "USD")
+    r.add_holding("alice", pid, "vti", 10, 3000, "Roth")
+    r.add_holding("alice", pid, "$cash", 500)
+    hs = r.holdings("alice", pid)
+    check("symbols are normalised", sorted(h["symbol"] for h in hs) == ["CASH", "VTI"])
+    check("cash cost basis defaults to its amount",
+          [h["cost_basis"] for h in hs if h["symbol"] == "CASH"] == [500])
+    try:
+        r.get("bob", pid)
+        iso = False
+    except NotFound:
+        iso = True
+    check("another workspace cannot read the portfolio", iso)
+    try:
+        r.add_holding("bob", pid, "AAPL", 1)
+        iso2 = False
+    except NotFound:
+        iso2 = True
+    check("another workspace cannot add to it", iso2)
+    check("another workspace sees no portfolios", r.list("bob") == [])
+    r.update("alice", pid, settings={"targets": {"equity": 0.6}})
+    check("settings round-trip as JSON", r.get("alice", pid)["settings"]["targets"]["equity"] == 0.6)
+    new = r.duplicate("alice", pid)
+    check("duplicate copies holdings", len(r.holdings("alice", new)) == 2)
+    r.save_projection("alice", pid, {"a": 1}, {"b": 2}, {"c": 3})
+    r.delete("alice", pid)
+    check("delete removes holdings and projections",
+          db.scalar("SELECT COUNT(*) FROM holdings WHERE portfolio_id = :p", {"p": pid}) == 0
+          and db.scalar("SELECT COUNT(*) FROM projections WHERE portfolio_id = :p", {"p": pid}) == 0)
+    check("the duplicate survives", len(r.holdings("alice", new)) == 2)
+    for i in range(13):
+        r.save_projection("alice", new, {"i": i}, {}, {})
+    runs = r.projections("alice", new)
+    check("only the last ten projections are kept", len(runs) == 10 and runs[0]["settings"]["i"] == 12)
+
+
+def test_classify():
+    cases = [("VTI", "Vanguard Total Stock Market ETF", "ETF", "equity"),
+             ("BND", "Vanguard Total Bond Market ETF", "ETF", "bond"),
+             ("VXUS", "Vanguard Total International Stock ETF", "ETF", "intl_equity"),
+             ("VWO", "Vanguard FTSE Emerging Markets ETF", "ETF", "em_equity"),
+             ("VNQ", "Vanguard Real Estate ETF", "ETF", "property"),
+             ("GLD", "SPDR Gold Shares", "ETF", "commodity"),
+             ("BTC-USD", "Bitcoin USD", "CRYPTOCURRENCY", "crypto"),
+             ("VMFXX", "Vanguard Federal Money Market Fund", "MONEYMARKET", "cash"),
+             ("AAPL", "Apple Inc.", "EQUITY", "equity")]
+    for sym, name, qt, want in cases:
+        check(f"classify {sym} as {want}", classify(sym, name, qt) == want,
+              classify(sym, name, qt))
+
+
+def test_fx_helpers():
+    check("GBp is pence of GBP", major("GBp") == ("GBP", 0.01))
+    check("same currency needs no pair", pair("USD", "usd") == (None, 1.0))
+    check("pence into USD uses GBPUSD=X at 1/100", pair("GBp", "USD") == ("GBPUSD=X", 0.01))
+
+
+# ------------------------------------------------------------------ prices
+def test_prices_and_retention():
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    pid = r.create("alice", "Mixed", "USD")
+    r.add_holding("alice", pid, "VTI", 10, 2000)
+    r.add_holding("alice", pid, "VOD.L", 1000, 1200)
+    r.add_holding("alice", pid, "NOPE", 5)
+    r.add_holding("alice", pid, "CASH", 1000)
+    vod = synthetic("VOD.L", mu=0.02, sigma=0.25, seed=2, currency="GBp",
+                    quote_type="EQUITY", name="Vodafone Group Plc", start_price=120)
+    fx = synthetic("GBPUSD=X", mu=0.0, sigma=0.08, seed=3, currency="USD",
+                   quote_type="CURRENCY", name="GBP/USD", start_price=1.30)
+    fake = FakeYahoo({"VTI": synthetic("VTI", seed=1), "VOD.L": vod, "GBPUSD=X": fx})
+    col = PriceCollector(r, fetch=fake.fetch, long_run=fake.long_run, pause=0)
+    res = col.collect(reason="test")
+    check("collector prices every held symbol plus the FX pair it discovers",
+          {s for s, _ in fake.calls} == {"VTI", "VOD.L", "NOPE", "GBPUSD=X"}, fake.calls)
+    check("a failing symbol is recorded, not fatal", res["failed"] == 1 and res["ok"] == 3)
+    check("the failure is kept on the security", bool(r.security("NOPE")["fetch_error"]))
+    check("a first fetch asks for a year", all(rg == "1y" for _, rg in fake.calls))
+    oldest = db.scalar("SELECT MIN(date) FROM prices")
+    check("nothing older than the retention window is stored", oldest >= retention_cutoff(),
+          f"{oldest} < {retention_cutoff()}")
+    check("long-run statistics are kept as numbers", r.security("VTI")["lt_vol"] == 0.15)
+    check("dividend yield is computed", (r.security("VTI")["dividend_yield"] or 0) > 0)
+    fake.calls.clear()
+    col.collect(reason="again")
+    check("a later fetch asks only for the gap", all(rg == "5d" for s, rg in fake.calls if s != "NOPE"),
+          fake.calls)
+    # prune removes rows past retention
+    with db.tx() as c:
+        Database.run(c, "INSERT INTO prices (symbol, date, close, adj_close) VALUES "
+                        "('VTI', '2000-01-03', 1, 1)")
+    check("prune deletes closes past retention", r.prune() == 1)
+    check("a longer retention fetches a longer first history",
+          _range_for(None, 730) == "2y" and _range_for(None, 365) == "1y")
+    check("gap ranges", _range_for(None) == "1y" and _range_for(date.today().isoformat()) == "5d"
+          and _range_for((date.today() - timedelta(days=40)).isoformat()) == "3mo")
+
+    v = r.valuation("alice", pid)
+    by = {p.symbol: p for p in v.positions}
+    rate = r.security("GBPUSD=X")["last_price"]
+    check("a pence-quoted holding is converted at FX/100",
+          close(by["VOD.L"].value, 1000 * vod.bars[-1].close * rate / 100, 1e-9))
+    check("an unpriced holding counts as zero and is listed",
+          by["NOPE"].value == 0 and "NOPE" in v.unpriced)
+    check("weights sum to one", close(sum(p.weight for p in v.positions), 1.0))
+    hist = r.value_history("alice", pid)
+    check("the back-cast ends at today's valuation",
+          close(hist[-1][1], v.total - by["NOPE"].value, 1e-9), f"{hist[-1][1]} vs {v.total}")
+    checks = run_checks(v, {p.symbol: r.security(p.symbol) or {} for p in v.positions})
+    check("unpriced holdings are flagged as a failure",
+          any(c["severity"] == "bad" and "no price" in c["title"] for c in checks))
+    check("a single company over 25% is flagged",
+          any("Concentrated" in c["title"] for c in checks))
+
+
+def test_config():
+    from web.config import ROOT, load_config
+    os.environ["RETPLAN_DATA"] = "somewhere/else"
+    try:
+        cfg = load_config()
+    finally:
+        del os.environ["RETPLAN_DATA"]
+    check("a relative data dir is resolved from the project root",
+          cfg.data_dir == os.path.join(ROOT, "somewhere/else"))
+    if "RETPLAN_DATABASE_URL" not in os.environ:
+        check("the default SQLite file moves with the data dir",
+              cfg.database_url == "sqlite:///" + os.path.join(ROOT, "somewhere/else/retplan.db"),
+              cfg.database_url)
+
+
+def test_importer():
+    rows = parse("symbol,shares,cost basis,account\nVTI,10,2000,Roth\nBND,5,,IRA\n")
+    check("header columns are recognised", [(x.symbol, x.quantity, x.cost_basis, x.account)
+                                            for x in rows] ==
+          [("VTI", 10.0, 2000.0, "Roth"), ("BND", 5.0, None, "IRA")])
+    rows = parse("aapl\t10\t1,500.50\tBrokerage\tEquity\nmsft;x")
+    check("tab separated without header", rows[0].symbol == "AAPL" and rows[0].cost_basis == 1500.5
+          and rows[0].asset_class == "equity")
+    rows = parse("VTI, 10\nBAD\n, 5\nX, abc")
+    check("bad lines carry a reason", [bool(x.error) for x in rows] == [False, True, True, True],
+          [(x.symbol, x.error) for x in rows])
+    rows = parse("Account Name,Ticker Symbol,Qty held,Total cost\nRoth,VTI,12,3000")
+    check("loose broker headers are recognised",
+          [(x.symbol, x.quantity, x.cost_basis, x.account) for x in rows] == [("VTI", 12.0, 3000.0, "Roth")],
+          [(x.symbol, x.quantity, x.cost_basis, x.account, x.error) for x in rows])
+    rows = parse("Ticker;Quantity\nVOD.L;1000")
+    check("semicolons with a header", rows[0].symbol == "VOD.L" and rows[0].quantity == 1000)
+
+
+# ------------------------------------------------------------------ projection
+def _asset(sym, value, cls="equity", mu=None, sigma=None, seed=1, days=400):
+    h = synthetic(sym, days=days, seed=seed)
+    return AssetInput(sym, sym, cls, value, [(b.date, b.adj_close) for b in h.bars],
+                      mu, sigma, 20.0 if mu is not None else None)
+
+
+def test_projection_closed_forms():
+    # cash only, no volatility: grows exactly at its assumption
+    s = Settings(years=10, trials=200, rebalance="none", overrides={"CASH": {"sigma": 1e-9}})
+    r = simulate([AssetInput("CASH", "Cash", "cash", 1000.0)], s)
+    want = 1000 * (1 + CLASSES["cash"]["mu"]) ** 10
+    check("cash compounds at its assumption", close(r["summary"]["end_nominal"]["p50"], want, 1e-6),
+          f"{r['summary']['end_nominal']['p50']} vs {want}")
+    check("the expected path agrees", close(r["expected"][-1], want, 1e-6))
+    check("real value deflates by inflation",
+          close(r["summary"]["end_real"]["p50"], want / 1.025 ** 10, 1e-6))
+    # contributions with zero volatility: an exact annuity on a quarterly clock
+    s = Settings(years=5, trials=200, rebalance="none", inflation=0.0,
+                 flows=[CashFlow("contribution", 4000, 1, 5, indexed=False)],
+                 overrides={"CASH": {"mu": 0.0, "sigma": 1e-9}})
+    r = simulate([AssetInput("CASH", "Cash", "cash", 1000.0)], s)
+    check("contributions add up exactly at zero return",
+          close(r["summary"]["end_nominal"]["p50"], 21000.0, 1e-6))
+    check("the yearly table records contributions", close(r["periods"][0]["contrib"], 4000.0))
+    # withdrawals: 1000 at 0% with 300/yr runs out in year 4
+    s = Settings(years=6, trials=200, rebalance="none", inflation=0.0,
+                 flows=[CashFlow("withdrawal", 300, 1, 6, indexed=False)],
+                 overrides={"CASH": {"mu": 0.0, "sigma": 1e-9}})
+    r = simulate([AssetInput("CASH", "Cash", "cash", 1000.0)], s)
+    dep = [p["p_depleted"] for p in r["periods"]]
+    check("withdrawals exhaust the portfolio when they should",
+          dep[:3] == [0.0, 0.0, 0.0] and dep[3] == 1.0 and r["summary"]["p_depleted"] == 1.0, dep)
+    check("a depleted portfolio ends at zero", r["summary"]["end_nominal"]["p50"] == 0.0)
+    # a percentage withdrawal at zero return
+    s = Settings(years=2, trials=200, rebalance="none", inflation=0.0, withdrawal_rate=0.04,
+                 overrides={"CASH": {"mu": 0.0, "sigma": 1e-9}})
+    r = simulate([AssetInput("CASH", "Cash", "cash", 1000.0)], s)
+    check("a % withdrawal compounds quarterly", close(r["summary"]["end_nominal"]["p50"],
+                                                      1000 * 0.99 ** 8, 1e-9))
+    # fee drag
+    s = Settings(years=10, trials=200, rebalance="none", fee=0.01,
+                 overrides={"CASH": {"mu": 0.0, "sigma": 1e-9}})
+    r = simulate([AssetInput("CASH", "Cash", "cash", 1000.0)], s)
+    check("a 1% fee takes 1% a year", close(r["summary"]["end_nominal"]["p50"], 1000 * 0.99 ** 10, 1e-9))
+
+
+def test_projection_statistics():
+    a = [_asset("EQ", 100000.0, "equity", 0.07, 0.17)]
+    ov = {"EQ": {"mu": 0.07, "sigma": 0.17}}
+    means, medians = {}, {}
+    for m in ("parametric", "fat_tails", "bootstrap"):
+        r = simulate(a, Settings(years=20, trials=20000, method=m, overrides=ov, seed=11))
+        means[m] = r["summary"]["end_mean"]
+        medians[m] = r["summary"]["end_nominal"]["p50"]
+        p = r["periods"][-1]["nominal"]
+        check(f"{m}: percentiles are ordered",
+              p["p5"] <= p["p10"] <= p["p25"] <= p["p50"] <= p["p75"] <= p["p90"] <= p["p95"])
+    want = 100000 * 1.07 ** 20
+    for m in means:
+        check(f"{m}: mean ending value matches (1+mu)^T within 4%",
+              abs(means[m] / want - 1) < 0.04, f"{means[m]:.0f} vs {want:.0f}")
+    s2 = math.log1p(0.17 ** 2 / 1.07 ** 2)
+    med = 100000 * math.exp(20 * (math.log(1.07) - 0.5 * s2))
+    check("parametric median matches the lognormal closed form within 2%",
+          abs(medians["parametric"] / med - 1) < 0.02, f"{medians['parametric']:.0f} vs {med:.0f}")
+    check("the three models agree on the median within 5%",
+          max(medians.values()) / min(medians.values()) < 1.05, medians)
+    # realised volatility of annual returns matches the input
+    r = simulate(a, Settings(years=30, trials=4000, overrides=ov, seed=5))
+    rets = [p["ret"] for p in r["periods"]]
+    check("annual returns centre near the assumption",
+          abs(np.mean([x["p50"] for x in rets]) - (math.exp(math.log(1.07) - 0.5 * s2) - 1)) < 0.01)
+
+
+def test_projection_structure():
+    a = [_asset("EQ", 60000.0, "equity", 0.09, 0.15, seed=1),
+         _asset("BD", 40000.0, "bond", 0.035, 0.05, seed=2)]
+    r = simulate(a, Settings(years=3, frequency="quarterly", trials=500, target=150000))
+    check("quarterly reporting gives four rows a year", len(r["periods"]) == 12)
+    check("quarter labels carry the quarter", r["periods"][0]["label"].endswith(("Q1", "Q2", "Q3", "Q4")))
+    check("goal probability is non-decreasing over time",
+          all(x["p_target"] <= y["p_target"] + 1e-12 for x, y in zip(r["periods"], r["periods"][1:])))
+    check("three representative futures are kept",
+          set(r["representative"]) == {"p10", "p50", "p90"} and len(r["representative"]["p50"]) == 12)
+    check("risk shares sum to one", close(sum(x["risk_share"] for x in r["assets"]), 1.0, 1e-9))
+    models, corr, _ = estimate(a, Settings())
+    check("the correlation matrix is symmetric with a unit diagonal",
+          np.allclose(corr, corr.T) and np.allclose(np.diag(corr), 1.0))
+    check("the blend puts half weight on 20 years of history",
+          close(models[0].mu, 0.5 * CLASSES["equity"]["mu"] + 0.5 * 0.09))
+    r1 = simulate(a, Settings(years=10, trials=1000, seed=3))
+    r2 = simulate(a, Settings(years=10, trials=1000, seed=3))
+    check("the same seed gives the same answer",
+          r1["summary"]["end_nominal"] == r2["summary"]["end_nominal"])
+    try:
+        simulate([AssetInput("X", "x", "equity", 0.0)], Settings())
+        refused = False
+    except ValueError:
+        refused = True
+    check("a portfolio with no value is refused with a reason", refused)
+
+
+def test_stress():
+    a = [AssetInput("EQ", "EQ", "equity", 100.0)]
+    rep = replay(a, "gfc", Settings(rebalance="none"))
+    want = float(np.prod([1 + x for x in SCENARIOS["gfc"]["returns"]["equity"]]))
+    check("a 100% equity replay compounds the index path",
+          close(rep["end_of_crisis"] / 100.0, want, 1e-9))
+    check("the drawdown is the worst point",
+          close(rep["drawdown"], min(rep["path"]) / 100 - 1))
+    em = class_path("gfc", "em_equity")
+    check("a beta above one deepens the fall",
+          min(em) < min(SCENARIOS["gfc"]["returns"]["equity"]))
+    r = simulate(a, Settings(years=3, frequency="quarterly", trials=300, stress="gfc",
+                             overrides={"EQ": {"sigma": 0.17}}))
+    q = SCENARIOS["gfc"]["returns"]["equity"]
+    check("a stressed projection opens with the crisis in every trial",
+          close(r["periods"][0]["nominal"]["p10"], r["periods"][0]["nominal"]["p90"], 1e-9)
+          and close(r["periods"][0]["ret"]["p50"], q[0], 1e-9))
+
+
+def test_rebalance():
+    from portfolio.repository import Position, Valuation
+    def pos(sym, cls, value):
+        p = Position(1, sym, sym, 1, None, "", cls, "", 1.0, 1.0, None, "USD", None)
+        p.value = value
+        return p
+    v = Valuation(positions=[pos("A", "equity", 70.0), pos("B", "bond", 30.0)], total=100.0)
+    rb = rebalance(v, {"equity": 0.6, "bond": 0.4}, new_money=10.0)
+    trades = {x["key"]: x["trade"] for x in rb["rows"]}
+    check("rebalancing trades sum to the new money", close(sum(trades.values()), 10.0))
+    check("rebalancing reaches the target", close(trades["equity"], -4.0) and close(trades["bond"], 14.0))
+    cf = {x["key"]: x["cashflow_trade"] for x in rb["rows"]}
+    check("new-money-only never sells", all(x >= 0 for x in cf.values()) and close(sum(cf.values()), 10.0))
+
+
+# ------------------------------------------------------------------ plans, wizard
+def test_plan_store_and_wizard():
+    from retplan.engine import Projection
+    from web import wizard
+    from web.store import PlanStore
+    db = fresh_db()
+    with tempfile.TemporaryDirectory() as d:
+        from retplan.plan import save_plan
+        from retplan.samples import sample_plan
+        legacy = sample_plan()
+        legacy.label = "Old file"
+        save_plan(legacy, os.path.join(d, "abc123.json"))
+        s = PlanStore(db, legacy_dir=d)
+        check("a legacy JSON plan is imported on first sight", s.get("abc123").label == "Old file")
+    s = PlanStore(db)
+    first = s.active_id("w")
+    s.duplicate("w", first, "Copy")
+    check("duplicating activates the copy", s.get("w").label == "Copy" and s.active_id("w") != first)
+    s.activate("w", first)
+    check("activate switches back", s.active_id("w") == first)
+    s.set_results("w", {"x": 1})
+    p = s.get("w")
+    s.put("w", p)
+    check("editing a plan drops its cached results", s.results("w") is None)
+    s.delete("w", first)
+    check("deleting the active plan activates another", len(s.scenarios("w")) == 1)
+    try:
+        s.delete("w", s.active_id("w"))
+        kept = False
+    except ValueError:
+        kept = True
+    check("the last plan cannot be deleted", kept)
+    a = dict(wizard.DEFAULTS, partner="1", mortgage="100000", risk="growth", tax="flat",
+             flat_rate="25")
+    for step, *_ in wizard.STEPS:
+        check(f"wizard defaults validate: {step}", wizard.validate(step, a) == [])
+    bad = dict(a, age="70", retire_age="60")
+    check("wizard refuses retirement before today", wizard.validate("you", bad) != [])
+    plan = wizard.build_plan(a)
+    check("the wizard's plan has two people and a loan", len(plan.persons) == 2 and len(plan.loans) == 1)
+    check("every account's allocation sums to one",
+          all(close(sum(l.weights), 1.0) for l in plan.ledgers))
+    check("flat tax becomes one band", plan.tax.ordinary.rates == [0.25])
+    spend_now = sum(e.amount for e in plan.expenses if e.start_age < plan.persons[0].retire_age)
+    check("working-years spending equals the answer", close(spend_now, float(a["spend"])))
+    res = Projection(plan).run(200, seed=1)
+    check("the wizard's plan runs", np.isfinite(res.net_worth).all())
+
+
+# ------------------------------------------------------------------ web
+def test_web():
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False)
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        fake = FakeYahoo({"VTI": synthetic("VTI", seed=1),
+                          "BND": synthetic("BND", mu=0.03, sigma=0.05, seed=2,
+                                           name="Vanguard Total Bond Market ETF")})
+        wa.collector._fetch, wa.collector._long_run, wa.collector._pause = \
+            fake.fetch, fake.long_run, 0
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        pages = ["/", "/about", "/method", "/help", "/dashboard", "/plan/household",
+                 "/plan/income", "/plan/accounts", "/plan/markets", "/reports/cashflow",
+                 "/audit", "/start", "/start?step=review", "/scenarios", "/compare",
+                 "/portfolios", "/portfolios/new", "/prices", "/system", "/search?q=tax",
+                 "/healthz"]
+        bad = [(u, c.get(u).status_code) for u in pages]
+        bad = [x for x in bad if x[1] != 200]
+        check("every top-level page renders", not bad, bad)
+        r = c.post("/portfolios/new", data={"name": "T", "currency": "USD",
+                                            "holdings": "VTI, 10, 2000\nBND, 20\nCASH, 500"},
+                   follow_redirects=False)
+        pid = int(r.headers["location"].rsplit("/", 1)[-1])
+        time.sleep(0.5)                     # the background fetch for new symbols
+        wa.collector.collect(reason="test")
+        pages = [f"/portfolios/{pid}", f"/portfolios/{pid}/project", f"/portfolios/{pid}/stress",
+                 "/securities/VTI"]
+        bad = [(u, c.get(u).status_code) for u in pages]
+        check("portfolio pages render", all(s == 200 for _, s in bad), bad)
+        r = c.post(f"/portfolios/{pid}/project", data={
+            "years": "12", "frequency": "annual", "method": "fat_tails", "trials": "1000",
+            "target": "5000", "flow-0-kind": "contribution", "flow-0-amount": "1200",
+            "flow-0-start": "1", "flow-0-end": "12", "flow-0-indexed": "1",
+            "inflation": "2.5", "fee": "0.1", "rebalance": "annual"}, follow_redirects=True)
+        check("a projection runs from the form", r.status_code == 200 and "Year by year" in r.text)
+        rid = int(re.search(r"run=(\d+)", str(r.url)).group(1))
+        csv = c.get(f"/portfolios/{pid}/projections/{rid}.csv")
+        check("the projection table downloads as CSV",
+              csv.status_code == 200 and len(csv.text.strip().splitlines()) == 13)
+        other = TestClient(wa.app, raise_server_exceptions=False)
+        check("another browser cannot open the portfolio",
+              other.get(f"/portfolios/{pid}").status_code == 404)
+        r = c.post("/start/finish", data={"mode": "new"}, follow_redirects=True)
+        check("the wizard builds a plan from defaults", r.status_code == 200)
+        check("the new plan is a second scenario", len(wa.store.scenarios(
+            next(iter({x["owner"] for x in wa.db.query("SELECT owner FROM plans")})))) >= 1)
+        wa.db.dispose()
+
+
+# ------------------------------------------------------------------ builder
+def _fake_resolver():
+    from portfolio import builder
+    book = {"AAPL": ("Apple Inc.", "EQUITY", 200.0, "USD"),
+            "MSFT": ("Microsoft Corporation", "EQUITY", 400.0, "USD"),
+            "BND": ("Vanguard Total Bond Market Index Fund ETF", "ETF", 70.0, "USD"),
+            "IVV": ("iShares Core S&P 500 ETF", "ETF", 700.0, "USD"),
+            "VOD.L": ("Vodafone Group Plc", "EQUITY", 120.0, "GBp")}
+    def fetch(sym, range_="5d", interval="1d"):
+        if sym not in book:
+            raise yahoo.YahooError("not found")
+        n, t, px, cur = book[sym]
+        return yahoo.History(symbol=sym, name=n, quote_type=t, currency=cur, price=px,
+                             bars=[yahoo.Bar(date.today().isoformat(), px, px)])
+    def search(q, limit=6):
+        q = q.lower()
+        if q == "us9219378356":
+            return [{"symbol": "BND", "name": book["BND"][0], "type": "ETF", "exchange": "NGM"}]
+        if "s&p 500" in q:
+            return [{"symbol": "IVV", "name": book["IVV"][0], "type": "ETF", "exchange": "PCX"},
+                    {"symbol": "SPY", "name": "SPDR S&P 500 ETF", "type": "ETF", "exchange": "PCX"}]
+        return []
+    return builder.Resolver(fetch=fetch, search=search)
+
+
+def test_builder():
+    import openpyxl
+    from portfolio import builder
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Brokerage"
+    ws.append(["Positions report"]); ws.append(["As of today"]); ws.append([])
+    ws.append(["Ticker Symbol", "Security Description", "Qty held", "Last Price",
+               "Market Value (USD)", "Avg Cost", "Asset Type"])
+    ws.append(["NASDAQ:AAPL", "Apple Inc", 50, 200, 10000, 120, "Equity"])
+    ws.append(["MSFT US Equity", "Microsoft Corp", 20, None, None, 300, "Equity"])
+    ws.append(["", "iShares Core S&P 500 ETF", None, None, 7000, None, "Equity"])
+    ws.append(["US9219378356", "Vanguard Total Bond Market ETF", 100, 70, 7000, 72, "Fixed Income"])
+    ws.append(["SPAXX", "Fidelity Government Money Market", None, None, 4200, None, "Cash"])
+    ws.append(["AAPL", "Apple Inc", 10, 200, 2000, 150, "Equity"])
+    ws.append(["VOD.L", "Vodafone", 1000, 120, 120000, None, "Equity"])   # pence typed as pounds
+    ws.append(["Subtotal", "", None, None, 31400, None, ""])
+    ws2 = wb.create_sheet("Roth IRA")
+    ws2.append(["Symbol", "Name", "Quantity", "Value", "Cost Basis"])
+    ws2.append(["BND", "Vanguard Total Bond", 10, 700, 400])
+    ws2.append(["ZZZZ", "Imaginary Holdings", 5, 500, 400])
+    buf = io.BytesIO()
+    wb.save(buf)
+    d = builder.analyse(buf.getvalue(), "positions.xlsx", resolver=_fake_resolver())
+    by = {(x["symbol"], x["account"]): x for x in d["lines"]}
+    check("the header is found below a preamble", "row 4" in d["messages"][0], d["messages"])
+    check("an exchange-prefixed symbol resolves", by[("AAPL", "Brokerage")]["confidence"] == "high")
+    check("repeated lines merge", by[("AAPL", "Brokerage")]["quantity"] == 60
+          and by[("AAPL", "Brokerage")]["merged"] == 2)
+    check("per-share cost becomes a total",
+          close(by[("AAPL", "Brokerage")]["cost"], 50 * 120 + 10 * 150))
+    check("a Bloomberg-style ticker resolves", ("MSFT", "Brokerage") in by)
+    ivv = by[("IVV", "Brokerage")]
+    check("a name-only line is found by search", ivv["how"] == "name search"
+          and len(ivv["alternatives"]) == 2)
+    check("a missing quantity comes from value / price", close(ivv["quantity"], 10.0))
+    check("an ISIN resolves", by[("BND", "Brokerage")]["how"] == "identifier")
+    check("a money-market line becomes cash",
+          by[("CASH", "Brokerage")]["quantity"] == 4200 and by[("CASH", "Brokerage")]["confidence"] == "cash")
+    vod = by[("VOD.L", "Brokerage")]
+    check("a pounds-versus-pence price is flagged",
+          any("100×" in n for n in vod["notes"]) and vod["confidence"] != "high", vod["notes"])
+    check("the sheet name becomes the account", ("BND", "Roth IRA") in by)
+    check("a total-cost column sized like the position stays a total",
+          by[("ZZZZ", "Roth IRA")]["cost"] == 400)
+    z = by[("ZZZZ", "Roth IRA")]
+    check("an unknown security is left unticked", z["confidence"] == "none" and not z["include"])
+    check("subtotals are skipped", not any(x["raw_symbol"].lower() == "subtotal"
+                                           for x in d["lines"]))
+    # CSV without a header
+    d = builder.analyse(b"AAPL,10,1500\nMSFT,5,1000\n", "x.csv", resolver=_fake_resolver())
+    check("a headerless CSV is read as symbol, quantity, cost",
+          [(x["symbol"], x["quantity"], x["cost"]) for x in d["lines"]] ==
+          [("AAPL", 10.0, 1500.0), ("MSFT", 5.0, 1000.0)])
+    d = builder.analyse(b"hello\nworld\n", "x.csv", resolver=_fake_resolver())
+    check("a file with no positions says so", d["lines"] == [] and d["messages"])
+    try:
+        builder.read_sheets(b"\xd0\xcf\x11\xe0", "old.xls")
+        refused = False
+    except ValueError:
+        refused = True
+    check("old .xls files are refused with advice", refused)
+
+
+def test_security_admin():
+    from routes.security_routes import parse_prices
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    r.create_security("myfund", name="Private fund", currency="USD", asset_class="property",
+                      source="manual")
+    old = (date.today() - timedelta(days=500)).isoformat()
+    got = r.put_prices("MYFUND", [(old, 50.0, None),
+                                  ((date.today() - timedelta(days=10)).isoformat(), 100.0, None),
+                                  (date.today().isoformat(), 104.0, None)])
+    sec = r.security("MYFUND")
+    check("typed prices set the latest price", sec["last_price"] == 104.0 and sec["prev_close"] == 100.0)
+    check("typed prices past retention are skipped", got["too_old"] == 1 and got["stored"] == 2)
+    r.delete_prices("MYFUND", [date.today().isoformat()])
+    check("deleting the latest close rolls the price back", r.security("MYFUND")["last_price"] == 100.0)
+    pid = r.create("w", "P")
+    r.add_holding("w", pid, "MYFUND", 3)
+    check("a manual security is never fetched", "MYFUND" not in r.tracked_symbols())
+    try:
+        r.delete_security("MYFUND")
+        blocked = False
+    except ValueError:
+        blocked = True
+    check("a held security cannot be deleted", blocked)
+    r.delete("w", pid)
+    r.delete_security("MYFUND")
+    check("an unheld security is deleted with its prices",
+          r.security("MYFUND") is None and r.price_stats_for("MYFUND") == 0)
+    try:
+        r.create_security("BAD SYMBOL!")
+        rejected = False
+    except ValueError:
+        rejected = True
+    check("an invalid symbol is rejected", rejected)
+    rows, bad = parse_prices("date,close\n2026-01-02\t1,234.5\n2026-01-03\t12\t11.5\nnope,3\n2026-01-04,-1")
+    check("price paste parses dates, thousands and tabs",
+          rows == [("2026-01-02", 1234.5, None), ("2026-01-03", 12.0, 11.5)] and len(bad) == 2, (rows, bad))
+
+
+def test_admin_gate():
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        wa = RetPlanWebApp(config=Config(data_dir=d, database_url=f"sqlite:///{d}/a.db",
+                                         prices_enabled=False, admin_password="s3cret"),
+                           start_scheduler=False)
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        c.post("/securities/new", data={"symbol": "XYZ", "source": "manual"})
+        check("a non-admin cannot add a security", wa.portfolios.security("XYZ") is None)
+        c.post("/admin/login", data={"password": "wrong"})
+        c.post("/securities/new", data={"symbol": "XYZ", "source": "manual"})
+        check("a wrong password does not grant admin", wa.portfolios.security("XYZ") is None)
+        c.post("/admin/login", data={"password": "s3cret"})
+        c.post("/securities/new", data={"symbol": "XYZ", "source": "manual",
+                                        "prices": f"{date.today().isoformat()},10"})
+        check("an admin can add a manual security with prices",
+              (wa.portfolios.security("XYZ") or {}).get("last_price") == 10.0)
+        check("the admin sees it in the list", "XYZ" in c.get("/securities").text)
+        other = TestClient(wa.app, raise_server_exceptions=False)
+        check("another browser is not admin", "XYZ" not in other.get("/securities").text)
+        c.post("/admin/logout")
+        c.post("/securities/XYZ/delete")
+        check("after signing out, delete is refused", wa.portfolios.security("XYZ") is not None)
+        wa.db.dispose()
+
+
+def main():
+    global DB_URL
+    if "--database" in sys.argv:
+        DB_URL = sys.argv[sys.argv.index("--database") + 1]
+    t0 = time.time()
+    print(f"database: {DB_URL}")
+    test_schema_files(); test_schema_mismatch_detected()
+    test_repository(); test_classify(); test_fx_helpers()
+    test_prices_and_retention(); test_importer(); test_config()
+    test_projection_closed_forms(); test_projection_statistics()
+    test_projection_structure(); test_stress(); test_rebalance()
+    test_plan_store_and_wizard(); test_builder(); test_security_admin()
+    test_admin_gate(); test_web()
+    print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
+    for f in FAIL:
+        print("  FAILED:", f)
+    return 1 if FAIL else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

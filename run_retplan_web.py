@@ -41,7 +41,8 @@ def main() -> int:
                     help="auto-reload on source changes (development only)")
     ap.add_argument("--log-level", default="info",
                     choices=["critical", "error", "warning", "info", "debug"])
-    ap.add_argument("--data-dir", default=os.environ.get("RETPLAN_DATA", "data"))
+    ap.add_argument("--data-dir", default=os.environ.get("RETPLAN_DATA"),
+                    help="overrides [app] data_dir in config/retplan.toml")
     args = ap.parse_args()
 
     logging.basicConfig(
@@ -61,7 +62,8 @@ def main() -> int:
 
     _banner(args.host, args.port, __version__)
     if args.reload:
-        os.environ["RETPLAN_DATA"] = args.data_dir
+        if args.data_dir:
+            os.environ["RETPLAN_DATA"] = args.data_dir
         uvicorn.run("web.retplan_webapp:create_app", host=args.host, port=args.port,
                     reload=True, factory=True, log_level=args.log_level)
     else:

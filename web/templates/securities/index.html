@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Securities{% endblock %}
+{% block content %}
+{% call ui.page_head('Securities', 'Look up any stock, fund, index or currency on Yahoo Finance' ~ (', and manage the list RetPlan prices every day.' if admin else '. The list below shows the securities in your portfolios.'), eyebrow='Market data', help=url_for('help_prices')) %}
+  {% if admin %}
+    {{ ui.pill('brand', 'administrator') }}
+    <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#add-sec"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a security</button>
+    {% if mode == 'password' %}<form method="post" action="{{ url_for('admin_logout') }}"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>{% endif %}
+  {% elif mode == 'password' %}
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_login', next='/securities') }}"><i class="bi bi-shield-lock" aria-hidden="true"></i> Administrator sign-in</a>
+  {% endif %}
+{% endcall %}
+
+<div class="card"><div class="card-body">
+  <form class="row g-2 align-items-end" method="get" action="{{ url_for('security_lookup') }}">
+    <div class="col-md-6"><label class="form-label" for="lk">Look up a security</label>
+      <div class="ticker-box"><input class="form-control mono" id="lk" name="symbol" autocomplete="off" required placeholder="A symbol or a name: MSFT, vanguard total, VOD.L, BTC-USD" data-ticker data-ticker-name="#lk-name"></div>
+      <div class="form-hint mt-1 text-truncate" id="lk-name">Pick from the suggestions, or type an exact Yahoo symbol.</div></div>
+    <div class="col-md-2"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Look up</button></div>
+  </form>
+</div></div>
+
+{% if admin %}
+<div class="collapse" id="add-sec"><form class="card mb-3" method="post" action="{{ url_for('security_create') }}" data-busy="Adding…">
+  <div class="card-header"><i class="bi bi-plus-square" aria-hidden="true"></i> Add a security</div>
+  <div class="card-body"><div class="row g-3">
+    <div class="col-md-3"><label class="form-label" for="n-sym">Symbol</label>
+      <div class="ticker-box"><input class="form-control mono" id="n-sym" name="symbol" required maxlength="32" autocomplete="off" data-ticker data-ticker-name="#n-hint"></div>
+      <div class="form-hint mt-1 text-truncate" id="n-hint">Yahoo's symbol, or your own for a manual one (e.g. PRIVATE-FUND-A).</div></div>
+    <div class="col-md-5"><label class="form-label" for="n-name">Name <span class="small-muted">(filled from Yahoo if blank)</span></label>
+      <input class="form-control" id="n-name" name="name" maxlength="200"></div>
+    <div class="col-md-4"><span class="form-label d-block">Prices from</span>
+      {{ ui.seg('source', [('yahoo', 'Yahoo, daily'), ('manual', 'Typed in by me')], 'yahoo', 'n-src') }}</div>
+    <div class="col-md-2"><label class="form-label" for="n-cur">Currency</label><input class="form-control" id="n-cur" name="currency" maxlength="8" placeholder="USD"></div>
+    <div class="col-md-3"><label class="form-label" for="n-qt">Type</label>
+      <select class="form-select" id="n-qt" name="quote_type"><option value="">-</option>{% for q in quote_types %}<option>{{ q }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label" for="n-cls">Asset class</label>
+      <select class="form-select" id="n-cls" name="asset_class">{% for k, l in classes %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+    <div class="col-md-4"><label class="form-label" for="n-ex">Exchange</label><input class="form-control" id="n-ex" name="exchange" maxlength="60"></div>
+    <div class="col-12"><label class="form-label" for="n-px">Prices, for a manual security <span class="small-muted">- one per line: date, close[, adjusted close]</span></label>
+      <textarea class="form-control mono" id="n-px" name="prices" rows="4" placeholder="2026-06-30, 104.20&#10;2026-09-30, 107.85"></textarea>
+      <div class="form-hint mt-1">Closes older than {{ retention }} days are not kept. A quarterly valuation is fine; projections estimate volatility better from more frequent prices.</div></div>
+    <div class="col-12"><label class="form-label" for="n-notes">Notes</label><input class="form-control" id="n-notes" name="notes" maxlength="500"></div>
+  </div>
+  <button class="btn btn-primary mt-3" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Add security</button></div>
+</form></div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> {{ 'Every tracked security' if admin else 'Your securities' }} <span class="small-muted fw-normal">{{ rows|length }}</span>
+    <form class="ms-auto d-flex gap-1" method="get" action="{{ url_for('securities') }}"><label class="visually-hidden" for="flt">Filter</label>
+      <input class="form-control form-control-sm" id="flt" name="q" value="{{ q }}" placeholder="Filter the list"><button class="btn btn-sm btn-outline-secondary">Filter</button></form></div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Symbol</th><th>Class</th><th>Source</th><th class="num">Last close</th><th>Date</th><th class="num">Closes kept</th><th class="num">Holdings</th><th>Status</th></tr></thead>
+    <tbody>{% for s in rows %}<tr>
+      <td><a class="mono fw-bold" href="{{ url_for('security', symbol=s.symbol) }}">{{ s.symbol }}</a>{% if s.mine %} <span class="small-muted">· yours</span>{% endif %}<span class="cell-sub text-truncate" style="max-width:22rem">{{ s.name }}</span></td>
+      <td>{{ 'exchange rate' if s.symbol.endswith('=X') else class_info.get(s.asset_class, {}).get('label', '-') }}</td>
+      <td>{{ 'manual' if s.source == 'manual' else 'Yahoo' }}</td>
+      <td class="num">{{ '%.4g'|format(s.last_price) if s.last_price is not none else '-' }} <span class="small-muted">{{ s.currency }}</span></td>
+      <td class="small-muted">{{ s.last_price_date or '' }}</td><td class="num">{{ s.n_prices }}</td>
+      <td class="num">{{ s.n_portfolios if admin else ('yes' if s.mine else '') }}</td>
+      <td>{% if s.fetch_error %}{{ ui.pill('bad', 'error') }}{% elif s.last_price is none %}{{ ui.pill('warn', 'no price') }}{% else %}{{ ui.pill('ok', 'ok') }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="8">{% call ui.empty('tags', 'Nothing here yet', 'Look a symbol up above, or add holdings to a portfolio - their securities appear here.') %}{% endcall %}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</div>
+{% if not admin %}
+<p class="small-muted">{% if mode == 'password' %}Adding, amending and deleting securities needs the administrator password.{% elif mode == 'local' %}Adding, amending and deleting securities is allowed only from the computer RetPlan runs on.{% else %}Administration is switched off in the configuration.{% endif %} See <a href="{{ url_for('help_prices') }}#admin">Daily prices</a>.</p>
+{% endif %}
+{% endblock %}

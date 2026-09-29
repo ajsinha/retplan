@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Prices{% endblock %}
+{% block content %}
+{% call ui.page_head('Prices', 'Daily closes for every symbol held in any portfolio, collected from Yahoo Finance. Closes older than ' ~ config.prices_retention_days ~ ' days are deleted; long-run statistics are kept as numbers, not as prices.', eyebrow='Market data', help=url_for('help_prices')) %}
+  <form method="post" action="{{ url_for('prices_run') }}"><button class="btn btn-sm btn-primary" type="submit" {% if running %}disabled{% endif %}><i class="bi bi-arrow-repeat {{ 'spin' if running }}" aria-hidden="true"></i> {{ 'Collecting…' if running else 'Collect now' }}</button></form>
+{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Schedule', ('daily at ' ~ scheduler.run_at) if scheduler.enabled else 'off', ('next ' ~ scheduler.next_run|replace('T', ' ')) if scheduler.next_run else ('set prices.enabled in config' if not scheduler.enabled else 'starting'), 'alarm', '' if scheduler.enabled else 'warn') }}
+  {{ ui.kpi('Symbols tracked', tracked|length, 'held in a portfolio, plus FX pairs', 'tags') }}
+  {{ ui.kpi('Daily closes stored', '{:,}'.format(stats.rows), (stats.first ~ ' to ' ~ stats.last) if stats.first else 'none yet', 'database') }}
+  {{ ui.kpi('Last run', runs[0].started_at|dt if runs else 'never', ((runs[0].ok ~ ' ok, ' ~ runs[0].failed ~ ' failed') if runs and runs[0].finished_at else ('running' if runs else '')), 'clock-history', ('bad' if runs and runs[0].failed and not runs[0].ok else ('warn' if runs and runs[0].failed else '')) if runs else 'warn') }}
+</div>
+<div class="card">
+  <div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> Securities <span class="small-muted fw-normal">{{ secs|length }}</span></div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Symbol</th><th>Class</th><th class="num">Last close</th><th>Date</th><th class="num">Closes kept</th><th class="num">Long-run return</th><th class="num">Long-run vol</th><th class="num">Portfolios</th><th>Status</th></tr></thead>
+    <tbody>{% for s in secs if s.symbol != 'CASH' %}<tr>
+      <td><a class="mono fw-bold" href="{{ url_for('security', symbol=s.symbol) }}">{{ s.symbol }}</a><span class="cell-sub text-truncate" style="max-width:18rem">{{ s.name }}</span></td>
+      <td>{{ classes.get(s.asset_class, {}).get('label', '-') if not s.symbol.endswith('=X') else 'exchange rate' }}</td>
+      <td class="num">{{ '%.4g'|format(s.last_price) if s.last_price is not none else '-' }} <span class="small-muted">{{ s.currency }}</span></td>
+      <td class="small-muted">{{ s.last_price_date or '' }}</td>
+      <td class="num">{{ s.n_prices }}</td>
+      <td class="num">{{ s.lt_return|pct if s.lt_return is not none else '' }}</td>
+      <td class="num">{{ s.lt_vol|pct if s.lt_vol is not none else '' }}</td>
+      <td class="num">{{ s.n_portfolios }}</td>
+      <td>{% if s.fetch_error %}{{ ui.pill('bad', 'error') }} <span class="small-muted">{{ s.fetch_error }}</span>{% elif s.last_price is none %}{{ ui.pill('warn', 'pending') }}{% else %}{{ ui.pill('ok', 'ok') }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="9">{% call ui.empty('tags', 'Nothing tracked yet', 'Prices are collected for symbols you hold. Add holdings to a portfolio.') %}<a class="btn btn-primary" href="{{ url_for('portfolios') }}">Go to portfolios</a>{% endcall %}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</div>
+<div class="card">
+  <div class="card-header"><i class="bi bi-journal-text" aria-hidden="true"></i> Collection runs</div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm mb-0">
+    <thead><tr><th>Started</th><th>Why</th><th class="num">Symbols</th><th class="num">OK</th><th class="num">Failed</th><th class="num">Rows written</th><th class="num">Rows pruned</th><th>Message</th></tr></thead>
+    <tbody>{% for r in runs %}<tr><td class="text-nowrap">{{ r.started_at|dt }}</td><td>{{ r.reason }}</td><td class="num">{{ r.symbols }}</td><td class="num">{{ r.ok }}</td>
+      <td class="num {{ 'down' if r.failed }}">{{ r.failed }}</td><td class="num">{{ r.rows_added }}</td><td class="num">{{ r.rows_pruned }}</td>
+      <td class="small-muted">{{ r.message if r.finished_at else 'running…' }}</td></tr>
+    {% else %}<tr><td colspan="8" class="text-center small-muted py-3">No runs yet.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}

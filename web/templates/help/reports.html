@@ -1,0 +1,92 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p><a class="help-goto" href="{{ url_for('report', name='cashflow') }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Open the reports</a></p>
+<p>Three year-by-year tables &mdash; cash flow, balance sheet and tax &mdash; plus the
+audit on the last tab. They are where you check the model&rsquo;s arithmetic against
+your own understanding of your finances, one year at a time.</p>
+
+<h2>What the reports show, and what they do not</h2>
+<ul>
+  <li><strong>Deterministic.</strong> Every report is the fixed-return projection:
+      each asset earns its typical (median) growth rate every year - or its average,
+      if you chose that on the Markets page - and inflation sits at its mean.
+      It is the same path behind the deterministic dashboard tiles, not a median of
+      the simulation. Running a simulation does not change these tables.</li>
+  <li><strong>Real terms.</strong> Every figure is in today&rsquo;s money, so a flat
+      line means &ldquo;keeps its purchasing power&rdquo;.</li>
+  <li><strong>One row per year</strong>, starting with the current calendar year. The
+      age column is the first person&rsquo;s age.</li>
+</ul>
+{% call note('why', 'Why a deterministic table at all') %}
+<p>A median across thousands of futures is not a path: its income, tax and balances
+come from different trials and do not add up. The fixed-return projection does, so it
+is the only table you can reconcile line by line. Use it to check the mechanics, and
+the simulation to judge the odds.</p>
+{% endcall %}
+
+<h2>Cash flow</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:20%">Column</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td>Income</td><td>Every income row for the year, plus any forced draws.</td></tr>
+    <tr><td>Forced draws</td><td>Minimum distributions a wrapper mandates from a certain age, shown separately so you can see them (they are already inside Income).</td></tr>
+    <tr><td>Spending</td><td>What the withdrawal policy set for the year, plus debt payments.</td></tr>
+    <tr><td>Tax</td><td>Tax on income plus the extra tax triggered by withdrawals.</td></tr>
+    <tr><td>Withdrawals</td><td>Gross amounts taken from accounts to cover the gap, in draw order, before tax and any early-access penalty.</td></tr>
+    <tr><td>Paid in</td><td>Contributions and any surplus swept into an account.</td></tr>
+    <tr><td>Fees</td><td>Fund, platform and adviser charges taken from the balances.</td></tr>
+    <tr><td>Shortfall</td><td>Need the plan could not meet. Any row with a shortfall is shaded red.</td></tr>
+    <tr><td>Portfolio</td><td>Total account balances at the end of the year.</td></tr>
+  </tbody>
+</table>
+</div>
+{% call note('tip', 'The line that should always balance') %}
+<p>For any year: <em>Income + Withdrawals &minus; Tax &minus; Spending + Shortfall
+= Paid in</em>, apart from any early-access penalties. If you have none and a row does
+not balance to the nearest unit, something is wrong &mdash; check the audit.</p>
+{% endcall %}
+
+<h2>Balance sheet</h2>
+<p>One column per tax wrapper, then the portfolio total, the debt outstanding and net
+worth (portfolio less debt).</p>
+{% call note('trap', 'Two different moments in one row') %}
+<p>The wrapper columns are balances at the <strong>start</strong> of the year;
+Portfolio and Net worth are at the <strong>end</strong> of it, after that
+year&rsquo;s flows and returns. So the wrapper columns of one row add up to the
+Portfolio of the row above, not the row they sit in.</p>
+{% endcall %}
+<p>What to check: that the draw order empties the wrappers you expect first; that a
+mortgage disappears in the year it should; that net worth does not fall off a cliff
+the year a pension or salary stops.</p>
+
+<h2>Tax</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:20%">Column</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td>Taxable income</td><td>The taxable base for the year: taxable income above the allowance, including the taxable share of withdrawals.</td></tr>
+    <tr><td>Tax</td><td>Total tax, as in the cash-flow report.</td></tr>
+    <tr><td>Withdrawals</td><td>Gross withdrawals, as in the cash-flow report.</td></tr>
+    <tr><td>Effective rate</td><td>Tax &divide; (Income + Withdrawals). Blank in a year with essentially nothing coming in.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The effective rate is the number that describes what it costs to fund a year. Look
+for spikes: a year where a pension starts on top of a salary, or where forced draws
+push you into a higher band, is often cheaper to smooth by drawing earlier from the
+taxed wrapper. See {{ goto('help_tax', 'Tax') }}.</p>
+
+<h2>What to check in each</h2>
+{% call steps() %}
+<li><strong>First row.</strong> Does income and spending match what you actually live on
+    this year? If not, fix the inputs before looking at anything else.</li>
+<li><strong>Retirement year.</strong> Does the salary stop and withdrawals start in the
+    year you expect?</li>
+<li><strong>Pension start ages.</strong> Does income step up when each pension begins?</li>
+<li><strong>The first shortfall.</strong> If any row is red, that is the
+    &ldquo;money lasts to age&rdquo; year on the dashboard.</li>
+<li><strong>Tax spikes.</strong> A jump in the effective rate is a planning opportunity.</li>
+{% endcall %}
+{% endblock %}

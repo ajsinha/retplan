@@ -6,6 +6,7 @@ sequencing and policy rather than a closed-form approximation of them.
 from __future__ import annotations
 
 import copy
+import math
 
 import numpy as np
 
@@ -60,6 +61,23 @@ def max_sustainable_spend(plan, trials=1000, seed=None, confidence=None):
                 first_year_base=first_year)
 
 
+def _retire_at(q, age):
+    """Move everyone's retirement to ``age``. Earnings that stopped at the old
+    retirement age stop at the new one - later as well as earlier; earnings that
+    were set to end before retirement keep their own end."""
+    old = {i: pp.retire_age for i, pp in enumerate(q.persons)}
+    for pp in q.persons:
+        pp.retire_age = age
+    for row in q.income:
+        if row.category not in ("employment", "self_employment"):
+            continue
+        owner_old = old.get(row.owner, old.get(0))
+        if owner_old is not None and abs(row.end_age - owner_old) < 1e-9:
+            row.end_age = age
+        else:
+            row.end_age = min(row.end_age, age)
+
+
 def earliest_retirement_age(plan, trials=1000, seed=None, confidence=None):
     conf = plan.policy.confidence if confidence is None else confidence
     lo = plan.persons[0].age + 0.5
@@ -67,11 +85,7 @@ def earliest_retirement_age(plan, trials=1000, seed=None, confidence=None):
 
     def fn(age):
         q = copy.deepcopy(plan)
-        for pp in q.persons:
-            pp.retire_age = age
-        for row in q.income:
-            if row.category in ("employment", "self_employment"):
-                row.end_age = min(row.end_age, age)
+        _retire_at(q, age)
         return success_of(q, trials, seed)
 
     age, iters, ok = bisect(fn, lo, hi, conf, tol=1e-2)
@@ -127,16 +141,22 @@ def _perturb(plan, key, delta):
     elif key == "spend":
         q = _scaled(q, 1.0 + delta)
     elif key == "retage":
+        old = [pp.retire_age for pp in q.persons]
         for pp in q.persons:
             pp.retire_age += delta
         for row in q.income:
-            if row.category in ("employment", "self_employment"):
+            # only the earnings that stop at retirement move with it
+            if row.category in ("employment", "self_employment") and row.owner < len(old) \
+                    and abs(row.end_age - old[row.owner]) < 1e-9:
                 row.end_age += delta
     elif key == "fees":
-        q.platform_fee += delta
+        q.platform_fee = max(0.0, q.platform_fee + delta)
     elif key == "death":
         for pp in q.persons:
             pp.death_age += delta
+        # living longer only matters if the projection lasts that long
+        need = max(pp.death_age - pp.age for pp in q.persons)
+        q.horizon = int(min(80, max(q.horizon, math.ceil(need))))
     elif key == "vol":
         for a in q.market.assets:
             a.sigma = max(0.0, a.sigma + delta)

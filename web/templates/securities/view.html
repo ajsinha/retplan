@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}{{ sec.symbol }}{% endblock %}
+{% block content %}
+{% call ui.page_head(sec.symbol ~ (' · ' ~ sec.name if sec.name else ''), (sec.quote_type ~ ' · ' if sec.quote_type else '') ~ (sec.exchange ~ ' · ' if sec.exchange else '') ~ 'quoted in ' ~ (sec.currency or 'an unknown currency') ~ ' · prices ' ~ ('typed in by an administrator' if sec.source == 'manual' else 'from Yahoo, daily'), eyebrow='Security', help=url_for('help_prices')) %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('securities') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Securities</a>
+  {% if admin %}{{ ui.pill('brand', 'administrator') }}{% endif %}
+{% endcall %}
+{% if sec.fetch_error and sec.source != 'manual' %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Last fetch failed: {{ sec.fetch_error }}</div>{% endif %}
+{% if sec.notes %}<p class="lead-slate"><i class="bi bi-sticky" aria-hidden="true"></i> {{ sec.notes }}</p>{% endif %}
+<div class="stat-grid">
+  {{ ui.kpi('Last close', ('%.2f'|format(sec.last_price) ~ ' ' ~ (sec.currency or '')) if sec.last_price is not none else '-', sec.last_price_date or 'not priced yet', 'tag') }}
+  {% if stats %}
+  {{ ui.kpi('Over the stored period', stats.ret_1y|spct, stats.days ~ ' closes, dividends included', 'calendar3', 'good' if stats.ret_1y >= 0 else 'bad') }}
+  {{ ui.kpi('Volatility', stats.vol|pct, 'annualised, assuming daily closes', 'activity') }}
+  {{ ui.kpi('Worst fall', stats.max_dd|pct, 'peak to trough', 'graph-down-arrow', 'warn' if stats.max_dd < -0.2 else '') }}
+  {% endif %}
+  {% if sec.lt_return is not none %}{{ ui.kpi('Long run', sec.lt_return|pct ~ ' / yr', 'volatility ' ~ sec.lt_vol|pct ~ ' over ' ~ sec.lt_years|round(0)|int ~ ' years of monthly data', 'hourglass') }}{% endif %}
+  {% if sec.dividend_yield %}{{ ui.kpi('Dividend yield', sec.dividend_yield|pct(2), 'trailing twelve months', 'cash-stack') }}{% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-xl-8">
+    {% call ui.chart_card('Daily closes', 'graph-up', chart, sec.currency or '') %}
+      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Close</th><th class="num">Adjusted</th></tr></thead>
+        <tbody>{% for d, c, a in table[:40] %}<tr><td>{{ d }}</td><td class="num">{{ '%.2f'|format(c) }}</td><td class="num">{{ '%.2f'|format(a) }}</td></tr>{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  <div class="col-xl-4">
+    {% if not fx and mine %}
+    <div class="card"><div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> Asset class for your holdings</div>
+      <div class="card-body">
+        <form class="d-flex gap-2" method="post" action="{{ url_for('security_class', symbol=sec.symbol) }}">
+          <label class="visually-hidden" for="sc">Asset class</label>
+          <select class="form-select form-select-sm" id="sc" name="asset_class">{% for k, l in classes %}<option value="{{ k }}" {% if k == sec.asset_class %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary">Save</button></form>
+        <p class="small-muted mt-2 mb-0">RetPlan classes it as <strong>{{ classes|selectattr(0, 'equalto', sec.asset_class)|map(attribute=1)|first or 'Other' }}</strong>. Saving here sets the class on your own holdings of {{ sec.symbol }} only.</p>
+      </div></div>
+    {% endif %}
+    <div class="card"><div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> In your portfolios</div>
+      <div class="card-body">
+        {% if mine %}<ul class="list-rows">{% for h in mine %}<li><span class="grow"><a href="{{ url_for('portfolio_view', pid=h.pid) }}">{{ h.portfolio }}</a><span class="cell-sub">{{ h.account or 'no account' }}</span></span><span class="num">{{ '%g'|format(h.quantity) }}</span></li>{% endfor %}</ul>
+        {% else %}<p class="small-muted mb-0">{{ 'An exchange rate, priced so holdings in ' ~ sec.symbol[:3] ~ ' can be converted.' if fx else 'Not in any of your portfolios.' }}</p>{% endif %}
+      </div></div>
+  </div>
+</div>
+
+{% if admin and not fx %}
+<h2 class="h5 mt-2"><i class="bi bi-shield-lock" aria-hidden="true"></i> Administration</h2>
+<div class="row g-3">
+  <div class="col-xl-6">
+    <form class="card h-100" method="post" action="{{ url_for('security_edit', symbol=sec.symbol) }}">
+      <div class="card-header"><i class="bi bi-pencil" aria-hidden="true"></i> Amend</div>
+      <div class="card-body"><div class="row g-2">
+        <div class="col-12"><label class="form-label" for="e-name">Name</label><input class="form-control" id="e-name" name="name" value="{{ sec.name }}" maxlength="200"></div>
+        <div class="col-md-4"><label class="form-label" for="e-cur">Currency</label><input class="form-control" id="e-cur" name="currency" value="{{ sec.currency }}" maxlength="8"></div>
+        <div class="col-md-4"><label class="form-label" for="e-qt">Type</label><select class="form-select" id="e-qt" name="quote_type"><option value="">-</option>{% for q in quote_types %}<option {% if q == sec.quote_type %}selected{% endif %}>{{ q }}</option>{% endfor %}{% if sec.quote_type and sec.quote_type not in quote_types %}<option selected>{{ sec.quote_type }}</option>{% endif %}</select></div>
+        <div class="col-md-4"><label class="form-label" for="e-ex">Exchange</label><input class="form-control" id="e-ex" name="exchange" value="{{ sec.exchange }}" maxlength="60"></div>
+        <div class="col-md-6"><label class="form-label" for="e-cls">Asset class (everyone's default)</label><select class="form-select" id="e-cls" name="asset_class">{% for k, l in classes %}<option value="{{ k }}" {% if k == sec.asset_class %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="col-md-6"><span class="form-label d-block">Prices from</span>{{ ui.seg('source', [('yahoo', 'Yahoo'), ('manual', 'Typed in')], sec.source, 'e-src') }}</div>
+        <div class="col-12"><label class="form-label" for="e-notes">Notes</label><input class="form-control" id="e-notes" name="notes" value="{{ sec.notes }}" maxlength="500"></div>
+      </div>
+      <p class="form-hint mt-2 mb-2">The class here is the default for every workspace's holdings that follow the security; a holding with its own class keeps it. Currency changes how holdings are converted, so change it only to correct a mistake.</p>
+      <button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+    </form>
+  </div>
+  <div class="col-xl-6">
+    <form class="card h-100" method="post" action="{{ url_for('security_prices', symbol=sec.symbol) }}">
+      <div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Prices
+        {% if sec.source != 'manual' %}<span class="ms-auto small-muted fw-normal">Yahoo will overwrite typed prices on its next run</span>{% endif %}</div>
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-5"><label class="form-label" for="p-d">Date</label><input class="form-control" id="p-d" name="one_date" type="date"></div>
+          <div class="col-5"><label class="form-label" for="p-c">Close</label><input class="form-control num" id="p-c" name="one_close" type="number" step="any" min="0"></div>
+          <div class="col-2"><button class="btn btn-primary w-100" type="submit">Add</button></div>
+        </div>
+        <details class="advanced"><summary>Paste many (date, close[, adjusted close])</summary>
+          <textarea class="form-control mono" name="prices" rows="5" placeholder="2026-09-26, 101.20&#10;2026-09-29, 102.05"></textarea>
+          <button class="btn btn-sm btn-primary mt-2" type="submit">Store</button></details>
+        <div class="table-scroll mt-3" style="max-height:260px"><table class="table table-sm mb-0">
+          <thead><tr><th><span class="visually-hidden">Delete</span></th><th>Date</th><th class="num">Close</th><th class="num">Adjusted</th></tr></thead>
+          <tbody>{% for d, c, a in table %}<tr><td><input class="form-check-input" type="checkbox" name="delete_date" value="{{ d }}" aria-label="Delete {{ d }}"></td><td>{{ d }}</td><td class="num">{{ '%.4g'|format(c) }}</td><td class="num">{{ '%.4g'|format(a) }}</td></tr>
+          {% else %}<tr><td colspan="4" class="small-muted text-center py-3">No prices stored.</td></tr>{% endfor %}</tbody></table></div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% if table %}<button class="btn btn-sm btn-outline-secondary" type="submit">Delete ticked</button>{% endif %}
+        </div>
+        <p class="form-hint mt-2 mb-0">Closes older than {{ retention }} days are not kept.</p>
+      </div>
+    </form>
+  </div>
+  <div class="col-12">
+    <div class="card"><div class="card-body d-flex flex-wrap gap-2 align-items-center">
+      {% if sec.source != 'manual' %}
+      <form method="post" action="{{ url_for('security_refresh', symbol=sec.symbol) }}" data-busy="Fetching…"><button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Fetch from Yahoo now</button></form>
+      {% endif %}
+      <form method="post" action="{{ url_for('security_delete', symbol=sec.symbol) }}" data-confirm="Delete {{ sec.symbol }} and all its stored prices? This cannot be undone.">
+        <button class="btn btn-sm btn-outline-danger" type="submit" {% if holders %}disabled{% endif %}><i class="bi bi-trash" aria-hidden="true"></i> Delete security</button></form>
+      {% if holders %}<span class="small-muted">Held in {{ holders }} holding(s) across all workspaces, so it cannot be deleted; those holdings must be removed first.</span>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

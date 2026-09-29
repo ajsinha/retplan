@@ -1,0 +1,33 @@
+{# Building blocks for help topics, drawn as MAYA's help boxes. The names are the
+   ones every existing page uses: note(kind, title), steps(), field_table(rows),
+   goto(endpoint, label, section). #}
+
+{% macro note(kind, title) %}
+{% set cls = {'tip': 'tip', 'warn': 'warn', 'why': 'concept', 'trap': 'warn'}[kind] %}
+{% set icon = {'tip': 'bi-check2-circle', 'warn': 'bi-exclamation-triangle',
+               'why': 'bi-lightbulb', 'trap': 'bi-cone-striped'}[kind] %}
+<div class="help-box {{ cls }}"><div class="hb-title"><i class="bi {{ icon }}" aria-hidden="true"></i> {{ title }}</div>{{ caller() }}</div>
+{% endmacro %}
+
+{% macro steps() %}
+<ol class="help-steps">{{ caller() }}</ol>
+{% endmacro %}
+
+{% macro field_table(rows) %}
+<div class="help-table-wrap">
+<table class="table table-sm help-fields">
+  <thead><tr><th style="width:22%">Field</th><th style="width:30%">What it means</th>
+    <th>How to set it</th></tr></thead>
+  <tbody>
+    {% for name, means, howto in rows %}
+    <tr><td><code>{{ name }}</code></td><td>{{ means }}</td><td>{{ howto }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro goto(endpoint, label, section=None) %}
+<a class="help-goto" href="{{ url_for(endpoint, section=section) if section else url_for(endpoint) }}">
+  <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> {{ label }}</a>
+{% endmacro %}

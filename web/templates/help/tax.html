@@ -1,0 +1,74 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the tax editor', 'tax') }}</p>
+<p>Tax here is a table of bands. There is no country setting, no tax year, and no
+built-in rates &mdash; you type the schedule your jurisdiction applies.</p>
+
+<h2>Bands are in gross-income space</h2>
+<p>Each row is "from this income level, the marginal rate is this". The first band
+must start at 0. A tax-free allowance is therefore <strong>a 0% first band</strong>,
+not a separate field:</p>
+<table class="table table-sm" style="max-width:520px">
+  <thead><tr><th class="num">Income from</th><th class="num">Marginal rate</th><th>What it represents</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0</td><td class="num">0%</td><td>the tax-free allowance</td></tr>
+    <tr><td class="num">12,570</td><td class="num">20%</td><td>basic rate</td></tr>
+    <tr><td class="num">50,270</td><td class="num">40%</td><td>higher rate</td></tr>
+    <tr><td class="num">100,000</td><td class="num">60%</td><td>the allowance taper, as its effective rate</td></tr>
+    <tr><td class="num">125,140</td><td class="num">45%</td><td>additional rate</td></tr>
+  </tbody>
+</table>
+<p>An allowance <em>taper</em> &mdash; where the allowance is withdrawn above a
+threshold &mdash; is just a band carrying the higher effective marginal rate over
+the range where it bites. The example above is the UK's 60% band expressed exactly
+that way.</p>
+
+{% call note('why', 'Why bands, rather than an allowance field') %}
+<p>Because it keeps the schedule piecewise linear and strictly increasing, and that
+is what makes it <em>exactly invertible</em>. The model constantly needs to answer
+"how much must I withdraw so that, after tax, I can spend X?" With an invertible
+schedule that is a single calculation. With special-case allowance and taper logic
+it becomes a circular reference that a spreadsheet can only solve iteratively and
+non-deterministically. Expressing everything as bands buys exactness.</p>
+{% endcall %}
+
+<h2>The other settings</h2>
+{{ field_table([
+  ('Index bands to inflation', 'Whether thresholds keep pace with prices.',
+   'Ticked, the schedule holds in real terms. Unticked, bands freeze in nominal terms and fiscal drag emerges on its own - a real tax rise every year. Worth testing: over thirty years it is a large effect.'),
+  ('Capital gains inclusion', 'The share of a realised gain that enters taxable income.',
+   '100% taxes gains at ordinary rates. 50% is a half-inclusion system. 0% exempts them. For a separate flat gains rate, give the account a wrapper with a fixed taxable fraction instead.'),
+  ('Surtax / social contribution', 'A flat extra rate above a threshold.',
+   'For social charges or solidarity levies that sit on top of the main schedule.'),
+  ('Surtax threshold', 'Where the surtax starts.', '0 means no surtax.'),
+]) }}
+
+<h2>How tax is actually applied</h2>
+<p>Each year the model stacks your taxable income &mdash; employment, pensions, the
+taxable share of withdrawals &mdash; and applies the bands to the total. Two
+consequences worth internalising:</p>
+<ul>
+  <li>The marginal rate on a withdrawal depends on everything else you received that
+      year. Taking 20,000 from a pension in a year with a large salary is taxed
+      completely differently from the same withdrawal after you stop working.</li>
+  <li>The gap between retiring and your state pension starting is often the lowest-tax
+      window you will ever have. Drawing taxable money then, rather than later, is one
+      of the few genuinely free improvements available &mdash; and you can test it by
+      changing the draw order on the accounts page.</li>
+</ul>
+
+<h2>Checking your schedule</h2>
+<p>Enter your bands, then look at the tax report. The effective rate column is total
+tax over income plus withdrawals. Compare a year or two against a real tax
+calculation for your country. If it is close, the schedule is right; if it is
+systematically off, you have most likely entered net-of-relief contributions
+somewhere, or mis-set a wrapper's taxable fraction.</p>
+
+{% call note('warn', 'One tax unit, not two') %}
+<p>The model taxes the household as a single unit with one set of bands. Where a
+jurisdiction taxes individuals separately, this overstates tax for couples with
+uneven incomes &mdash; sometimes materially. It is the model's largest known
+simplification; see <a href="{{ url_for('help_limitations') }}">limitations</a>.</p>
+{% endcall %}
+{% endblock %}

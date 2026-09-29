@@ -1,0 +1,38 @@
+# RetPlan configuration.
+#
+# Every key can also be set from the environment, which wins over this file:
+#   RETPLAN_DATABASE_URL, RETPLAN_DATA, RETPLAN_SECRET,
+#   RETPLAN_PRICES_ENABLED, RETPLAN_PRICES_RUN_AT, RETPLAN_PRICES_RETENTION_DAYS
+#   RETPLAN_ADMIN_PASSWORD, RETPLAN_ADMIN_LOCAL
+# A different file can be named with RETPLAN_CONFIG=/path/to/file.toml.
+
+[app]
+# Where legacy plan files, the session secret and the default SQLite file live.
+# Relative paths (here and in a sqlite URL) are resolved from the project root.
+data_dir = "data"
+
+[database]
+# Pick the backend by URL. Switch at any time: point this at an empty database
+# and RetPlan builds the schema from schema/sqlite.sql or schema/postgres.sql.
+# (Data is not copied between backends; tools/copy_db.py does that.)
+#
+#   SQLite (default, zero setup):
+url = "sqlite:///{data_dir}/retplan.db"   # {data_dir} is [app] data_dir above
+#   PostgreSQL (needs the psycopg driver, installed from requirements.txt):
+# url = "postgresql+psycopg://retplan:CHANGE-ME@localhost:5432/retplan"
+echo = false          # log every SQL statement (debugging only)
+
+[prices]
+# Collect daily closes from Yahoo Finance for every held symbol.
+enabled = true
+run_at = "18:30"      # local time, after the US close; also runs at start-up if stale
+retention_days = 365  # closes older than this are deleted after each run
+
+[admin]
+# Administrators can add, amend and delete securities and their prices.
+# With no password, a request from this machine itself (127.0.0.1) is an
+# administrator - right for a personal install. Set a password if other people
+# can reach the app, and ALWAYS behind a reverse proxy (every proxied request
+# looks local). With a password set, sign in at /admin/login.
+password = ""
+local_is_admin = true   # ignored once a password is set

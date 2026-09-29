@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{# A help subject page, after MAYA's help/subject.html: breadcrumbs, a gradient topic
+   hero, on-page chips (built from the h2s by retplan.js, so they can never disagree
+   with the page), the article, a prev/next pager and related subjects. #}
+{% block title %}{{ topic.title }} · Help{% endblock %}
+{% block content %}
+<nav class="help-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <a href="{{ url_for('help') }}#cat-{{ help_related.category_id }}">{{ help_related.category }}</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <span aria-current="page">{{ topic.title }}</span>
+</nav>
+<header class="help-topic-hero">
+  <span class="ico"><i class="bi {{ topic.icon }}" aria-hidden="true"></i></span>
+  <div><h1>{{ topic.title }}{% if topic.badge %} <span class="badge">{{ topic.badge }}</span>{% endif %}</h1>
+    <p>{{ topic.summary }}</p></div>
+</header>
+<nav class="help-onpage mb-3" aria-label="On this page" data-toc-for="helpBody"></nav>
+<article class="help-article help-body card card-body" id="helpBody">
+  {% block help %}{% endblock %}
+</article>
+<div class="help-pager">
+  {% if help_related.prev %}<a class="btn btn-outline-secondary" href="{{ url_for('help_' ~ help_related.prev.slug|replace('-','_')) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> {{ help_related.prev.title }}</a>{% else %}<span></span>{% endif %}
+  {% if help_related.next %}<a class="btn btn-primary" href="{{ url_for('help_' ~ help_related.next.slug|replace('-','_')) }}">{{ help_related.next.title }} <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
+</div>
+<div class="help-related">
+  <div class="head"><i class="bi bi-signpost-2" aria-hidden="true"></i> More in {{ help_related.category }}</div>
+  <div class="chips">
+    {% for t in help_related.siblings %}<a class="chip" href="{{ url_for('help_' ~ t.slug|replace('-','_')) }}"><i class="bi {{ t.icon }}" aria-hidden="true"></i> {{ t.title }}</a>{% endfor %}
+    <a class="chip all" href="{{ url_for('help') }}"><i class="bi bi-grid" aria-hidden="true"></i> All help</a>
+  </div>
+</div>
+{% endblock %}

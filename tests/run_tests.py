@@ -385,13 +385,92 @@ def test_convergence():
           abs(vals[-1] - vals[-2]) < 0.03, f"{vals}")
 
 
+def test_model_fixes():
+    """The five modelling fixes made when the app stopped mirroring the workbook."""
+    print("\nmodel fixes")
+    import copy
+    from retplan.metrics import funded_ratio
+    from retplan.samples import sample_plan
+    from retplan.solvers import _perturb, _retire_at
+
+    # employer match is new money, paid on what you actually saved
+    def match_plan(spend):
+        p = simple_plan(spend, 0.0, 0.0, 0.0, 5)
+        p.persons = [Person("A", 40, 60, 90)]
+        p.income = [IncomeRow("pay", 0, "employment", 100000, "real", 0.0, False, 0, 200,
+                              0.0, 0.0, 1.0)]
+        lg = p.ledgers[0]
+        lg.contribution_pct_income, lg.employer_match_pct, lg.employer_match_cap_pct = 0.05, 1.0, 0.04
+        return p
+    r = Projection(match_plan(40000)).run(1)
+    check("employer match is paid on top of your own saving",
+          close(r.employer[0, 0], 4000.0) and close(r.contribution[0, 0], 100000 - 40000 + 4000),
+          f"employer {r.employer[0, 0]}, paid in {r.contribution[0, 0]}")
+    r = Projection(match_plan(97000)).run(1)       # only 3,000 of surplus
+    check("the match follows the saving actually made",
+          close(r.employer[0, 0], 3000.0) and close(r.contribution[0, 0], 6000.0),
+          f"employer {r.employer[0, 0]}, paid in {r.contribution[0, 0]}")
+    r = Projection(match_plan(100000)).run(1)      # no surplus
+    check("no saving, no match", r.employer[0, 0] == 0.0)
+    check("the reconciliation still ties with employer money",
+          reconcile(Projection(match_plan(40000)).run(1))["pass"])
+
+    # funded ratio counts forced draws once
+    p = simple_plan(20000, 1e6, 0.0, 0.0, 30)
+    p.persons = [Person("A", 69, 69, 200)]
+    p.wrappers[0].mrd_age = 70
+    p.wrappers[0].mrd_divisors = [(70, 25.0)]
+    r = Projection(p).run(1)
+    d = (1.03) ** -np.arange(r.spend.shape[1])
+    want = (r.balance[0, 0] + ((r.income[0] - r.mrd[0]) * d).sum()) / (r.spend[0] * d).sum()
+    check("funded ratio does not count forced draws as outside income",
+          r.mrd[0].sum() > 0 and close(float(funded_ratio(r, 0.03)[0]), want, 1e-12))
+
+    # fixed-return mode compounds at the typical (median) rate by default
+    p = simple_plan(0.0, 1000.0, 0.07, 0.0, 10)
+    p.market.assets[0].sigma = 0.17
+    r = Projection(p).run(1)
+    s2 = math.log1p(0.17 ** 2 / 1.07 ** 2)
+    g = 1.07 * math.exp(-0.5 * s2) - 1
+    check("fixed returns compound at the typical rate",
+          close(r.balance[0, 10], 1000 * (1 + g) ** 10, 1e-9), f"{r.balance[0, 10]}")
+    p.market.fixed_basis = "average"
+    r = Projection(p).run(1)
+    check("the average basis keeps the arithmetic mean",
+          close(r.balance[0, 10], 1000 * 1.07 ** 10, 1e-9))
+
+    # retiring later extends the salary that ended at retirement
+    q = sample_plan()
+    _retire_at(q, 70)
+    pay = [x for x in q.income if x.category == "employment"]
+    check("a later retirement extends earnings that stopped at retirement",
+          all(x.end_age == 70 for x in pay))
+    consult = [x for x in q.income if x.label.startswith("Part-time")][0]
+    check("earnings that start after retirement keep their own end",
+          consult.end_age == 70)
+    q = _perturb(sample_plan(), "fees", -0.05)
+    check("the fee driver never goes negative", q.platform_fee >= 0)
+    q = _perturb(sample_plan(), "death", 10.0)
+    check("the longevity driver lengthens the projection",
+          q.horizon >= max(pp.death_age - pp.age for pp in q.persons))
+
+    # the sample's cash and property accounts hold cash and property
+    sp = sample_plan()
+    labels = [a.label for a in sp.market.assets]
+    by = {lg.label: lg for lg in sp.ledgers}
+    check("sample cash reserve is invested in Cash",
+          by["Cash reserve"].weights[labels.index("Cash")] == 1.0)
+    check("sample rental property is invested in Property",
+          by["Rental property"].weights[labels.index("Property")] == 1.0)
+
+
 def main():
     slow = "--slow" in sys.argv
     t0 = time.time()
     test_rng(); test_tax(); test_amortisation()
     test_golden(); test_policies(); test_determinism()
     test_serialisation(); test_edges(); test_solvers()
-    test_convergence()
+    test_convergence(); test_model_fixes()
     test_market_statistics(200000 if slow else 40000)
     dt = time.time() - t0
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {dt:.1f}s")

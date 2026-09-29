@@ -81,6 +81,13 @@ class MarketSpec:
     fixed_path: list = field(default_factory=list)      # (T, A) simple returns
     historical: list = field(default_factory=list)      # (n, A) historical rows
     block_length: int = 5
+    fixed_basis: str = "typical"
+    """What 'fixed returns' means in the deterministic projection. 'typical' is each
+    asset's median growth rate, (1 + mu) * exp(-s2 / 2) - 1 with
+    s2 = ln(1 + sigma^2 / (1 + mu)^2) - what compounding actually delivers in the
+    middle future. 'average' is the arithmetic mean mu itself, which is higher
+    by roughly sigma^2 / 2 and makes a fixed-return plan look better than half of
+    its futures."""
     antithetic: bool = False
     calibrate: bool = True
     """Re-centre regime drift and crash drag so the *unconditional* mean return
@@ -237,12 +244,21 @@ class MarketModel:
             out[:, t] = prev
         return out
 
+    def fixed_returns(self) -> np.ndarray:
+        """Per-asset returns for the fixed (deterministic) mode; see fixed_basis."""
+        mu = np.asarray(self.mu, dtype=float)
+        if self.spec.fixed_basis == "average":
+            return mu
+        sig = np.array([a.sigma for a in self.spec.assets], dtype=float)
+        s2 = np.log1p((sig / np.maximum(1.0 + mu, 1e-9)) ** 2)
+        return (1.0 + mu) * np.exp(-0.5 * s2) - 1.0
+
     # -- main entry ------------------------------------------------------
     def generate(self, n_trials: int, T: int, seed: int):
         """Return dict with returns (n,T,A), inflation (n,T), regime, crash depth."""
         sp = self.spec
         if sp.mode == "fixed":
-            r = np.tile(self.mu, (n_trials, T, 1))  # no regimes, no jumps
+            r = np.tile(self.fixed_returns(), (n_trials, T, 1))  # no regimes, no jumps
             infl = np.full((n_trials, T), sp.inflation.mean)
             return dict(returns=r, inflation=infl,
                         regime=np.ones((n_trials, T), dtype=np.int8),

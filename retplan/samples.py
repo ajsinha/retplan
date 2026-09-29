@@ -69,8 +69,10 @@ def sample_plan() -> Plan:
     pen_glide = [0.45, 0.45, 0.05, 0.05, 0.00, 0.00]
     tfa = [0.85, 0.10, 0.00, 0.05, 0.00, 0.00]
     tfa_glide = [0.55, 0.35, 0.05, 0.05, 0.00, 0.00]
-    cash = [0.00, 0.00, 0.00, 1.00, 0.00, 0.00]
-    prop = [0.00, 0.00, 1.00, 0.00, 0.00, 0.00]
+    # asset order: Global equity, Government bonds, Corporate credit, Property,
+    # Cash, Alternatives (see sample_assets)
+    cash = [0.00, 0.00, 0.00, 0.00, 1.00, 0.00]
+    prop = [0.00, 0.00, 0.00, 1.00, 0.00, 0.00]
 
     return Plan(
         label="Sample household",

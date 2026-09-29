@@ -1,0 +1,67 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the spending editor', 'expenses') }}</p>
+<p>This is the input that decides the answer. Everything else adjusts the margin.</p>
+
+<h2>The columns</h2>
+{{ field_table([
+  ('Label', 'Your description of the category.', 'Group at a level you can actually verify against bank statements.'),
+  ('Amount / year', 'Annual cost in the chosen basis.', 'Today’s money on a real basis.'),
+  ('Basis', 'real or nominal.', 'Almost always real: costs rise with prices.'),
+  ('Essential', 'Whether this is a floor.',
+   'Ticked, no flexible policy may cut it. Housing, food, insurance, care: essential. Travel, hobbies, gifts: not.'),
+  ('Above CPI', 'Real growth on top of general inflation.',
+   '0% for most. 1-3% for healthcare and long-term care. 2-3% for education. Negative if you expect a category to fade.'),
+  ('Age curve', 'Whether the spending smile applies.',
+   'Tick for discretionary categories that fall away with age; leave clear for fixed costs.'),
+  ('From age / To age', 'When the cost applies.',
+   'Commuting might end at retirement; travel might end at 85; a mortgage-adjacent cost might start later.'),
+  ('Every N years', 'Recurrence.',
+   '0 or 1 means every year. 8 means every eighth year from the start age - the way to model car replacement without entering each occurrence.'),
+  ('Probability', 'Scales the amount.', 'Use for costs that may not happen, such as a care episode.'),
+]) }}
+
+<h2>Getting the total right</h2>
+<p>The most reliable method is top-down, not bottom-up: take twelve months of bank
+and card outflows, subtract transfers to savings and investments, subtract the
+mortgage (it is entered on the debt page), and the remainder is your spending. Then
+split that total into categories. Bottom-up budgets almost always come out low,
+because the irregular things get forgotten.</p>
+
+{% call note('warn', 'Do not enter the mortgage here') %}
+<p>Debt service comes from the debt page and is added automatically. Entering it as
+a spending row too will double-count it, and the projection will look far worse than
+reality.</p>
+{% endcall %}
+
+<h2>The essential / discretionary split</h2>
+<p>This split is the model's flexibility. A guardrail policy cuts only the
+discretionary layer, so the split decides how much room the plan has in a bad
+decade. Be honest in both directions: calling everything essential removes your
+ability to adapt, and calling too much discretionary produces a plan that only works
+if you accept cuts you would not really accept.</p>
+<p>A workable test for each row: <em>if markets fell 30% and stayed down for five
+years, would I actually cut this?</em> If yes, it is discretionary.</p>
+
+<h2>Lumpy costs</h2>
+<p>Cars, roofs, weddings and big trips are not annual, and averaging them into an
+annual figure hides sequence risk &mdash; a new car the year after a crash is a
+different event from one in a good year. Use <em>Every N years</em> with the real
+amount instead.</p>
+
+<h2>Healthcare and long-term care</h2>
+<p>Healthcare usually needs its own row with 1&ndash;3% above CPI, because medical
+costs have outpaced general inflation almost everywhere for decades.</p>
+<p>Long-term care is not yet a dedicated module. Model it as an expense row: the
+annual cost, from the age care might start, for the expected duration, with a
+probability reflecting how likely it is, and 2% above CPI. The sample plan carries
+exactly such a row, switched off &mdash; switch it on to see what it does, because
+for many plans it is the single largest risk.</p>
+
+{% call note('tip', 'The one-row sanity check') %}
+<p>After entering everything, look at first-year spending on the dashboard. If it
+does not match what you actually spend today, the detail is wrong somewhere, and no
+amount of simulation will fix it.</p>
+{% endcall %}
+{% endblock %}

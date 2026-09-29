@@ -23,7 +23,7 @@ person is data the user edits in tables, not logic baked into formulas.
 ./scripts/setup.sh                      # venv + dependencies
 .venv/bin/python run_retplan_web.py     # the web app on port 5007
 
-make test        # 91 assertions, no LibreOffice needed        (~3 s)
+make test        # engine + portfolio/web suites, offline       (~5 s)
 make build       # generate RetPlan.ods through the UNO API    (~80 s)
 make verify      # prove the sheet and the engine agree exactly
 make simulate    # run the Monte Carlo and write results in
@@ -114,41 +114,84 @@ Priority uses MoSCoW: **M**ust / **S**hould / **C**ould / **W**on't (this releas
 
 ## The web application
 
-A FastAPI application over the same engine, so the browser and the workbook can
-never disagree about a number.
+A FastAPI application, now developed independently of the workbook (which is
+kept as it was at 1.0; see *The LibreOffice workbook* in the help for how the two
+differ). Its design - four themes, mega-menu navigation,
+gradient heroes, help centre and about page - is adopted from MAYA.
 
 ```bash
 ./scripts/setup.sh                      # venv + dependencies
 .venv/bin/python run_retplan_web.py     # http://127.0.0.1:5007
 ```
 
-`--host`, `--port`, `--reload` and `--log-level` are all flags; `RETPLAN_PORT`
-and `RETPLAN_DATA` work as environment variables.
+`--host`, `--port`, `--reload`, `--log-level` and `--data-dir` are flags;
+everything else is in `config/retplan.toml`, overridable by `RETPLAN_*`
+environment variables.
 
 | | |
 |---|---|
-| **Dashboard** | verdict, stat tiles, and up to eight charts; run 500–25,000 trials from the page |
-| **Plan editor** | nine sections — household, income, spending, debt, wrappers, accounts, markets, tax, policy |
-| **Reports** | year-by-year cash flow, balance sheet and tax |
-| **Audit** | the same discipline as the workbook's audit sheet, including the roll-forward identity |
-| **Import / export** | a plan is portable JSON; download it, edit it, upload it |
+| **Quick start** (`/start`) | six short steps - you, income, savings, spending, assumptions, review - build a complete plan |
+| **Scenarios** (`/scenarios`, `/compare`) | several named plans per workspace; compare odds, wealth and tax side by side on one seed |
+| **Dashboard** | verdict hero with success odds and error bar, KPI tiles, up to eight charts; 500-25,000 trials |
+| **Plan editor** | nine sections; rarely changed columns hidden behind *Show advanced columns*; contextual help on each |
+| **Reports / Audit** | year-by-year cash flow, balance sheet and tax; the reconciliation audit |
+| **Portfolios** (`/portfolios`) | holdings with ticker search or paste-import, daily prices, FX conversion, allocation, risk checks, target mix and rebalancing trades, a one-click copy into the plan |
+| **Projection** | correlated lognormal, fat-tailed Student-t or bootstrap Monte Carlo over 1-60 years, contributions and withdrawals, a goal; yearly or quarterly table, P10-P90 fan chart, return and drawdown distributions, three sample futures, CSV export, saved runs |
+| **Stress tests** | 2008, the dot-com bust, Covid, the 2022 rate shock and 1973-74 replayed on your mix; any of them can open every projection trial |
+| **Portfolio builder** (`/portfolios/build`) | upload a broker's .xlsx or CSV of positions; RetPlan finds the table, reads the columns, identifies every security on Yahoo (symbol, ISIN or name), flags doubtful matches, and imports after you review |
+| **Securities** (`/securities`) | look up any symbol live on Yahoo; administrators add, amend and delete securities, including manually priced ones (private funds, property) |
+| **Prices** (`/prices`) | the collector's schedule, every tracked security, and the run log |
+| **Help** (`/help`) | 29 subjects in five categories, searchable; `Ctrl-K` searches pages, help and holdings |
 
-Charts are **server-rendered inline SVG** — no charting library, no CDN, nothing to
-load. The categorical palette is validated for colour-vision separation against
-both the light and dark surfaces, every chart with two or more series carries a
-legend, and each one ships a table view so no value is reachable only by hovering.
-Themes (light / dark / blue) swap through CSS custom properties, including the
-chart palette, without re-rendering.
+### Database
 
-Your plan is stored server-side as JSON keyed by an opaque session id, so the
-cookie never carries your finances.
+SQLAlchemy over **SQLite** (default, zero setup) or **PostgreSQL** - switch with
+one line in `config/retplan.toml`:
+
+```toml
+[database]
+url = "sqlite:///data/retplan.db"
+# url = "postgresql+psycopg://retplan:secret@localhost:5432/retplan"
+```
+
+There are **no migrations**. The schema is two hand-written files that describe
+the same tables, `schema/sqlite.sql` and `schema/postgres.sql`; an empty database
+is built from the one for its dialect at start-up, and a database missing a
+declared table is refused with a clear error. `tests/test_portfolio.py` checks
+the two files declare identical tables, columns and indexes.
+
+```bash
+python tools/copy_db.py --to postgresql+psycopg://...    # move your data across
+make test-pg PG=postgresql+psycopg://.../empty_db         # run the suite on PostgreSQL
+```
+
+### Prices
+
+Daily closes for every held symbol (and the FX pairs their portfolios need) come
+from Yahoo Finance's chart endpoint, using only the standard library. The web
+app collects them daily at `prices.run_at` and catches up at start-up if the last
+run is stale; `tools/fetch_prices.py` does one run for cron. Closes older than
+`prices.retention_days` (365) are deleted after every run; long-run return and
+volatility from up to 20 years of monthly history are kept as numbers only.
+
+Charts are **server-rendered inline SVG** with a hover layer - no charting
+library, no CDN. The categorical palette is validated for colour-vision
+separation against the light and dark surfaces, and every chart ships a table
+view so no value is reachable only by hovering.
+
+Plans and portfolios are keyed by an opaque workspace id in a signed session
+cookie; there are no accounts, and the cookie never carries your finances.
 
 ### Layout
 
 ```
-web/         the application: app singleton, templating, charts, view model, store
-web/static/  vendored Bootstrap, Bootstrap Icons, fonts (no CDN)
+web/         app singleton, config, templating, charts, view models, wizard, plan store
+web/static/  css/tokens.css + css/theme.css (the MAYA design), js, vendored Bootstrap
+web/templates/  base + _nav (mega menu) + _macros/ui.html; one folder per area
 routes/      one handler class per area, registered by the app singleton
+portfolio/   db (SQLAlchemy), repository, yahoo, prices, projection, stress, checks, fx
+schema/      sqlite.sql and postgres.sql - the only definition of the database
+config/      retplan.toml
 run_retplan_web.py   launcher (port 5007 by default)
 ```
 
@@ -156,12 +199,16 @@ run_retplan_web.py   launcher (port 5007 by default)
 
 ```
 retplan/     the engine - rng, tax, markets, engine, metrics, solvers, reader, samples
-web/         the FastAPI application - app, templating, charts, view model, store
+web/         the FastAPI application
 routes/      one route handler class per area of the web application
+portfolio/   portfolios, prices and projections
+schema/      the database schema, one file per backend
 build/       the workbook generator (UNO): spec, theme, sheet builders
 macros/      in-document Python macros for LibreOffice
-tools/       installer, trust helper, simulation runner, cross-check, inspectors
-tests/       91 assertions covering units, golden scenarios and statistics
+tools/       installer, trust helper, simulation runner, cross-check, inspectors,
+             fetch_prices, copy_db
+tests/       run_tests.py (engine, 91 assertions) and test_portfolio.py (database,
+             prices, projections, wizard, web; offline)
 docs/        specification and delivery notes
 ```
 

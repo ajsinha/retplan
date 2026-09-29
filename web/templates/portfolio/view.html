@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}{{ pf.name }}{% endblock %}
+{% block content %}
+{% call ui.page_head(pf.name, pf.description or ('Holdings in ' ~ pf.currency ~ ', priced daily.'), eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_project', pid=pf.id) }}"><i class="bi bi-graph-up" aria-hidden="true"></i> Project</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_stress', pid=pf.id) }}"><i class="bi bi-lightning" aria-hidden="true"></i> Stress test</a>
+  <form method="post" action="{{ url_for('portfolio_refresh', pid=pf.id) }}" data-busy="Fetching…">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" {% if running %}disabled{% endif %}><i class="bi bi-arrow-repeat {{ 'spin' if running }}" aria-hidden="true"></i> {{ 'Collecting…' if running else 'Refresh prices' }}</button></form>
+  <div class="dropdown">
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"><i class="bi bi-three-dots" aria-hidden="true"></i><span class="visually-hidden">More</span></button>
+    <div class="dropdown-menu dropdown-menu-end">
+      <a class="dropdown-item" href="#settings" data-bs-toggle="collapse"><i class="bi bi-pencil" aria-hidden="true"></i> Rename, currency</a>
+      <form method="post" action="{{ url_for('portfolio_duplicate', pid=pf.id) }}"><button class="dropdown-item"><i class="bi bi-copy" aria-hidden="true"></i> Duplicate</button></form>
+      <a class="dropdown-item" href="{{ url_for('api_portfolio', pid=pf.id) }}"><i class="bi bi-filetype-json" aria-hidden="true"></i> As JSON</a>
+      <div class="dropdown-divider"></div>
+      <form method="post" action="{{ url_for('portfolio_delete', pid=pf.id) }}" data-confirm="Delete '{{ pf.name }}' and its projections? Prices are shared and stay."><button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete portfolio</button></form>
+    </div>
+  </div>
+{% endcall %}
+
+<div class="collapse" id="settings"><form class="card card-body mb-3" method="post" action="{{ url_for('portfolio_edit', pid=pf.id) }}">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label" for="e-name">Name</label><input class="form-control" id="e-name" name="name" value="{{ pf.name }}" required></div>
+    <div class="col-md-2"><label class="form-label" for="e-cur">Currency</label><select class="form-select" id="e-cur" name="currency">{% for c in currencies %}<option {% if c == pf.currency %}selected{% endif %}>{{ c }}</option>{% endfor %}{% if pf.currency not in currencies %}<option selected>{{ pf.currency }}</option>{% endif %}</select></div>
+    <div class="col-md-4"><label class="form-label" for="e-desc">Notes</label><input class="form-control" id="e-desc" name="description" value="{{ pf.description }}"></div>
+    <div class="col-md-2"><button class="btn btn-primary w-100">Save</button></div>
+  </div></form></div>
+
+<div class="stat-grid">
+  {{ ui.kpi('Value', v.total|money, pf.currency ~ (' · priced ' ~ v.as_of if v.as_of else ' · awaiting prices'), 'briefcase') }}
+  {{ ui.kpi('Today', v.day_change|smoney if v.day_change_pct is not none else '-', (v.day_change_pct|spct(2)) if v.day_change_pct is not none else 'no change yet', 'activity', ('good' if v.day_change >= 0 else 'bad') if v.day_change_pct is not none else '') }}
+  {{ ui.kpi('Gain on cost', v.gain|smoney if v.gain is not none else '-', (v.gain_pct|spct ~ ' on ' ~ v.cost|money ~ ' paid' ~ (' · excludes holdings without a cost' if v.cost_value < v.total - 0.5 else '')) if v.gain_pct is not none else 'add cost bases to see it', 'graph-up-arrow', ('good' if v.gain >= 0 else 'bad') if v.gain is not none else '') }}
+  {{ ui.kpi('Past year', change_1y|spct if change_1y is not none else '-', "today's holdings, back-cast" if change_1y is not none else 'needs price history', 'calendar3', ('good' if change_1y >= 0 else 'bad') if change_1y is not none else '') }}
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-8">
+    {% call ui.chart_card('A year of value', 'graph-up', chart_hist, "today's holdings on each past day, in " ~ pf.currency) %}
+      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Value</th></tr></thead>
+        <tbody>{% for d, x in hist|reverse %}{% if loop.index0 % 5 == 0 %}<tr><td>{{ d }}</td><td class="num">{{ x|money }}</td></tr>{% endif %}{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  <div class="col-xl-4">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-pie-chart" aria-hidden="true"></i> Allocation</div>
+      <div class="card-body">
+        {% if by_class %}
+        <ul class="nav nav-tabs mb-2" role="tablist">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#al-class" type="button" role="tab">By class</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#al-acct" type="button" role="tab">By account</button></li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="al-class" role="tabpanel">{{ ui.allocation(by_class) }}</div>
+          <div class="tab-pane" id="al-acct" role="tabpanel">{{ ui.allocation(by_account) }}</div>
+        </div>
+        {% else %}<p class="small-muted">Add holdings to see the mix.</p>{% endif %}
+      </div></div>
+  </div>
+</div>
+
+{# ---------------- holdings ---------------- #}
+<div class="card" id="holdings">
+  <div class="card-header"><i class="bi bi-list-ul" aria-hidden="true"></i> Holdings <span class="small-muted fw-normal">{{ v.positions|length }}</span>
+    <span class="ms-auto d-flex gap-2">
+      <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#add-one" aria-expanded="{{ 'true' if not v.positions else 'false' }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#add-many"><i class="bi bi-clipboard-plus" aria-hidden="true"></i> Paste / import</button>
+    </span></div>
+  <div class="card-body">
+    <div class="collapse {{ 'show' if not v.positions }}" id="add-one">
+      <form class="row g-2 align-items-end mb-3 p-3 rounded-3" style="background: var(--rp-crimson-tint)" method="post" action="{{ url_for('holding_add', pid=pf.id) }}" data-busy="Adding and pricing…">
+        <div class="col-md-3"><label class="form-label" for="h-sym">Symbol or name</label>
+          <div class="ticker-box"><input class="form-control mono" id="h-sym" name="symbol" autocomplete="off" required placeholder="VTI, apple, CASH" data-ticker data-ticker-name="#h-name"></div>
+          <div class="form-hint mt-1 text-truncate" id="h-name">Start typing to search Yahoo.</div></div>
+        <div class="col-md-2"><label class="form-label" for="h-qty">Quantity</label>
+          <input class="form-control num" id="h-qty" name="quantity" type="number" step="any" required>
+          <div class="form-hint mt-1">shares, or the amount for CASH</div></div>
+        <div class="col-md-2"><label class="form-label" for="h-cost">Cost <span class="small-muted">(optional)</span></label>
+          <input class="form-control num" id="h-cost" name="cost_basis" type="number" step="any">
+          <div class="form-hint mt-1"><label><input type="radio" name="cost_mode" value="total" checked> total</label> <label class="ms-2"><input type="radio" name="cost_mode" value="per_unit"> per share</label></div></div>
+        <div class="col-md-2"><label class="form-label" for="h-acct">Account</label>
+          <input class="form-control" id="h-acct" name="account" list="acct-list" placeholder="e.g. Roth IRA">
+          <datalist id="acct-list">{% for a in accounts %}<option value="{{ a }}">{% endfor %}</datalist></div>
+        <div class="col-md-2"><label class="form-label" for="h-cls">Asset class</label>
+          <select class="form-select" id="h-cls" name="asset_class"><option value="">Detect automatically</option>{% for k, l in classes %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+        <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">Add</button></div>
+      </form>
+    </div>
+    <div class="collapse" id="add-many">
+      <form class="mb-3 p-3 rounded-3" style="background: var(--rp-crimson-tint)" method="post" action="{{ url_for('holding_import', pid=pf.id) }}" enctype="multipart/form-data" data-busy="Importing…">
+        <label class="form-label" for="imp-text">Paste rows: <code>symbol, quantity[, cost basis][, account][, asset class]</code> - or a CSV with a header row</label>
+        <textarea class="form-control mono" id="imp-text" name="text" rows="5" placeholder="AAPL, 10, 1500, Brokerage&#10;VXUS	200	11000	Roth IRA"></textarea>
+        <div class="d-flex flex-wrap gap-3 align-items-center mt-2">
+          <input class="form-control form-control-sm" style="max-width:320px" type="file" name="file" accept=".csv,.txt,text/csv" aria-label="Or choose a CSV file">
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="imp-rep" name="replace" value="1"><label class="form-check-label" for="imp-rep">Replace all current holdings</label></div>
+          <button class="btn btn-primary btn-sm ms-auto" type="submit"><i class="bi bi-upload" aria-hidden="true"></i> Import</button>
+        </div>
+      </form>
+    </div>
+
+    {% if v.positions %}
+    <form method="post" action="{{ url_for('holdings_save', pid=pf.id) }}">
+    <div class="table-scroll">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Symbol</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Value ({{ pf.currency }})</th>
+        <th class="num">Weight</th><th class="num">Today</th><th class="num">Cost</th><th class="num">Gain</th><th>Account</th><th>Class</th><th><span class="visually-hidden">Delete</span></th></tr></thead>
+      <tbody>
+      {% for p in v.positions %}
+        {% set k = 'h-' ~ p.id ~ '-' %}
+        <tr>
+          <td>{% if p.is_cash %}<span class="fw-bold"><i class="bi bi-cash-coin" aria-hidden="true"></i> Cash</span>{% else %}<a class="fw-bold mono" href="{{ url_for('security', symbol=p.symbol) }}">{{ p.symbol }}</a>{% endif %}
+            <span class="cell-sub text-truncate" style="max-width:15rem">{{ p.name if not p.is_cash else '' }}{% if p.fetch_error and p.price is none %}<span class="down"> · {{ p.fetch_error }}</span>{% endif %}</span></td>
+          <td><input class="form-control form-control-sm num" name="{{ k }}quantity" type="number" step="any" value="{{ '%g'|format(p.quantity) }}" aria-label="Quantity of {{ p.symbol }}"></td>
+          <td class="num">{% if p.price is not none %}{{ '%.2f'|format(p.price) }}{% if p.currency and p.currency != pf.currency and not p.is_cash %}<span class="cell-sub">{{ p.currency }}{% if p.fx_missing %} · <span class="down">no rate</span>{% endif %}</span>{% endif %}{% else %}<span class="down">-</span>{% endif %}</td>
+          <td class="num fw-semibold">{{ p.value|money }}</td>
+          <td class="num">{{ p.weight|pct }}</td>
+          <td class="num {{ 'up' if (p.day_change_pct or 0) > 0 else ('down' if (p.day_change_pct or 0) < 0 else '') }}">{{ p.day_change_pct|spct(2) if p.day_change_pct is not none and not p.is_cash else '' }}</td>
+          <td><input class="form-control form-control-sm num" name="{{ k }}cost_basis" type="number" step="any" value="{{ '%.2f'|format(p.cost_basis) if p.cost_basis is not none else '' }}" aria-label="Cost basis of {{ p.symbol }}"></td>
+          <td class="num {{ 'up' if (p.gain or 0) > 0 else ('down' if (p.gain or 0) < 0 else '') }}">{% if p.gain is not none and not p.is_cash %}{{ p.gain|smoney }}<span class="cell-sub">{{ p.gain_pct|spct }}</span>{% endif %}</td>
+          <td><input class="form-control form-control-sm" name="{{ k }}account" value="{{ p.account }}" list="acct-list" aria-label="Account of {{ p.symbol }}"></td>
+          <td><select class="form-select form-select-sm" name="{{ k }}asset_class" aria-label="Asset class of {{ p.symbol }}">
+              <option value="__inherit__" {% if p.class_inherited %}selected{% endif %}>Auto: {{ p.class_label }}</option>
+              {% for key, l in classes %}<option value="{{ key }}" {% if not p.class_inherited and p.asset_class == key %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></td>
+          <td><input type="checkbox" class="d-none" name="{{ k }}delete" value="1">
+            <button type="button" class="btn btn-sm btn-link text-danger p-0" data-delete-row title="Mark for deletion"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden">Delete {{ p.symbol }}</span></button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr class="total"><td>Total</td><td></td><td></td><td class="num">{{ v.total|money }}</td><td class="num">100%</td>
+        <td class="num {{ 'up' if v.day_change > 0 else ('down' if v.day_change < 0 else '') }}">{{ v.day_change_pct|spct(2) if v.day_change_pct is not none else '' }}</td>
+        <td class="num">{{ v.cost|money if v.cost else '' }}</td><td class="num">{{ v.gain|smoney if v.gain is not none else '' }}</td><td colspan="3"></td></tr></tfoot>
+    </table></div>
+    <div class="d-flex gap-2 align-items-center mt-2">
+      <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Save changes</button>
+      <span class="small-muted">Edit quantities, costs, accounts or classes, then save. Rows marked with the bin are removed.</span>
+    </div>
+    </form>
+    {% else %}
+      {% call ui.empty('list-ul', 'No holdings yet', 'Add one above - search by symbol or by name - or paste a list from your broker.') %}{% endcall %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-6">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-shield-check" aria-hidden="true"></i> Portfolio checks
+      <a class="help-link" href="{{ url_for('help_portfolios') }}#checks" aria-label="About the checks">?</a></div>
+      <div class="card-body">
+        {% if checks %}
+        <ul class="checks">
+          {% for c in checks %}
+          <li class="{{ c.severity }}"><i class="bi bi-{{ {'ok':'check-circle-fill','warn':'exclamation-triangle-fill','bad':'x-octagon-fill','info':'info-circle-fill'}[c.severity] }}" aria-hidden="true"></i>
+            <span><span class="t">{{ c.title }}</span><span class="d">{{ c.detail }}</span></span></li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="small-muted mb-0">Checks appear once there are holdings.</p>{% endif %}
+      </div></div>
+  </div>
+  <div class="col-xl-6">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-bullseye" aria-hidden="true"></i> Target mix and rebalancing</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('portfolio_targets', pid=pf.id) }}">
+          <div class="row g-2">
+            {% for key, label in classes %}
+            <div class="col-6 col-md-4"><label class="form-label small" for="t-{{ key }}">{{ label }}</label>
+              <div class="input-group input-group-sm"><input class="form-control num" id="t-{{ key }}" name="t-{{ key }}" type="number" step="any" min="0" max="100" value="{{ '%g'|format(targets[key] * 100) if targets.get(key) else '' }}"><span class="input-group-text">%</span></div></div>
+            {% endfor %}
+          </div>
+          <button class="btn btn-sm btn-outline-primary mt-2" type="submit">Save targets</button>
+        </form>
+        {% if rb and rb.ok %}
+        <form class="d-flex gap-2 align-items-end mt-3" method="get" action="{{ url_for('portfolio_view', pid=pf.id) }}#holdings">
+          <div><label class="form-label small" for="nm">Money to add (or withdraw, negative)</label>
+            <input class="form-control form-control-sm num" id="nm" name="new_money" type="number" step="any" value="{{ request.query_params.get('new_money', '') }}"></div>
+          <button class="btn btn-sm btn-outline-secondary">Recalculate</button></form>
+        <div class="table-scroll mt-2"><table class="table table-sm">
+          <thead><tr><th>Class</th><th class="num">Now</th><th class="num">Target</th><th class="num">Drift</th><th class="num">Trade</th>{% if rb.rows and rb.rows[0].cashflow_trade is defined %}<th class="num" title="Invest the new money only; sell nothing">New money only</th>{% endif %}</tr></thead>
+          <tbody>{% for r in rb.rows %}<tr><td>{{ r.label }} {% if r.out_of_band %}{{ ui.pill('warn', 'off target') }}{% endif %}</td>
+            <td class="num">{{ r.weight|pct }}</td><td class="num">{{ r.target|pct }}</td><td class="num">{{ r.drift|spct }}</td>
+            <td class="num {{ 'up' if r.trade > 0 else 'down' }}">{{ ('Buy ' if r.trade > 0 else 'Sell ') ~ (r.trade|abs|money) if (r.trade|abs) >= 1 else '-' }}</td>
+            {% if r.cashflow_trade is defined %}<td class="num">{{ r.cashflow_trade|money }}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
+        <p class="small-muted mb-0">{{ 'Drift beyond ±5 points on at least one class - worth rebalancing.' if rb.needs else 'Every class is within ±5 points of its target.' }} Selling in a taxable account can realise gains; directing new money to what is underweight avoids that.</p>
+        {% elif not targets %}<p class="small-muted mt-2 mb-0">Set a target for each class (they need not add to exactly 100) to see the trades that restore it.</p>{% endif %}
+      </div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-6">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-link-45deg" aria-hidden="true"></i> Use in your retirement plan</div>
+      <div class="card-body">
+        <p class="small-muted">Copy this portfolio's value, cost and mix into an account of <strong>{{ plan_name }}</strong>, so the plan starts from what you actually hold.</p>
+        <form class="d-flex gap-2" method="post" action="{{ url_for('portfolio_to_plan', pid=pf.id) }}" data-confirm="Overwrite that account's balance and allocation?">
+          <label class="visually-hidden" for="tp-l">Account</label>
+          <select class="form-select form-select-sm" id="tp-l" name="ledger">{% for lg in ledgers %}<option value="{{ loop.index0 }}">{{ lg.label }} ({{ lg.opening|money }})</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary text-nowrap" type="submit" {% if not v.total %}disabled{% endif %}>Copy {{ v.total|compact }} in</button>
+        </form>
+      </div></div>
+  </div>
+  <div class="col-xl-6">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-clock-history" aria-hidden="true"></i> Recent projections
+      <a class="ms-auto small" href="{{ url_for('portfolio_project', pid=pf.id) }}">All</a></div>
+      <div class="card-body">
+        {% if projections %}
+        <ul class="list-rows">{% for r in projections %}
+          <li><span class="grow"><a href="{{ url_for('portfolio_project', pid=pf.id, run=r.id) }}">{{ r.summary.label or (r.settings.years ~ ' years, ' ~ r.settings.method|replace('_',' ')) }}</a>
+            <span class="cell-sub">{{ r.created_at|dt }} · {{ '{:,}'.format(r.settings.trials) }} trials</span></span>
+            <span class="num">median {{ r.summary.end_real.p50|compact }}<span class="cell-sub">P10 {{ r.summary.end_real.p10|compact }}</span></span></li>{% endfor %}</ul>
+        {% else %}<p class="small-muted mb-2">None yet.</p>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_project', pid=pf.id) }}"><i class="bi bi-graph-up" aria-hidden="true"></i> Run a projection</a>{% endif %}
+      </div></div>
+  </div>
+</div>
+{% endblock %}

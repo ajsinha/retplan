@@ -1,0 +1,65 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the accounts editor', 'accounts') }}</p>
+<p>Accounts carry the money. Each one points at a wrapper for its tax treatment, an
+asset mix for its returns, and a position in the draw and pay-in orders.</p>
+
+<h2>The columns</h2>
+{{ field_table([
+  ('Account', 'Your label.', 'Name it after the real account.'),
+  ('Wrapper', 'Which tax treatment applies.', 'Defined on the wrappers page. Get this right before anything else.'),
+  ('Owner', 'Whose account it is.', 'Matters for contributions based on that person’s earnings.'),
+  ('Balance', 'Value today.', 'The statement value.'),
+  ('Cost basis', 'What was paid for the holdings.',
+   'Only used where the wrapper realises gains. Equal to the balance means no unrealised gain yet; lower means a latent tax bill.'),
+  ('Draw order', 'Which account is spent first.',
+   '1 is emptied first. Give each account a distinct number - duplicates are resolved by row order, which may not be what you meant.'),
+  ('Pay-in order', 'Which account receives contributions first.', 'Same idea, for surplus.'),
+  ('Contribution / year', 'A fixed annual amount, in today’s money.', 'Stops automatically at retirement.'),
+  ('% of earnings', 'A contribution as a share of employment income.', 'The usual way workplace pensions are expressed.'),
+  ('Employer match / Match cap', 'Employer contribution as a multiple of yours, up to a cap.',
+   '100% match on the first 5% is: match 100%, cap 5%. The match is computed on the lesser of the percentage you actually paid in that year and the cap. It is paid on top, not out of your surplus.'),
+  ('Rebalance', 'annual or none.', 'Annual returns the account to its target weights each year.'),
+]) }}
+
+<h2>Allocation and the glidepath</h2>
+<p>The lower table sets weights now and weights at the end of the glide, plus the
+ages the glide runs between. Weights are percentages of that account and should sum
+to 100 &mdash; the audit flags it if they do not.</p>
+<p>Between the two ages the model interpolates linearly, so an account gliding from
+80% equity at 55 to 45% at 70 is at about 62% at 62. Leave the end weights at zero
+for a fixed allocation.</p>
+
+{% call note('tip', 'Glide the household, not each account') %}
+<p>It is usually simpler to think about the whole portfolio's risk and then set each
+account's weights so the total lands where you want it. Holding bonds in one account
+and equities in another is fine &mdash; and often tax-efficient &mdash; provided you
+look at the aggregate.</p>
+{% endcall %}
+
+<h2>Draw order: the decision that quietly costs the most</h2>
+<p>When spending exceeds income, the model works down the draw order, taking what it
+needs from each account in turn and grossing up for tax exactly. It respects:</p>
+<ul>
+  <li>forced minimum distributions, which are taken first whether you need them or not;</li>
+  <li>lock ages &mdash; a locked wrapper is skipped entirely;</li>
+  <li>early-withdrawal penalties, folded into the same solve;</li>
+  <li>the liquid flag &mdash; illiquid accounts are never sold.</li>
+</ul>
+<p>Anything left unspent (a forced draw you did not need, or surplus income) is swept
+into the account nominated at the bottom of the page.</p>
+
+<h2>Illiquid assets</h2>
+<p>Property and businesses belong in a wrapper with <em>Liquid</em> unticked. They
+then appear in net worth and grow at their asset class's return, but are never sold
+to meet spending. If you intend to sell one, model it as a one-off income row in the
+sale year and reduce the account balance.</p>
+
+{% call note('trap', 'A plan that "fails" with money left') %}
+<p>If the audit says a shortfall occurred while liquid money remained, something
+blocked the drawdown: a lock age, an illiquid flag, or every account being empty
+except an illiquid one. That is usually a modelling error rather than a real
+funding failure.</p>
+{% endcall %}
+{% endblock %}

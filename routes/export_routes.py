@@ -58,12 +58,13 @@ class ExportRoutes:
                 flash(request, "Nothing to import.", "error")
                 return redirect_to(request, "plan_section", section="household")
             json.loads(raw)                     # fail before touching the store
-            self.store.import_json(sid, raw)
+            self.store.import_json(sid, raw, as_new=bool(form.get("as_new")))
         except Exception as exc:  # noqa: BLE001
             flash_error_and_log(request, "That file is not a valid plan", exc)
             return redirect_to(request, "plan_section", section="household")
-        return redirect_to(request, "dashboard",
-                           flash_message="Plan imported.", section="household")
+        return redirect_to(request, "dashboard", flash_message=
+                           "Plan imported as a new scenario." if form.get("as_new")
+                           else "Plan imported.")
 
     async def reset(self, request: Request):
         self.store.reset(session_id(request))

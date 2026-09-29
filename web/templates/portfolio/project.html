@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Projection · {{ pf.name }}{% endblock %}
+{% block content %}
+{% call ui.page_head('Projection', 'Thousands of possible futures for ' ~ pf.name ~ ' (' ~ v.total|money ~ ' ' ~ pf.currency ~ ' today), with your contributions and withdrawals. The spread matters as much as the middle.', eyebrow='Portfolio · ' ~ pf.name, help=url_for('help_projection')) %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portfolio_view', pid=pf.id) }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Holdings</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portfolio_stress', pid=pf.id) }}"><i class="bi bi-lightning" aria-hidden="true"></i> Stress tests</a>
+{% endcall %}
+
+{% set years_opts = [5, 10, 15, 20, 25, 30, 40] %}
+<form class="card" method="post" action="{{ url_for('portfolio_project_run', pid=pf.id) }}" data-busy="Simulating…">
+  <div class="card-header"><i class="bi bi-sliders" aria-hidden="true"></i> Settings</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-6 col-md-2"><label class="form-label" for="s-years">Years ahead</label>
+        <input class="form-control num" id="s-years" name="years" type="number" min="1" max="60" step="1" value="{{ s.years }}" list="yrs">
+        <datalist id="yrs">{% for y in years_opts %}<option value="{{ y }}">{% endfor %}</datalist></div>
+      <div class="col-6 col-md-3"><span class="form-label d-block">Table by</span>
+        {{ ui.seg('frequency', [('annual', 'Year'), ('quarterly', 'Quarter')], s.frequency, 's-freq') }}</div>
+      <div class="col-6 col-md-3"><label class="form-label" for="s-method">Return model</label>
+        <select class="form-select" id="s-method" name="method">{% for k, l in methods %}<option value="{{ k }}" {% if k == s.method %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="col-6 col-md-2"><label class="form-label" for="s-trials">Trials</label>
+        <select class="form-select" id="s-trials" name="trials">{% for t in [1000, 2000, 5000, 10000, 20000] %}<option value="{{ t }}" {% if t == s.trials %}selected{% endif %}>{{ '{:,}'.format(t) }}</option>{% endfor %}{% if s.trials not in [1000, 2000, 5000, 10000, 20000] %}<option selected value="{{ s.trials }}">{{ s.trials }}</option>{% endif %}</select></div>
+      <div class="col-6 col-md-2"><label class="form-label" for="s-target">Goal <span class="small-muted">(today's money)</span></label>
+        <input class="form-control num" id="s-target" name="target" type="number" step="any" min="0" value="{{ '%.0f'|format(s.target) if s.target else '' }}" placeholder="optional"></div>
+    </div>
+
+    <h3 class="h6 mt-4 mb-2">Money in and out <span class="small-muted fw-normal">per year · leave empty for none</span></h3>
+    <div class="table-scroll"><table class="table table-sm align-middle mb-1">
+      <thead><tr><th>Type</th><th>Label</th><th class="num">Amount / year</th><th class="num">From year</th><th class="num">To year</th><th class="num">Extra growth</th><th title="Grows with inflation, so the amount stays constant in today's money">Inflation-linked</th><th></th></tr></thead>
+      <tbody id="flows">
+        {% for f in (s.flows or []) %}{% set i = loop.index0 %}
+        <tr data-row>
+          <td><select class="form-select form-select-sm" name="flow-{{ i }}-kind" aria-label="Type"><option value="contribution" {% if f.kind == 'contribution' %}selected{% endif %}>Add</option><option value="withdrawal" {% if f.kind == 'withdrawal' %}selected{% endif %}>Withdraw</option></select></td>
+          <td><input class="form-control form-control-sm" name="flow-{{ i }}-label" value="{{ f.label }}" aria-label="Label"></td>
+          <td><input class="form-control form-control-sm num" name="flow-{{ i }}-amount" type="number" step="any" value="{{ '%g'|format(f.amount) }}" aria-label="Amount per year"></td>
+          <td><input class="form-control form-control-sm num" name="flow-{{ i }}-start" type="number" step="1" min="1" value="{{ f.start_year }}" aria-label="From year"></td>
+          <td><input class="form-control form-control-sm num" name="flow-{{ i }}-end" type="number" step="1" min="1" value="{{ f.end_year }}" aria-label="To year"></td>
+          <td><div class="input-group input-group-sm"><input class="form-control num" name="flow-{{ i }}-growth" type="number" step="any" value="{{ '%g'|format(f.growth * 100) }}" aria-label="Extra growth"><span class="input-group-text">%</span></div></td>
+          <td class="text-center"><input class="form-check-input" type="checkbox" name="flow-{{ i }}-indexed" value="1" {% if f.indexed %}checked{% endif %} aria-label="Inflation-linked"></td>
+          <td><button type="button" class="btn btn-sm btn-link text-danger p-0 remove-row" title="Remove"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Remove</span></button></td>
+        </tr>{% endfor %}
+      </tbody></table></div>
+    <template id="flow-tpl"><tr data-row>
+      <td><select class="form-select form-select-sm" name="flow-__i__-kind" aria-label="Type"><option value="contribution">Add</option><option value="withdrawal">Withdraw</option></select></td>
+      <td><input class="form-control form-control-sm" name="flow-__i__-label" aria-label="Label"></td>
+      <td><input class="form-control form-control-sm num" name="flow-__i__-amount" type="number" step="any" aria-label="Amount per year"></td>
+      <td><input class="form-control form-control-sm num" name="flow-__i__-start" type="number" step="1" min="1" value="1" aria-label="From year"></td>
+      <td><input class="form-control form-control-sm num" name="flow-__i__-end" type="number" step="1" min="1" value="{{ s.years }}" aria-label="To year"></td>
+      <td><div class="input-group input-group-sm"><input class="form-control num" name="flow-__i__-growth" type="number" step="any" value="0" aria-label="Extra growth"><span class="input-group-text">%</span></div></td>
+      <td class="text-center"><input class="form-check-input" type="checkbox" name="flow-__i__-indexed" value="1" checked aria-label="Inflation-linked"></td>
+      <td><button type="button" class="btn btn-sm btn-link text-danger p-0 remove-row" title="Remove"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Remove</span></button></td>
+    </tr></template>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-add-row="flow-tpl" data-target="#flows"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a contribution or withdrawal</button>
+    <span class="form-hint ms-2">Year 1 is the next twelve months. Amounts are spread evenly across each year's quarters.</span>
+
+    <details class="advanced">
+      <summary>Assumptions, fees, rebalancing and stress</summary>
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label" for="s-src">Expected returns from</label>
+          <select class="form-select" id="s-src" name="return_source">{% for k, l in sources %}<option value="{{ k }}" {% if k == s.return_source %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          <div class="form-hint mt-1">A year of prices says little about the mean; the default leans on long-run class assumptions.</div></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="s-inf">Inflation</label>
+          <div class="input-group"><input class="form-control num" id="s-inf" name="inflation" type="number" step="any" value="{{ '%g'|format(s.inflation * 100) }}"><span class="input-group-text">%</span></div></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="s-fee">Annual fee</label>
+          <div class="input-group"><input class="form-control num" id="s-fee" name="fee" type="number" step="any" min="0" value="{{ '%g'|format(s.fee * 100) }}"><span class="input-group-text">%</span></div>
+          <div class="form-hint mt-1">adviser / platform, on top of fund costs</div></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="s-reb">Rebalance</label>
+          <select class="form-select" id="s-reb" name="rebalance">{% for k, l in rebalances %}<option value="{{ k }}" {% if k == s.rebalance %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="s-wr">Withdraw a % each year</label>
+          <div class="input-group"><input class="form-control num" id="s-wr" name="withdrawal_rate" type="number" step="any" min="0" value="{{ '%g'|format(s.withdrawal_rate * 100) if s.withdrawal_rate else '' }}"><span class="input-group-text">%</span></div></div>
+        <div class="col-md-5"><label class="form-label" for="s-stress">Open every trial with a crisis</label>
+          <select class="form-select" id="s-stress" name="stress"><option value="">No - every year is random</option>{% for k, l in stresses %}<option value="{{ k }}" {% if k == s.stress %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          <div class="form-hint mt-1">Tests sequence risk: the crisis comes first, then the future is uncertain.</div></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="s-seed">Random seed</label>
+          <input class="form-control num" id="s-seed" name="seed" type="number" step="1" value="{{ s.seed }}"></div>
+        <div class="col-md-5"><label class="form-label" for="s-label">Name this run <span class="small-muted">(optional)</span></label>
+          <input class="form-control" id="s-label" name="label" maxlength="80" placeholder="e.g. Retire at 60, 4% withdrawals"></div>
+      </div>
+      {% if symbols %}
+      <h4 class="h6 mt-3">Your own figures for a holding <span class="small-muted fw-normal">- blank uses the model's estimate</span></h4>
+      <div class="row g-2">
+        {% for sym in symbols %}{% set ov = s.overrides.get(sym, {}) %}
+        <div class="col-md-6 col-xl-4"><div class="input-group input-group-sm">
+          <span class="input-group-text mono" style="min-width:6.5rem">{{ sym }}</span>
+          <input class="form-control num" name="ov-mu-{{ sym }}" type="number" step="any" placeholder="return %" aria-label="{{ sym }} expected return %" value="{{ '%g'|format(ov.mu * 100) if ov.mu is defined else '' }}">
+          <input class="form-control num" name="ov-sigma-{{ sym }}" type="number" step="any" placeholder="volatility %" aria-label="{{ sym }} volatility %" value="{{ '%g'|format(ov.sigma * 100) if ov.sigma is defined else '' }}">
+        </div></div>{% endfor %}
+      </div>{% endif %}
+    </details>
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+      <button class="btn btn-primary" type="submit" {% if not v.total %}disabled{% endif %}><i class="bi bi-play-fill" aria-hidden="true"></i> Run projection</button>
+      {% if not v.total %}<span class="small-muted">Add priced holdings first.</span>{% endif %}
+    </div>
+  </div>
+</form>
+
+{% if run %}
+{% set r = run.result %}{% set sm = r.summary %}{% set rs = r.settings %}
+<div class="d-flex flex-wrap align-items-center gap-2 mt-4 mb-2">
+  <h2 class="h5 mb-0 me-auto">{{ sm.label or 'Results' }} <span class="small-muted fw-normal">· {{ run.created_at|dt }} · {{ '{:,}'.format(rs.trials) }} trials · {{ rs.years }} years · {{ dict(methods)[rs.method] }}{% if rs.stress %} · opens with {{ r.stress.short }}{% endif %}</span></h2>
+  <span class="seg" role="radiogroup" aria-label="Money basis">
+    <a class="btn btn-sm {{ 'btn-primary' if basis == 'real' else 'btn-outline-secondary' }}" href="{{ url_for('portfolio_project', pid=pf.id, run=run.id, basis='real') }}">Today's money</a>
+    <a class="btn btn-sm {{ 'btn-primary' if basis == 'nominal' else 'btn-outline-secondary' }}" href="{{ url_for('portfolio_project', pid=pf.id, run=run.id, basis='nominal') }}">Future money</a>
+  </span>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('projection_csv', pid=pf.id, rid=run.id) }}"><i class="bi bi-filetype-csv" aria-hidden="true"></i> CSV</a>
+</div>
+{% set end = sm.end_real if basis == 'real' else sm.end_nominal %}
+<div class="stat-grid">
+  {{ ui.kpi('Median in ' ~ rs.years ~ ' years', end.p50|money, 'half the futures end above this', 'bullseye') }}
+  {{ ui.kpi('Bad luck (P10)', end.p10|money, '1 future in 10 ends below', 'cloud-lightning-rain', 'warn') }}
+  {{ ui.kpi('Good luck (P90)', end.p90|money, '1 future in 10 ends above', 'sun') }}
+  {{ ui.kpi('Typical growth', sm.cagr.p50|spct, 'median annual return, after fees (P10 ' ~ sm.cagr.p10|spct ~ ')', 'graph-up-arrow') }}
+  {% if sm.p_target is not none %}{{ ui.kpi('Reach your goal', sm.p_target|pct(0), 'of ' ~ sm.target|money ~ ' by year ' ~ rs.years ~ ' (± ' ~ (1.96 * sm.success_se * 100)|round(1) ~ ' pts)', 'flag', 'good' if sm.p_target >= 0.8 else ('warn' if sm.p_target >= 0.5 else 'bad')) }}{% endif %}
+  {% if sm.p_depleted > 0 %}{{ ui.kpi('Runs out', ('<0.1%' if sm.p_depleted < 0.001 else sm.p_depleted|pct(1)), 'of futures can\'t fund every withdrawal', 'hourglass-bottom', 'bad' if sm.p_depleted > 0.1 else 'warn') }}{% endif %}
+  {{ ui.kpi('Ends below money put in', sm.p_loss|pct(0), 'start + contributions − withdrawals', 'arrow-down-right', 'warn' if sm.p_loss > 0.1 else '') }}
+  {{ ui.kpi('Typical worst fall', sm.max_dd.p50|pct(0), 'median peak-to-trough; 1 in 10 worse than ' ~ sm.max_dd.p10|pct(0), 'graph-down-arrow') }}
+</div>
+
+<div class="row g-3">
+  <div class="col-xxl-8">
+    {{ ui.chart_card('Range of outcomes', 'graph-up', view.fan, ("today's money" if basis == 'real' else 'future money') ~ ' · hover for each ' ~ ('quarter' if rs.frequency == 'quarterly' else 'year') ~ ' · numbers in the table below', url_for('help_projection') ~ '#fan') }}
+  </div>
+  <div class="col-xxl-4">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-eyeglasses" aria-hidden="true"></i> What the model assumed</div>
+      <div class="card-body">
+        {{ ui.kv([('Expected return', sm.exp_return|pct ~ ' a year (arithmetic)'), ('Volatility', sm.exp_vol|pct ~ ' a year'), ('Inflation', rs.inflation|pct), ('Fees', rs.fee|pct ~ ' a year'), ('Rebalancing', dict(rebalances)[rs.rebalance]), ('Contributions', sm.total_contrib|money ~ ' in total'), ('Withdrawals', sm.total_withdraw_p50|money ~ ' median total'), ('Worst single year', sm.worst_year.p50|pct(0) ~ ' in a typical future'), ('Expected-return path', sm.expected_end|money ~ ' nominal')]) }}
+        {% for n in r.notes %}<p class="small-muted mt-2 mb-0"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ n }}</p>{% endfor %}
+        {% if r.stress %}<p class="small-muted mt-2 mb-0"><i class="bi bi-lightning" aria-hidden="true"></i> Every trial opens with the {{ r.stress.label }}: {{ r.stress.blurb }}</p>{% endif %}
+      </div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> {{ 'Quarter' if rs.frequency == 'quarterly' else 'Year' }} by {{ 'quarter' if rs.frequency == 'quarterly' else 'year' }} <span class="small-muted fw-normal">{{ "today's money" if basis == 'real' else 'future money' }}</span>
+    <a class="ms-auto btn btn-sm btn-outline-secondary" href="{{ url_for('projection_csv', pid=pf.id, rid=run.id) }}"><i class="bi bi-download" aria-hidden="true"></i> CSV</a></div>
+  <div class="card-body p-0"><div class="table-scroll" style="max-height:560px">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Period</th><th class="num">In</th><th class="num">Out (median)</th><th class="num">P10</th><th class="num">P25</th><th class="num band-col">Median</th><th class="num">P75</th><th class="num">P90</th>
+      <th class="num">Return P10</th><th class="num">Return median</th><th class="num">Return P90</th><th class="num" title="Median annualised return from today to the end of this period">Growth / yr</th>
+      <th class="num">Loss this period</th>{% if sm.p_target is not none %}<th class="num">Goal reached</th>{% endif %}{% if sm.p_depleted > 0 %}<th class="num">Run out</th>{% endif %}</tr></thead>
+    <tbody>
+      <tr class="small-muted"><td>Today</td><td></td><td></td><td class="num" colspan="5" style="text-align:center">{{ sm.start|money }}</td><td colspan="{{ 5 + (1 if sm.p_target is not none else 0) + (1 if sm.p_depleted > 0 else 0) }}"></td></tr>
+      {% for p in r.periods %}{% set b = p[view.key] %}
+      <tr><td class="text-nowrap">{{ p.label }}</td>
+        {% set cin = p.contrib_real if basis == 'real' and p.contrib_real is defined else p.contrib %}{% set cout = p.withdraw_real if basis == 'real' and p.withdraw_real is defined else p.withdraw %}
+        <td class="num">{{ cin|money if cin else '' }}</td><td class="num">{{ cout|money if cout else '' }}</td>
+        <td class="num">{{ b.p10|money }}</td><td class="num">{{ b.p25|money }}</td><td class="num band-col fw-semibold">{{ b.p50|money }}</td><td class="num">{{ b.p75|money }}</td><td class="num">{{ b.p90|money }}</td>
+        <td class="num {{ 'down' if p.ret.p10 < 0 }}">{{ p.ret.p10|spct }}</td><td class="num">{{ p.ret.p50|spct }}</td><td class="num">{{ p.ret.p90|spct }}</td>
+        <td class="num">{{ p.cagr_p50|spct }}</td><td class="num">{{ p.p_loss_period|pct(0) }}</td>
+        {% if sm.p_target is not none %}<td class="num">{{ p.p_target|pct(0) }}</td>{% endif %}{% if sm.p_depleted > 0 %}<td class="num">{{ p.p_depleted|pct(1) }}</td>{% endif %}</tr>
+      {% endfor %}
+    </tbody></table></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-6">{{ ui.chart_card('Return in each ' ~ ('quarter' if rs.frequency == 'quarterly' else 'year'), 'bar-chart-steps', view.returns, 'P10 to P90, median marked; numbers in the table above') }}</div>
+  <div class="col-xl-6">
+    {% call ui.chart_card('Where it ends up', 'bar-chart', view.hist, "final value, today's money") %}
+      <table class="table table-sm"><thead><tr><th>Percentile</th><th class="num">Today's money</th><th class="num">Future money</th></tr></thead>
+        <tbody>{% for k in ['p5','p10','p25','p50','p75','p90','p95'] %}<tr><td>{{ k|upper }}</td><td class="num">{{ sm.end_real[k]|money }}</td><td class="num">{{ sm.end_nominal[k]|money }}</td></tr>{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  <div class="col-xl-6">
+    {% call ui.chart_card('Worst fall along the way', 'graph-down-arrow', view.dd, 'maximum drawdown in each future') %}
+      <table class="table table-sm"><thead><tr><th>Futures</th><th class="num">Worst fall</th></tr></thead>
+        <tbody>{% for k, l in [('p90','best 10%'),('p50','median'),('p25','worst 25%'),('p10','worst 10%'),('p5','worst 5%')] %}<tr><td>{{ l }}</td><td class="num">{{ sm.max_dd[k]|pct(1) }}</td></tr>{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  <div class="col-xl-6">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-signpost-split" aria-hidden="true"></i> Three futures, year by year</div>
+      <div class="card-body">
+        <p class="small-muted">Real trials, not averages: the ones that ended nearest the 10th, 50th and 90th percentiles. Notice that the median future has bad years too.</p>
+        <ul class="nav nav-tabs mb-2" role="tablist">
+          {% for k, l in [('p10','Bad luck'),('p50','Middle'),('p90','Good luck')] %}<li class="nav-item"><button class="nav-link {{ 'active' if k == 'p50' }}" data-bs-toggle="tab" data-bs-target="#path-{{ k }}" type="button" role="tab">{{ l }}</button></li>{% endfor %}
+        </ul>
+        <div class="tab-content">{% for k in ['p10','p50','p90'] %}
+          <div class="tab-pane {{ 'active' if k == 'p50' }}" id="path-{{ k }}" role="tabpanel"><div class="table-scroll" style="max-height:320px">
+            <table class="table table-sm"><thead><tr><th>Period</th><th class="num">Return</th><th class="num">In</th><th class="num">Out</th><th class="num">Value</th></tr></thead>
+              <tbody>{% for row in r.representative[k] %}<tr><td>{{ row.label }}</td><td class="num {{ 'down' if row.ret < 0 else '' }}">{{ row.ret|spct }}</td><td class="num">{{ row.contrib|money if row.contrib else '' }}</td><td class="num">{{ row.withdraw|money if row.withdraw else '' }}</td><td class="num">{{ (row.real if basis == 'real' else row.value)|money }}</td></tr>{% endfor %}</tbody></table></div></div>{% endfor %}
+        </div>
+      </div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-columns" aria-hidden="true"></i> Holdings as the model sees them
+    <a class="help-link" href="{{ url_for('help_projection') }}#assumptions" aria-label="How these are estimated">?</a></div>
+  <div class="card-body p-0"><div class="table-scroll">
+    <table class="table table-sm mb-0"><thead><tr><th>Symbol</th><th>Class</th><th class="num">Weight</th><th class="num">Expected return</th><th>From</th><th class="num">Volatility</th><th>From</th><th class="num" title="Share of the portfolio's variance this holding contributes">Share of risk</th></tr></thead>
+      <tbody>{% for a in r.assets %}<tr><td><span class="mono fw-bold">{{ a.symbol }}</span><span class="cell-sub text-truncate" style="max-width:14rem">{{ a.name }}</span></td>
+        <td>{{ a.asset_class|replace('_',' ') }}</td><td class="num">{{ a.weight|pct }}</td><td class="num">{{ a.mu|pct }}</td><td class="small-muted">{{ a.mu_note }}</td>
+        <td class="num">{{ a.sigma|pct }}</td><td class="small-muted">{{ a.sigma_note }}</td><td class="num">{{ a.risk_share|pct }}</td></tr>{% endfor %}</tbody></table></div>
+  {% if r.assets|length > 1 %}
+  <details class="table-twin px-3 pb-3"><summary>Correlations used</summary>
+    <div class="table-scroll mt-2"><table class="table table-sm"><thead><tr><th></th>{% for a in r.assets %}<th class="num mono">{{ a.symbol }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for row in r.corr %}{% set i = loop.index0 %}<tr><th class="mono">{{ r.assets[i].symbol }}</th>{% for c in row %}
+        <td class="num" style="background: color-mix(in srgb, {{ 'var(--viz-1)' if c >= 0 else 'var(--viz-2)' }} {{ ((c|abs) * 55)|round(0)|int }}%, transparent)">{{ '%.2f'|format(c) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+    <p class="small-muted mb-0">From overlapping daily returns in the stored year, blended 30% toward long-run class correlations. Blue: move together; orange: move apart.</p>
+  </details>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if runs %}
+<div class="card">
+  <div class="card-header"><i class="bi bi-clock-history" aria-hidden="true"></i> Saved runs <span class="small-muted fw-normal">the last ten are kept</span></div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Run</th><th>When</th><th class="num">Years</th><th>Model</th><th class="num">Median (today's money)</th><th class="num">P10</th><th class="num">Goal</th><th></th></tr></thead>
+    <tbody>{% for x in runs %}<tr {% if run and x.id == run.id %}class="fw-semibold"{% endif %}>
+      <td><a href="{{ url_for('portfolio_project', pid=pf.id, run=x.id) }}">{{ x.summary.label or ('#' ~ x.id) }}</a></td><td class="small-muted">{{ x.created_at|dt }}</td>
+      <td class="num">{{ x.settings.years }}</td><td>{{ x.settings.method|replace('_',' ') }}{% if x.settings.stress %} + {{ x.settings.stress }}{% endif %}</td>
+      <td class="num">{{ x.summary.end_real.p50|money }}</td><td class="num">{{ x.summary.end_real.p10|money }}</td>
+      <td class="num">{{ x.summary.p_target|pct(0) if x.summary.p_target is not none else '' }}</td>
+      <td class="text-end"><form method="post" action="{{ url_for('projection_delete', pid=pf.id, rid=x.id) }}" data-confirm="Delete this run?"><button class="btn btn-sm btn-link text-danger p-0" title="Delete"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden">Delete run</span></button></form></td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endif %}
+{% endblock %}

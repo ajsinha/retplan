@@ -5,7 +5,7 @@ OUT     ?= RetPlan.ods
 TRIALS  ?= 5000
 PORT    ?= 5007
 
-.PHONY: all build install trust untrust test verify simulate clean check setup web
+.PHONY: all build install trust untrust test test-pg verify simulate clean check setup web prices
 
 all: check
 
@@ -32,9 +32,18 @@ untrust:
 ## one-command setup after cloning anywhere: macros installed and folder trusted
 setup: install trust
 
-## unit, engine and statistical tests (no LibreOffice needed)
+## unit, engine and statistical tests (no LibreOffice, no network needed)
 test:
 	$(PY) tests/run_tests.py
+	.venv/bin/python tests/test_portfolio.py
+
+## the portfolio and web tests against PostgreSQL: make test-pg PG=postgresql+psycopg://...
+test-pg:
+	.venv/bin/python tests/test_portfolio.py --database "$(PG)"
+
+## collect today's prices once (the web app also does this on its own schedule)
+prices:
+	.venv/bin/python tools/fetch_prices.py -v
 
 ## prove the workbook's formulas and the Python engine agree exactly
 verify:

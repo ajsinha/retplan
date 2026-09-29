@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
 import threading
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from portfolio.db import Database
+from portfolio.prices import PriceCollector, PriceScheduler
+from portfolio.repository import PortfolioRepo
 from retplan import __version__ as VERSION
+from web.config import Config, load_config
 from web.fastapi_compat import STATIC_DIR, render, wants_json
 from web.store import PlanStore
 
@@ -32,19 +36,36 @@ class RetPlanWebApp:
     _instance = None
     _lock = threading.Lock()
 
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.store = PlanStore(os.path.join(data_dir, "plans"))
-        self.app = FastAPI(title="RetPlan", version=VERSION,
+    def __init__(self, data_dir: str | None = None, config: Config | None = None,
+                 start_scheduler: bool = True):
+        self.config = config or load_config(data_dir=data_dir)
+        self.data_dir = self.config.data_dir
+        self.db = Database(self.config.database_url, echo=self.config.database_echo)
+        self.store = PlanStore(self.db, legacy_dir=os.path.join(self.data_dir, "plans"))
+        self.portfolios = PortfolioRepo(self.db)
+        self.collector = PriceCollector(self.portfolios,
+                                        retention_days=self.config.prices_retention_days)
+        self.scheduler = PriceScheduler(self.collector, run_at=self.config.prices_run_at,
+                                        enabled=self.config.prices_enabled and start_scheduler)
+
+        @asynccontextmanager
+        async def lifespan(_app):
+            self.scheduler.start()
+            yield
+            self.scheduler.stop()
+            self.db.dispose()
+
+        self.app = FastAPI(title="RetPlan", version=VERSION, lifespan=lifespan,
                            docs_url="/api/docs", redoc_url=None)
         self._configure()
         self._register_routes()
         self._install_error_handlers()
-        logger.info("RetPlan %s ready (data dir: %s)", VERSION, data_dir)
+        logger.info("RetPlan %s ready (database: %s, config: %s)", VERSION,
+                    self.db.safe_url, self.config.source)
 
     # -- singleton ---------------------------------------------------------
     @classmethod
-    def get_instance(cls, data_dir: str = "data") -> "RetPlanWebApp":
+    def get_instance(cls, data_dir: str | None = None) -> "RetPlanWebApp":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -53,22 +74,20 @@ class RetPlanWebApp:
 
     # -- wiring ------------------------------------------------------------
     def _configure(self) -> None:
-        # A generated secret is fine: sessions carry only an opaque plan id, so
-        # the worst a restart costs is a new blank session. An operator who wants
-        # sessions to survive a restart sets RETPLAN_SECRET.
-        secret = os.environ.get("RETPLAN_SECRET") or secrets.token_hex(32)
-        self.app.add_middleware(SessionMiddleware, secret_key=secret,
+        # The secret persists in the data directory (or RETPLAN_SECRET), so a
+        # restart keeps every browser pointed at its own workspace.
+        self.app.add_middleware(SessionMiddleware, secret_key=self.config.secret(),
                                 session_cookie="retplan_session",
-                                same_site="lax", max_age=60 * 60 * 24 * 30)
+                                same_site="lax", max_age=60 * 60 * 24 * 365)
         self.app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-        self.app.state.store = self.store
-        self.app.state.version = VERSION
+        st = self.app.state
+        st.store, st.version, st.config = self.store, VERSION, self.config
+        st.db, st.portfolios = self.db, self.portfolios
+        st.collector, st.scheduler = self.collector, self.scheduler
 
     def _register_routes(self) -> None:
-        from routes import (DashboardRoutes, ExportRoutes, NoAuthRoutes,
-                            PlanRoutes, ReportRoutes, SimulationRoutes)
-        for handler in (NoAuthRoutes, PlanRoutes, DashboardRoutes,
-                        SimulationRoutes, ReportRoutes, ExportRoutes):
+        from routes import ALL_ROUTES
+        for handler in ALL_ROUTES:
             handler(self.app, self.store)
 
     def _install_error_handlers(self) -> None:
@@ -94,5 +113,4 @@ class RetPlanWebApp:
 
 def create_app() -> FastAPI:
     """Factory for ``uvicorn --reload``."""
-    return RetPlanWebApp.get_instance(
-        data_dir=os.environ.get("RETPLAN_DATA", "data")).app
+    return RetPlanWebApp.get_instance(data_dir=os.environ.get("RETPLAN_DATA")).app

@@ -1,0 +1,161 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('wizard', 'Open the quick-start wizard') }}</p>
+<p>The full editor asks for everything a careful plan needs: wrappers, tax bands,
+regimes, glide paths, draw order. The wizard asks for about twenty numbers instead
+and fills in the rest from the sample household, so you get a first answer in a few
+minutes. Nothing it assumes is hidden &mdash; every row it creates is an ordinary row
+you can open and change in the editor afterwards.</p>
+
+<h2>The six steps</h2>
+{% call steps() %}
+<li><strong>You.</strong> A name for the plan, your age, the age you retire and the
+    age to plan to. Tick <em>I'm planning with a partner</em> for a second person
+    with their own three ages.</li>
+<li><strong>Income.</strong> Pay before tax, real pay growth, and a public or state
+    pension with the age it starts. Other income (rent, part-time work, an annuity)
+    sits under a fold.</li>
+<li><strong>Savings.</strong> Today's balances in four groups by how they are taxed,
+    and what you save each year until you retire.</li>
+<li><strong>Spending.</strong> What you spend now, the share you expect in
+    retirement, the essential share, what you want to leave, and an optional
+    mortgage.</li>
+<li><strong>Assumptions.</strong> An investment mix, a tax choice and inflation.</li>
+<li><strong>Review.</strong> The plan in words. Each group has a <em>Change</em>
+    link back to its step; then choose how to save it and press
+    <em>Build my plan</em>.</li>
+{% endcall %}
+<p>Your answers are kept as a draft in your browser session as you go, so
+<em>Back</em> and a page reload lose nothing. <em>Start over</em> clears the draft.
+Each step is checked when you press <em>Continue</em>, and any problem is described
+in words on the same step.</p>
+
+<h2>What is checked</h2>
+<ul>
+  <li>Your age (and your partner's) is between 16 and 100.</li>
+  <li>The retirement age is not before the current age &mdash; if you have already
+      retired, enter your current age.</li>
+  <li>The plan-to age is after both the current age and the retirement age.</li>
+  <li>No balance is negative, spending is above zero, and the essential share is
+      between 0 and 100%.</li>
+  <li>An investment mix is chosen, and inflation is between &minus;2% and 15%.</li>
+</ul>
+<p>Every step is re-checked when you press <em>Build my plan</em>, so a draft that
+was edited out of order still cannot produce an impossible plan.</p>
+
+<h2>What each answer becomes</h2>
+<h3>People and income</h3>
+{{ field_table([
+  ("Ages", "One person called You, and optionally one called Partner.",
+   "The plan runs for the longest of the two lifetimes (plan-to age minus current age), capped at 80 years."),
+  ("Your pay", "An employment income row: real basis, growing at your real pay growth, from now until you retire.",
+   "Taxable 100%, survivor 0%. Your partner’s pay gets its own row with the same growth rate."),
+  ("Public pension", "A state_pension row, real basis with 0% growth, from the start age for life.",
+   "Growth 0% on a real basis means it keeps pace with inflation. With a partner, 50% continues to the survivor; alone, 0%."),
+  ("Other income", "An other_taxable row, real, from now until the age you give (blank means for life).",
+   "Fully taxable, and 100% continues to a survivor. Edit it in the income editor if that is wrong."),
+]) }}
+
+<h3>Savings: four accounts on four wrappers</h3>
+<p>Each balance becomes an account on one of the sample's wrappers, so its tax
+treatment comes from that wrapper:</p>
+<div class="help-table-wrap"><table class="table table-sm">
+  <thead><tr><th>Wizard field</th><th>Account created</th><th>Wrapper</th><th>Drawn</th><th>Paid into</th></tr></thead>
+  <tbody>
+    <tr><td>Taxable investments</td><td>Taxable investments</td><td>Taxable brokerage</td><td>1st</td><td>the fixed amount a year, plus any surplus</td></tr>
+    <tr><td>Tax-free accounts</td><td>Tax-free account</td><td>Tax-free account (TEE)</td><td>2nd</td><td>nothing by default</td></tr>
+    <tr><td>Retirement accounts</td><td>Workplace / retirement account</td><td>Pension (EET)</td><td>3rd</td><td>your % of pay, plus the employer's</td></tr>
+    <tr><td>Cash savings</td><td>Cash savings</td><td>Cash savings</td><td>last</td><td>nothing</td></tr>
+  </tbody>
+</table></div>
+<p>The cost basis of the taxable, tax-free and cash accounts is set equal to the
+balance, so no gains are assumed to be embedded in them today; the retirement
+account's basis is zero, which is how a pension taxed on the way out is modelled.
+If you have large unrealised gains in a taxable account, raise the balance-versus-basis
+gap in the accounts editor.</p>
+<p>Saving works through the household's <strong>surplus</strong> &mdash; income left
+after spending, debt and tax. Your % of pay goes to the retirement account first,
+then the fixed amount to taxable investments, and whatever is still left over is
+swept into taxable investments too. So the saving figures decide mainly
+<em>where</em> money goes first; unspent income is never lost. Contributions stop
+when the household has retired.</p>
+{% call note('trap', 'The employer figure is a match') %}
+<p>"Employer matches up to" is a match: 100% of your own percentage-of-pay saving, up
+to that share of pay. If you enter 0% for yourself, the employer adds nothing. The
+match is new money - it does not come out of your surplus - but it follows what you
+actually managed to save: in a year with too little surplus to make your full
+contribution, the match shrinks with it.</p>
+{% endcall %}
+
+<h3>Spending: four rows</h3>
+<p>Your annual spending is split by the essential share, and split again at
+retirement:</p>
+<ul>
+  <li><strong>Essentials (working years)</strong> and <strong>Discretionary (working
+      years)</strong>: today's full level, from now until you retire. Skipped if you
+      are already retired.</li>
+  <li><strong>Essentials (retirement)</strong> and <strong>Discretionary
+      (retirement)</strong>: the retirement share of today's level (never below 10%),
+      from retirement for life. Only the retirement discretionary row follows the
+      age spending curve (the "smile"); essentials stay flat in real terms.</li>
+</ul>
+<p>All four are in today's money. Rows that come out at zero are left out. The
+essential/discretionary split matters later: a flexible withdrawal policy can cut
+discretionary spending in a bad year but never the essentials. A mortgage becomes
+one amortising loan at the rate and remaining term you give. <em>Leave at
+least</em> becomes the plan's legacy target.</p>
+
+<h3>Investment mix and the glide path</h3>
+{{ field_table([
+  ("Conservative", "35% equity, 35% government bonds, 20% corporate credit, 10% cash.", "Smaller swings, lower growth."),
+  ("Balanced", "60% equity, 25% government bonds, 10% corporate credit, 5% cash.", "The default."),
+  ("Growth", "85% equity, 10% government bonds, 5% corporate credit.", "Bigger swings, more growth."),
+]) }}
+<p>The mix is applied to the retirement, tax-free and taxable accounts. Each of them
+then glides in a straight line to the <em>conservative</em> mix, starting ten years
+before your retirement age (or now, if that is sooner) and finishing five years
+after it. Choosing conservative therefore means no glide at all. The cash account is
+100% cash and never glides. The sample's property and alternatives classes start
+at zero.</p>
+
+<h3>Tax and inflation</h3>
+{{ field_table([
+  ("Progressive bands (example)", "The sample schedule: 0% to 12,570, 20% to 50,270, 40% to 100,000, 60% to 125,140 (the allowance taper), then 45%.",
+   "An example, not your system. Replace the bands in the tax editor."),
+  ("One flat rate", "A single band: the rate you give, on all taxable income from the first unit.", "Quick and honest if your system is roughly flat."),
+  ("Ignore tax", "A single 0% band.", "Useful for a first look; every figure is then before tax."),
+  ("Inflation", "The plan's mean inflation rate.", "2–3% is typical."),
+]) }}
+<p>Everything else &mdash; the market model, correlations, regimes, crash process,
+wrappers and the withdrawal policy &mdash; is the sample household's. See
+{{ goto('plan_section', 'markets', 'markets') }} and
+{{ goto('plan_section', 'policy', 'policy') }}.</p>
+
+<h2>Saving the result</h2>
+<ul>
+  <li><strong>Save as a new scenario</strong> (the default) creates a new plan named
+      after the wizard's plan name and makes it active. Your current plan is left as
+      it was, and you can compare the two on the
+      {{ goto('compare', 'comparison page') }}.</li>
+  <li><strong>Replace the current plan</strong> overwrites the active plan &mdash;
+      its inputs <em>and</em> its name &mdash; with the wizard's plan. There is no
+      undo; download the current plan as JSON first if you might want it back.</li>
+</ul>
+<p>Either way you land on the dashboard with the deterministic projection already
+drawn. Press <em>Run simulation</em> for the odds.</p>
+
+{% call note('tip', 'Start from a portfolio you track') %}
+<p>If you have built a portfolio in RetPlan, the Savings step offers to fill the
+<em>taxable investments</em> figure from its current value. Only the balance is
+copied; to copy a portfolio's mix into any account of the plan, use <em>Use in your
+retirement plan</em> on the portfolio page after the plan exists.</p>
+{% endcall %}
+
+{% call note('why', 'Why a wizard at all') %}
+<p>A rough plan today beats a perfect plan never. The four numbers that carry most of
+the answer &mdash; ages, spending, savings and guaranteed income &mdash; are all in the
+wizard. Refine from there: see <a href="{{ url_for('help_getting_started') }}">getting
+started</a> for the order that pays off fastest.</p>
+{% endcall %}
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>One line each. Where a term has its own help page, the definition links to it.</p>
+
+<h2>Money and time</h2>
+<dl class="row">
+  <dt class="col-sm-3">Real / today&rsquo;s money</dt><dd class="col-sm-9">An amount expressed in what it would buy today. The whole model works in real terms.</dd>
+  <dt class="col-sm-3">Nominal</dt><dd class="col-sm-9">A number of future currency units, which lose purchasing power as prices rise.</dd>
+  <dt class="col-sm-3">Basis</dt><dd class="col-sm-9">Whether an income or spending row is entered in real or nominal terms.</dd>
+  <dt class="col-sm-3">Inflation</dt><dd class="col-sm-9">The yearly rise in prices; simulated per trial, so each future has its own price path.</dd>
+  <dt class="col-sm-3">Horizon</dt><dd class="col-sm-9">How many years the projection runs, counted from this year.</dd>
+  <dt class="col-sm-3">Planning age</dt><dd class="col-sm-9">The age a person is planned to live to; after it, their income falls to its survivor share.</dd>
+  <dt class="col-sm-3">Spending smile</dt><dd class="col-sm-9">The tendency for real spending to fall through retirement and rise again late in life.</dd>
+  <dt class="col-sm-3">Essential floor</dt><dd class="col-sm-9">Spending you cannot cut; flexible policies never go below it.</dd>
+  <dt class="col-sm-3">Discretionary</dt><dd class="col-sm-9">Spending you could cut in a bad year.</dd>
+  <dt class="col-sm-3">Legacy target</dt><dd class="col-sm-9">Real wealth you want left at the end; success requires reaching it.</dd>
+</dl>
+
+<h2>Tax and accounts</h2>
+<dl class="row">
+  <dt class="col-sm-3">Wrapper</dt><dd class="col-sm-9">A tax treatment described as data: when money going in, growing and coming out is taxed. {{ goto('help_wrappers', 'Tax wrappers') }}</dd>
+  <dt class="col-sm-3">EET</dt><dd class="col-sm-9">Exempt in, exempt growth, taxed out &mdash; a typical pension or traditional 401(k).</dd>
+  <dt class="col-sm-3">TEE</dt><dd class="col-sm-9">Taxed in, exempt growth, exempt out &mdash; an ISA or Roth account.</dd>
+  <dt class="col-sm-3">TTE</dt><dd class="col-sm-9">Taxed in, taxed growth, exempt out &mdash; an ordinary taxable account (gains taxed on sale).</dd>
+  <dt class="col-sm-3">ETT</dt><dd class="col-sm-9">Exempt in, taxed growth, taxed out &mdash; rarer; some schemes and insurance bonds.</dd>
+  <dt class="col-sm-3">Account (ledger)</dt><dd class="col-sm-9">One pot of money in one wrapper, with its own balance, asset mix and contributions.</dd>
+  <dt class="col-sm-3">Draw order</dt><dd class="col-sm-9">The order accounts are used to fund spending.</dd>
+  <dt class="col-sm-3">Sweep account</dt><dd class="col-sm-9">The account any unspent income is paid into.</dd>
+  <dt class="col-sm-3">Forced draw (MRD)</dt><dd class="col-sm-9">A minimum distribution a wrapper requires from a given age, taxable and paid out whether needed or not.</dd>
+  <dt class="col-sm-3">Cost basis</dt><dd class="col-sm-9">What you paid for an investment; only the gain above it is taxable when sold.</dd>
+  <dt class="col-sm-3">Inclusion rate</dt><dd class="col-sm-9">The share of a capital gain that is added to taxable income.</dd>
+  <dt class="col-sm-3">Tax band</dt><dd class="col-sm-9">A slice of income taxed at one rate; an allowance is simply a 0% first band.</dd>
+  <dt class="col-sm-3">Gross-up</dt><dd class="col-sm-9">Working out how much to withdraw so that, after the tax it triggers, the need is met.</dd>
+  <dt class="col-sm-3">Effective tax rate</dt><dd class="col-sm-9">Total tax divided by income plus withdrawals.</dd>
+  <dt class="col-sm-3">Fiscal drag</dt><dd class="col-sm-9">Frozen tax bands that bite harder each year as incomes rise with inflation.</dd>
+</dl>
+
+<h2>Markets and simulation</h2>
+<dl class="row">
+  <dt class="col-sm-3">Asset class</dt><dd class="col-sm-9">A group of investments that behave alike (equity, government bonds, cash&hellip;), with one return, volatility and crash beta.</dd>
+  <dt class="col-sm-3">Expected return</dt><dd class="col-sm-9">The arithmetic average yearly return; compounding delivers less.</dd>
+  <dt class="col-sm-3">CAGR</dt><dd class="col-sm-9">Compound annual growth rate: the single steady rate that turns the start value into the end value.</dd>
+  <dt class="col-sm-3">Volatility</dt><dd class="col-sm-9">The standard deviation of yearly (or annualised) returns; the size of a typical surprise.</dd>
+  <dt class="col-sm-3">Correlation</dt><dd class="col-sm-9">How far two assets move together, from &minus;1 (opposite) to +1 (in step).</dd>
+  <dt class="col-sm-3">Regime</dt><dd class="col-sm-9">A market state (bear, normal, bull) that shifts returns and volatility and persists from year to year.</dd>
+  <dt class="col-sm-3">Crash beta</dt><dd class="col-sm-9">How much of a market crash an asset suffers; negative means it gains.</dd>
+  <dt class="col-sm-3">Calibration</dt><dd class="col-sm-9">Re-centring returns so regimes and crashes do not quietly lower the averages you typed.</dd>
+  <dt class="col-sm-3">Monte Carlo</dt><dd class="col-sm-9">Running the plan against thousands of randomly generated futures and counting outcomes.</dd>
+  <dt class="col-sm-3">Trial</dt><dd class="col-sm-9">One simulated future.</dd>
+  <dt class="col-sm-3">Seed</dt><dd class="col-sm-9">The number that fixes the random draws; same seed and inputs, same answer.</dd>
+  <dt class="col-sm-3">Bootstrap</dt><dd class="col-sm-9">Building futures by resampling blocks of real past returns instead of drawing from a formula.</dd>
+  <dt class="col-sm-3">Standard error</dt><dd class="col-sm-9">How far an estimate from a finite sample may be from the truth; &radic;(p(1&minus;p)/n) for a success rate.</dd>
+  <dt class="col-sm-3">Success probability</dt><dd class="col-sm-9">The share of trials with no unmet need that also reach the legacy target.</dd>
+  <dt class="col-sm-3">Confidence level</dt><dd class="col-sm-9">The success probability you are aiming for; the solvers target it.</dd>
+  <dt class="col-sm-3">Percentile</dt><dd class="col-sm-9">The value below which a given share of outcomes falls.</dd>
+  <dt class="col-sm-3">P10 / P50 / P90</dt><dd class="col-sm-9">The 10th, 50th (median) and 90th percentiles: one in ten worse, the middle, one in ten better.</dd>
+  <dt class="col-sm-3">Median</dt><dd class="col-sm-9">The middle outcome; half are better, half worse.</dd>
+  <dt class="col-sm-3">Shortfall</dt><dd class="col-sm-9">Need in a year that the plan could not pay.</dd>
+  <dt class="col-sm-3">Depletion</dt><dd class="col-sm-9">The first year with a shortfall &mdash; &ldquo;the money ran out&rdquo;.</dd>
+  <dt class="col-sm-3">Drawdown</dt><dd class="col-sm-9">A fall from a previous peak, as a percentage; the maximum drawdown is the worst.</dd>
+  <dt class="col-sm-3">Sequence risk</dt><dd class="col-sm-9">The danger that bad returns arrive early in retirement, when withdrawals lock in the losses.</dd>
+  <dt class="col-sm-3">Funded ratio</dt><dd class="col-sm-9">Assets plus the present value of future income, divided by the present value of future spending.</dd>
+  <dt class="col-sm-3">Present value</dt><dd class="col-sm-9">A future amount discounted back to today at a chosen rate.</dd>
+  <dt class="col-sm-3">Deterministic</dt><dd class="col-sm-9">One projection with every return at its average &mdash; no randomness.</dd>
+</dl>
+
+<h2>Withdrawal policy</h2>
+<dl class="row">
+  <dt class="col-sm-3">Withdrawal policy</dt><dd class="col-sm-9">The rule that sets each year&rsquo;s spending. {{ goto('help_policy', 'Withdrawal policy') }}</dd>
+  <dt class="col-sm-3">Guardrails</dt><dd class="col-sm-9">Cut spending when the withdrawal rate rises too far, raise it when it falls far enough.</dd>
+  <dt class="col-sm-3">VPW</dt><dd class="col-sm-9">Variable percentage withdrawal: spend a share of the portfolio that rises as the years left fall.</dd>
+  <dt class="col-sm-3">Withdrawal rate</dt><dd class="col-sm-9">A year&rsquo;s spending as a share of the portfolio.</dd>
+  <dt class="col-sm-3">Glide path</dt><dd class="col-sm-9">An asset mix that changes with age, usually becoming more cautious.</dd>
+  <dt class="col-sm-3">Rebalancing</dt><dd class="col-sm-9">Selling what has grown and buying what has shrunk to restore the target mix.</dd>
+</dl>
+
+<h2>The app and portfolios</h2>
+<dl class="row">
+  <dt class="col-sm-3">Workspace</dt><dd class="col-sm-9">Everything that belongs to one browser: its plans and portfolios, found through an opaque id in the session cookie.</dd>
+  <dt class="col-sm-3">Scenario</dt><dd class="col-sm-9">One named version of your plan; a workspace has one active at a time.</dd>
+  <dt class="col-sm-3">Audit</dt><dd class="col-sm-9">The checks that prove the projection adds up. {{ goto('help_audit', 'The audit') }}</dd>
+  <dt class="col-sm-3">Holding</dt><dd class="col-sm-9">A quantity of one security in a portfolio.</dd>
+  <dt class="col-sm-3">Symbol</dt><dd class="col-sm-9">The ticker a price source knows a security by.</dd>
+  <dt class="col-sm-3">FX pair</dt><dd class="col-sm-9">An exchange rate between two currencies, priced like a symbol, used to value foreign holdings.</dd>
+  <dt class="col-sm-3">Time-weighted return</dt><dd class="col-sm-9">Growth that ignores when money was added or taken out &mdash; it measures the investments, not your timing.</dd>
+  <dt class="col-sm-3">Stress test</dt><dd class="col-sm-9">A historical crisis replayed on your current mix.</dd>
+</dl>
+{% endblock %}

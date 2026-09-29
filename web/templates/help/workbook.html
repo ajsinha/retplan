@@ -1,0 +1,106 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>RetPlan began as a spreadsheet, and the spreadsheet still ships: <code>RetPlan.ods</code>
+in the project folder, a LibreOffice Calc workbook with the whole deterministic model
+written as visible formulas. The two were built to agree exactly; since this release
+the web application is developed on its own and the workbook is kept as it was, so
+their numbers now differ in the ways listed below.</p>
+
+<h2>What is in the workbook</h2>
+<ul>
+  <li><strong>24 worksheets</strong>: guided input sheets, a fully visible formula
+      engine, simulation sheets, a dashboard with ten charts, three reports and an
+      audit sheet.</li>
+  <li><strong>Live formulas</strong> for the whole fixed-return projection &mdash;
+      income, tax, withdrawals, balances. They need no macros and work with macros
+      blocked.</li>
+  <li><strong>Buttons</strong> on the dashboard that run the Monte Carlo and the
+      solvers. These call Python macros and need a little setup (below).</li>
+</ul>
+
+<h2>How the application now differs</h2>
+<p>Up to version 1.0 a cross-check compared the workbook&rsquo;s formulas with the Python
+engine column by column and found them equal to about 7&times;10<sup>&minus;12</sup>. The
+application has since corrected five things the workbook still does the old way:</p>
+<ul>
+  <li><strong>Employer matches</strong> are new money paid on top of your saving, not taken
+      out of the household&rsquo;s surplus.</li>
+  <li><strong>The funded ratio</strong> no longer counts forced withdrawals from your own
+      accounts as outside income (they were counted twice).</li>
+  <li><strong>The fixed-return projection</strong> compounds at each asset&rsquo;s typical
+      (median) rate by default rather than its arithmetic average.</li>
+  <li><strong>The earliest-retirement solver</strong> extends salaries when it tries a later
+      retirement age, and the sensitivity drivers for fees and longevity behave sensibly.</li>
+  <li><strong>The sample household&rsquo;s</strong> cash reserve and rental property are
+      invested in the right asset classes.</li>
+</ul>
+<p>So for the same inputs, expect the workbook to show a higher funded ratio, a more
+optimistic fixed-return path, and less saved where there is an employer match.
+<code>make verify</code> will report these differences; that is expected.</p>
+<h2>When to use which</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th>Use the web app when&hellip;</th><th>Use the workbook when&hellip;</th></tr></thead>
+  <tbody>
+    <tr><td>you want to enter a plan quickly, keep several scenarios and compare them</td>
+      <td>you want to see and audit every intermediate number as a formula</td></tr>
+    <tr><td>you want your actual holdings priced daily and projected</td>
+      <td>you want to work offline in a file you can email or archive</td></tr>
+    <tr><td>you want the help, the wizard and the charts with tables</td>
+      <td>you want to change the model itself and see the effect cell by cell</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Plans do not move between the two automatically: the web app imports and exports its
+own JSON, not <code>.ods</code> files.</p>
+
+<h2>Setting it up</h2>
+<p>From the project folder, with LibreOffice <strong>closed</strong>:</p>
+{% call steps() %}
+<li><code>make build</code> &mdash; generates <code>RetPlan.ods</code> from source through
+    LibreOffice (about a minute and a half).</li>
+<li><code>make setup</code> &mdash; installs the macros into your LibreOffice profile and
+    trusts this folder, so the buttons are allowed to run.</li>
+<li>Open <code>RetPlan.ods</code>, work through <em>Start Here</em>, and press
+    <em>Run simulation</em> on its dashboard.</li>
+{% endcall %}
+{% call note('trap', 'Buttons that do nothing') %}
+<p>At LibreOffice&rsquo;s default High macro security, with no trusted location, the
+buttons silently do nothing. <code>make setup</code> fixes that without lowering your
+security level. The buttons also need the Python script provider
+(<code>libreoffice-script-provider-python</code> on Debian and Ubuntu).</p>
+{% endcall %}
+
+<h2>The tools</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:30%">Command</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>make test</code></td><td>Unit, engine and statistical tests. No LibreOffice needed; a few seconds.</td></tr>
+    <tr><td><code>make build</code></td><td>Builds the workbook from source.</td></tr>
+    <tr><td><code>make verify</code></td><td>Runs <code>tools/crosscheck.py</code>: proves the workbook&rsquo;s formulas and the engine agree to 1e-9.</td></tr>
+    <tr><td><code>make simulate</code></td><td>Runs <code>tools/simulate.py</code>: the Monte Carlo and solvers from outside LibreOffice, results written into the workbook (it saves in place).</td></tr>
+    <tr><td><code>make install</code></td><td>Runs <code>tools/install_macros.py</code>: copies (never links) the macro module and the engine into your LibreOffice profile, so what runs is what you can read.</td></tr>
+    <tr><td><code>make trust</code> / <code>make untrust</code></td><td>Runs <code>tools/trust_folder.py</code>: adds or removes this folder in LibreOffice&rsquo;s trusted locations. <code>--list</code> shows the current ones.</td></tr>
+    <tr><td><code>make check</code></td><td>The full gate: test, build, verify, simulate.</td></tr>
+    <tr><td><code>make web</code></td><td>Starts this web application on port 5007.</td></tr>
+  </tbody>
+</table>
+</div>
+{% call note('tip', 'No macro setup at all') %}
+<p>If you would rather not touch LibreOffice&rsquo;s security settings,
+<code>python3 tools/simulate.py RetPlan.ods --trials 10000 --full</code> runs exactly the
+code the buttons run and needs only <code>python3-uno</code>.</p>
+{% endcall %}
+
+<h2>Known differences</h2>
+<ul>
+  <li>The sheet assumes annual rebalancing; the engine also honours &ldquo;none&rdquo;.</li>
+  <li>The workbook is built at fixed sizes: 100 income and spending rows, 10 loans,
+      6 accounts, 6 wrappers, 6 asset classes and a 60-year horizon.</li>
+  <li>Workbook scenarios store scalar assumptions only, not whole tables. Web scenarios
+      are complete copies of the plan.</li>
+  <li>Only LibreOffice is supported; an Excel version is not built.</li>
+</ul>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('portfolios', 'Open portfolios') }}, pick one, then <em>Stress test</em>.</p>
+<p>A projection tells you the range of futures; a stress test tells you what one
+specific bad future would do. RetPlan replays five real crises, quarter by quarter,
+on the mix you hold today. It is the quickest way to find out whether you could live
+with your own portfolio in a bad year.</p>
+
+<h2>The five crises</h2>
+<div class="help-table-wrap"><table class="table table-sm">
+  <thead><tr><th>Crisis</th><th>Quarters</th><th>What happened</th></tr></thead>
+  <tbody>
+    <tr><td>Global financial crisis</td><td>9 (2007 Q4 &ndash; 2009 Q4)</td><td>Equities fell about 55% peak to trough; REITs worse; high-quality bonds rose.</td></tr>
+    <tr><td>Dot-com bust</td><td>11 (2000 Q2 &ndash; 2002 Q4)</td><td>A slow, grinding fall of about 45% over two and a half years, while bonds and property did well.</td></tr>
+    <tr><td>Covid crash</td><td>2 (2020 Q1 &ndash; Q2)</td><td>The fastest 30% fall on record, largely recovered the next quarter.</td></tr>
+    <tr><td>Rate shock</td><td>4 (2022)</td><td>Stocks and bonds fell together; the year a 60/40 portfolio had nowhere to hide.</td></tr>
+    <tr><td>Stagflation</td><td>8 (1973 &ndash; 1974)</td><td>Two years of falling stocks and double-digit inflation; commodities soared.</td></tr>
+  </tbody>
+</table></div>
+<p>They are chosen to be different kinds of bad: a banking crash, a valuation bust,
+a sudden shock, an inflation shock that broke the bond hedge, and a long real-terms
+grind.</p>
+
+<h2>How your holdings are mapped</h2>
+<p>Each crisis is stored as quarterly total returns for five proxy indices:</p>
+<ul>
+  <li><strong>equity</strong>: S&amp;P 500</li>
+  <li><strong>bond</strong>: Bloomberg US Aggregate</li>
+  <li><strong>cash</strong>: 3-month US Treasury bills</li>
+  <li><strong>property</strong>: FTSE Nareit All Equity REITs</li>
+  <li><strong>commodity</strong>: S&amp;P GSCI</li>
+</ul>
+<p>Every holding follows the proxy for its asset class. Classes without a proxy of
+their own borrow one, scaled by a beta:</p>
+<div class="help-table-wrap"><table class="table table-sm">
+  <thead><tr><th>Asset class</th><th>Follows</th><th class="num">Beta</th></tr></thead>
+  <tbody>
+    <tr><td>Equity</td><td>equity</td><td class="num">1.00</td></tr>
+    <tr><td>Intl equity</td><td>equity</td><td class="num">1.05</td></tr>
+    <tr><td>Emerging equity</td><td>equity</td><td class="num">1.25</td></tr>
+    <tr><td>Crypto</td><td>equity</td><td class="num">2.50</td></tr>
+    <tr><td>Other</td><td>equity</td><td class="num">0.80</td></tr>
+    <tr><td>Bonds, Cash, Property, Commodities</td><td>their own proxy</td><td class="num">1.00</td></tr>
+  </tbody>
+</table></div>
+<p>The beta scales the return <em>in excess of cash</em>, not the whole return:</p>
+<p class="mono">r<sub>holding</sub> = r<sub>cash</sub> + &beta; &times; (r<sub>proxy</sub> &minus; r<sub>cash</sub>), floored at &minus;95% a quarter</p>
+<p>so a beta of 2 doubles the risk taken, not the interest earned on the cash part.
+A quarter where shares fell 20% and bills paid 1% becomes about &minus;25% for emerging
+markets (1% + 1.25 &times; &minus;21%).</p>
+
+<h2>The replay</h2>
+<p>The current mix, weighted by today's values, goes through the crisis one quarter at
+a time. It is rebalanced during the crisis according to the rebalancing setting of
+your last projection (annually by default). When the crisis ends, each holding grows
+at its <strong>expected return</strong> &mdash; the same one the projection would use,
+including any overrides &mdash; until the portfolio is back to today's value, or for
+at most 40 quarters (ten years).</p>
+<p>There are <strong>no contributions, withdrawals or fees</strong> in a replay. That
+isolates the portfolio's own behaviour; the effect of spending through a crisis is
+what the Monte Carlo version below is for.</p>
+{{ field_table([
+  ("Worst point", "The lowest quarter-end value, as a fall from today.", "The number to ask yourself about: could I hold on through this?"),
+  ("Value at the bottom", "That lowest value in money.", "Losses feel different in money than in percent."),
+  ("At the end of the crisis", "Change from today to the crisis’s last quarter.", "Often much better than the worst point: most crises end in a rebound."),
+  ("Back to today’s value", "Years from today until the value is regained, crisis included.",
+   "“by the end” if the crisis ends at or above today’s value; “over 10 years” if expected returns would not recover it within ten years after the crisis."),
+]) }}
+<p>Each crisis also has a chart and a quarter-by-quarter table, with the crisis
+shaded and its last quarter marked.</p>
+
+{% call note('warn', 'What the approximations leave out') %}
+<ul class="mb-0">
+  <li>The figures are rounded index returns, good to about a point per quarter, and
+      describe the shape and depth of each episode rather than a precise record. The
+      1973&ndash;74 figures are published annually and are spread evenly across each
+      year's quarters, which smooths that crisis considerably.</li>
+  <li>Quarter-end values miss falls within a quarter. In March 2020 US shares were
+      down about 34% at the low; the quarter ended down about 20%, and that is what
+      you will see.</li>
+  <li>The proxies are US indices in dollars. A UK or European portfolio, and any
+      currency effect, are approximated by the US experience.</li>
+  <li>All bonds follow investment-grade US bonds. High-yield or long-duration bonds
+      behaved very differently in some of these crises.</li>
+  <li>Your individual holdings are replaced by their class. A single stock that went
+      to zero in 2008 shows here as the index.</li>
+  <li>The crypto beta is a judgement: crypto did not exist in most of these episodes.</li>
+  <li>Recovery is to today's value in money, not in purchasing power. After the
+      1970s, getting the number back is not the same as getting the spending power
+      back.</li>
+</ul>
+{% endcall %}
+
+<h2>Opening every projection with a crisis</h2>
+<p>On the projection page, <em>Open every trial with a crisis</em> makes every
+simulated future start with the chosen crisis. For its first quarters every trial
+earns exactly the crisis returns; after that, returns are random as usual. Your
+contributions, withdrawals, fee and rebalancing all apply throughout, crisis
+included.</p>
+{% call steps() %}
+<li><strong>Run a projection</strong> with your contributions and withdrawals, and no
+    crisis. Name it "Base".</li>
+<li><strong>Run it again</strong> with a crisis chosen and the same seed. Name it
+    after the crisis.</li>
+<li><strong>Compare</strong> the two in <em>Saved runs</em>: the median, the P10,
+    and &mdash; if you are withdrawing &mdash; the chance of running out.</li>
+{% endcall %}
+{% call note('why', 'Why this is the honest test of sequence risk') %}
+<p>The same crisis does far more damage at the start of a withdrawal plan than in
+the middle of it. Selling to fund spending while prices are down turns a temporary
+fall into a permanent one: the units sold are not there for the recovery. A portfolio
+with no withdrawals barely notices when its crash happens; a portfolio paying an
+income can be broken by the timing alone. Putting the crisis first, and then letting
+the future be uncertain, is exactly the case a retirement plan has to survive.</p>
+{% endcall %}
+<p>Choose a horizon longer than the crisis, or the projection ends inside it. For the
+equivalent test on the whole retirement plan, see
+<a href="{{ url_for('help_recipes') }}">recipes</a> and the crash settings in
+<a href="{{ url_for('help_markets') }}">markets, regimes and crashes</a>.</p>
+{% endblock %}

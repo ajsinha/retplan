@@ -1,0 +1,88 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('dashboard', 'Open the dashboard and press Full analysis') }}</p>
+<p>The solvers turn the question round. Instead of &ldquo;what are my odds?&rdquo;
+they ask &ldquo;what would I have to change to reach my confidence target?&rdquo;.
+Each one re-runs the <em>whole</em> model &mdash; tax, forced draws, guardrails,
+draw order &mdash; at every step, so the answer respects everything the simulation
+does rather than a rule-of-thumb approximation of it.</p>
+
+<h2>How they search: bisection</h2>
+<p>Each solver has one knob and a range to search. It checks success at both ends of
+the range; if your target lies between them, it halves the range again and again,
+keeping the half where success crosses the target, until the range is narrower than
+a set tolerance. That is <strong>bisection</strong>: slow-ish, but it cannot be
+fooled by the noise in a Monte Carlo the way a gradient search can, and every step
+uses the same seed, so the success curve it walks along is smooth.</p>
+{% call note('warn', 'When the target is outside the range') %}
+<p>If success is above the target at both ends, or below it at both, there is nothing
+to bisect. The solver then returns whichever end is nearer the target and marks the
+answer as <em>not bracketed</em>. The dashboard does not show that mark, so treat an
+answer sitting exactly on a limit below (10% or 300% of spending, age 85, 200,000 a
+year) as &ldquo;the target is out of reach within the range&rdquo;, not as a
+precise figure.</p>
+{% endcall %}
+
+<h2>The three solvers</h2>
+<h3>Maximum sustainable spend</h3>
+<p>Scales <strong>every spending row</strong> &mdash; essential, discretionary and
+lumpy alike &mdash; by the same factor, searched between 0.1&times; and 3&times;.
+The answer is the first-year essential plus discretionary spending at the factor that
+just meets your confidence target. Debt payments are not scaled and not included in
+the figure, so it can be lower than the <em>First-year spending</em> tile, which does
+include them.</p>
+
+<h3>Earliest retirement age</h3>
+<p>Sets <strong>everyone&rsquo;s</strong> retirement age to the same trial age,
+searched from the first person&rsquo;s current age plus six months up to their
+planning age minus one (never past 85). Every employment and self-employment income
+row is cut off at that age if it would have run longer.</p>
+{% call note('trap', 'The solver can end a salary early, never extend one') %}
+<p>If your salary row stops at 60, trying a retirement age of 63 does not add three
+more years of pay &mdash; the row still ends at 60. If the earliest age looks
+stubborn, set salary rows to run to a late age and let the retirement age decide.
+Likewise, a couple with different retirement dates is solved as if both stopped
+together.</p>
+{% endcall %}
+
+<h3>Extra saving needed</h3>
+<p>Adds a fixed real amount per year to the contribution of the account named in
+<em>Surplus sweeps into account #</em> on the accounts page, searched between 0 and
+200,000. If the plan already meets the target the answer is zero. The money only goes
+in during working years with surplus income, and within that wrapper&rsquo;s
+contribution cap &mdash; so a large answer can be one the engine cannot actually pay
+in. This figure is calculated by the full analysis but is not currently shown on the
+dashboard.</p>
+
+<h2>The sweep and the tornado</h2>
+<p>These are not solvers but ride on the same machinery. The <strong>sweep</strong>
+re-runs the plan at 17 spending levels from 50% to 150% of today&rsquo;s spending.
+The <strong>tornado</strong> moves eight drivers down and up one at a time. What each
+perturbs is listed in {{ goto('help_charts', 'Reading the charts') }}.</p>
+
+<h2>Trial counts and accuracy</h2>
+<p>A full analysis runs the model dozens of times, so every solver, the sweep and the
+tornado use <strong>half your chosen trial count, capped at 1,500 and never below
+200</strong>. At 2,000 trials that is 1,000 per evaluation, so each success figure
+inside a solver carries an error of about &plusmn;2 points. The headline odds use the
+full count. Choosing 10,000 trials for the full analysis buys a better headline, not
+better solver answers beyond 1,500.</p>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th>Solver</th><th>Knob and range</th><th>Precision</th></tr></thead>
+  <tbody>
+    <tr><td>Max sustainable spend</td><td>Factor on every spending row, 0.1 to 3</td><td>Tolerance about 0.2% of the factor</td></tr>
+    <tr><td>Earliest retirement</td><td>One retirement age for everyone</td><td>Tolerance about 0.01 of a year</td></tr>
+    <tr><td>Extra saving</td><td>Real amount added to the sweep account</td><td>0 to 200,000 a year</td></tr>
+  </tbody>
+</table>
+</div>
+
+{% call note('why', 'Why the answer depends on your confidence level') %}
+<p>Every solver aims at the confidence level on the policy page. Raise it from 80% to
+90% and the maximum spend falls, the retirement age rises. That is the point: the
+level expresses how much bad luck you want the plan to survive.
+{{ goto('plan_section', 'Open the policy page', 'policy') }}</p>
+{% endcall %}
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, goto with context %}
+{% block help %}
+
+<p>Each recipe is a short sequence that answers one real question. They assume your
+plan is entered and the audit passes.</p>
+
+<h2>Can I afford to retire at 60?</h2>
+{% call steps() %}
+<li>On <a href="{{ url_for('plan_section', section='household') }}">household</a>,
+    set the retirement age to 60.</li>
+<li>On <a href="{{ url_for('plan_section', section='income') }}">income</a>, change
+    the <em>To age</em> on each salary row to 60 as well. Nothing else stops the
+    salary &mdash; this is the step people forget.</li>
+<li>Check whether any pension has a penalty or lock age before 60 on
+    <a href="{{ url_for('plan_section', section='wrappers') }}">wrappers</a>. If it
+    does, the bridge years have to come from somewhere else.</li>
+<li>Run <em>Full analysis</em> on the dashboard and read the success probability and
+    the <em>earliest retirement age</em> the solver found.</li>
+{% endcall %}
+{% call note('tip', 'Let the solver answer directly') %}
+<p><em>Earliest retirement age</em> does exactly this search for you: it bisects on
+retirement age, moving the salary end dates with it, until success hits your
+confidence level. Use it first, then test the specific age you care about.</p>
+{% endcall %}
+
+<h2>How much can I actually spend?</h2>
+{% call steps() %}
+<li>Make sure the split between essential and discretionary rows is honest.</li>
+<li>Run <em>Full analysis</em>. Read <em>max sustainable spend</em>.</li>
+<li>Open the <em>Success against spending</em> chart. It prices each extra unit of
+    spending in probability &mdash; usually the most useful picture in the app.</li>
+<li>Decide where on that curve you want to sit. The solver aims at your confidence
+    level; the curve shows what the next 5,000 a year would cost you.</li>
+{% endcall %}
+<p>The figure is first-year spending in today's money, including debt service, and
+it scales every spending row proportionally. If you would rather cut only
+discretionary spending, change those rows directly and re-run.</p>
+
+<h2>What if markets crash the year I retire?</h2>
+<p>Two ways, and they answer different questions.</p>
+<h3>The distribution already contains it</h3>
+<p>With the crash process on, a share of the simulated futures already include a
+crash at or near retirement. The P5 and P10 bands on the fan chart are largely
+made of those paths &mdash; that is what the bottom of the fan <em>is</em>.</p>
+<h3>Force it and look</h3>
+{% call steps() %}
+<li>On <a href="{{ url_for('plan_section', section='markets') }}">markets</a>, raise
+    the crash probability to 1 (a crash every year is not realistic, but it makes
+    the mechanism visible) or deepen the depth distribution.</li>
+<li>Re-run and compare the success probability and the depletion-age curve against
+    your baseline.</li>
+<li>Put the settings back. Write down the two numbers you compared.</li>
+{% endcall %}
+{% call note('warn', 'Change one thing at a time') %}
+<p>Stress tests are only informative against a baseline you recorded. Download the
+plan JSON before you start experimenting so you can always return to it exactly.</p>
+{% endcall %}
+
+<h2>Should I pay off the mortgage or invest?</h2>
+{% call steps() %}
+<li>Record the baseline: run a simulation and note the success probability and
+    median terminal wealth.</li>
+<li>Add an overpayment on <a href="{{ url_for('plan_section', section='debt') }}">debt</a>
+    equal to what you would otherwise invest, and reduce the matching contribution
+    on <a href="{{ url_for('plan_section', section='accounts') }}">accounts</a>.</li>
+<li>Re-run with the same seed and trial count, and compare.</li>
+{% endcall %}
+<p>The comparison is fair only if the money comes from the same place in both runs.
+The usual finding: paying down debt is a guaranteed return equal to the loan rate,
+so it wins whenever the loan rate exceeds the portfolio's expected return after tax
+and fees &mdash; and it always wins on certainty, because it removes a fixed
+obligation from the bad paths.</p>
+
+<h2>Is my adviser fee worth it?</h2>
+<p>Set the adviser fee to zero on the markets page, re-run with the same seed, and
+compare median terminal wealth. The difference is what the fee costs you over the
+plan, in today's money. Whether it is worth it is not a question this model can
+answer &mdash; but the number it is being measured against should be this one, not
+the annual percentage.</p>
+
+<h2>What does one more year of work buy?</h2>
+<p>Push both retirement age and salary end age out by one year and re-run. One extra
+year typically moves the answer more than any plausible change in asset allocation,
+because it does three things at once: adds a year of saving, removes a year of
+drawdown, and shortens the horizon the money has to cover.</p>
+
+<h2>How exposed am I to living a long time?</h2>
+<p>Raise the planning age by five years on the household page and re-run. If the
+success probability falls sharply, longevity is your binding risk and the answer is
+usually guaranteed income (a later state pension claim, or an annuity) rather than
+a different portfolio.</p>
+{% endblock %}

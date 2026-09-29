@@ -1,0 +1,65 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the household editor', 'household') }}</p>
+
+<h2>Plan settings</h2>
+{{ field_table([
+  ('Plan name', 'A label for this plan. It names the downloaded JSON file.',
+   'Anything. Useful when you keep several variants.'),
+  ('Years to project', 'How many years the model steps through, from now.',
+   'Long enough to reach the oldest planning age. The audit flags it if not. Capped at 80.'),
+  ('Cash-flow timing', 'Whether flows are assumed at the start, middle or end of each year.',
+   'Leave at "end" unless you have a reason. It shifts results by well under a percent.'),
+  ('Random seed', 'Fixes the simulated futures.',
+   'Keep it fixed while comparing scenarios, so differences come from your change and not from new random draws. Change it to check a result is not an artefact of one seed.'),
+]) }}
+
+<h2>People</h2>
+{{ field_table([
+  ('Name', 'A display label only.', 'No personal data is needed anywhere in this app.'),
+  ('Age now', 'Age at the plan start.', 'Every age-based rule is measured from here. Leave blank to remove a person.'),
+  ('Retires at', 'When employment income stops for that person.',
+   'This alone does not stop the salary - the income row has its own "To age", and both must agree.'),
+  ('Plan to age', 'The age the plan must fund.',
+   'Not life expectancy. See below.'),
+]) }}
+
+{% call note('warn', 'Retirement age is set in two places, on purpose') %}
+<p>Changing "Retires at" stops contributions and starts the drawdown phase. It does
+<em>not</em> end a salary row &mdash; that is controlled by the row's own "To age" on
+the income page, because part-time work after retirement is common. When you move a
+retirement age, move the matching salary row too.</p>
+{% endcall %}
+
+<h2>Choosing a planning age</h2>
+<p>Planning to life expectancy means roughly half of the outcomes outlive the money.
+Life expectancy is a median, not a horizon. Conventional practice is to plan to
+somewhere around the 10th-to-25th percentile of survival &mdash; commonly 95 for a
+single person and 97&ndash;100 for the second death of a couple.</p>
+<p>The model does not draw a random age of death; it funds the plan to the age you
+set. To see how exposed you are, raise the age by five years and compare: a sharp
+drop in success means longevity is your binding constraint, and guaranteed income
+is the usual remedy.</p>
+
+<h2>The spending smile</h2>
+<p>Real spending in retirement is not flat. It typically declines through the
+sixties and seventies as travel and activity fall off, then ticks up late if care is
+needed. The smile is a multiplier curve by age, interpolated linearly between the
+ages you set, and clamped at both ends.</p>
+<p>It applies only to spending rows flagged <em>Age curve</em>, so you choose which
+categories obey it. Housing and insurance usually should not; travel and hobbies
+usually should.</p>
+{% call note('tip', 'A conservative smile is a flat one') %}
+<p>If you would rather not assume spending falls, set every multiplier to 1.00. The
+smile then does nothing, and your plan is funded at full spending throughout. That
+is the cautious choice, and it costs you a slightly lower sustainable spend.</p>
+{% endcall %}
+
+<h2>Survivor assumptions</h2>
+<p>When a person passes their planning age, their salary and pension rows stop
+except for the share set by <em>Survivor %</em> on each income row. Spending does not
+automatically fall &mdash; if you want it to, reduce the relevant rows or set their
+end ages. Two cannot live as cheaply as one, but nor does spending halve; 65&ndash;75%
+of joint spending is a common assumption.</p>
+{% endblock %}

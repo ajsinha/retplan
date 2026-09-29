@@ -1,0 +1,96 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the wrappers editor', 'wrappers') }}</p>
+<p>A wrapper is a description of <em>when</em> money inside it is taxed. Accounts
+hold balances; wrappers hold rules. That separation is what lets this model work in
+any country without a country setting.</p>
+
+<h2>The three decisions</h2>
+<p>Every tax-advantaged account in the world is some combination of three answers:</p>
+<ol>
+  <li>Does putting money in reduce your taxable income?</li>
+  <li>Is growth taxed as it arises?</li>
+  <li>Is taking money out taxable?</li>
+</ol>
+<p>Write E for exempt and T for taxed and you get the familiar shorthand:</p>
+<table class="table table-sm">
+  <thead><tr><th>Pattern</th><th>Contribution deductible</th><th>Withdrawal taxable</th>
+    <th>Real-world examples</th></tr></thead>
+  <tbody>
+    <tr><td><code>EET</code></td><td>100%</td><td>100%</td>
+      <td>UK workplace pension, US 401(k)/traditional IRA, Canadian RRSP, Australian concessional super</td></tr>
+    <tr><td><code>TEE</code></td><td>0%</td><td>0%</td>
+      <td>UK ISA, US Roth, Canadian TFSA</td></tr>
+    <tr><td><code>TTE</code></td><td>0%</td><td>0% (but growth taxed yearly)</td>
+      <td>Ordinary savings and deposit accounts</td></tr>
+    <tr><td>Taxable brokerage</td><td>0%</td><td>gain only</td>
+      <td>General investment account: tick <em>Realises gains</em></td></tr>
+  </tbody>
+</table>
+
+<h2>The columns</h2>
+{{ field_table([
+  ('Wrapper', 'The name you will see on the accounts page.', 'Name it after the real product so you do not mis-assign accounts.'),
+  ('Contribution deductible', 'Share of a contribution that reduces taxable income.',
+   '100% for a pension with full relief; 0% for a Roth or ISA.'),
+  ('Withdrawal taxable', 'Share of a withdrawal that is taxable income.',
+   '100% for a pension; 0% for a tax-free wrapper; 75% where a quarter comes out tax free.'),
+  ('Realises gains', 'Withdrawals are taxable only to the extent they are gain.',
+   'Tick for a taxable brokerage account. The taxable fraction is then computed from the account’s own cost basis, not from this column.'),
+  ('Cap', 'none, absolute, or pct_income.', 'How an annual contribution limit is expressed.'),
+  ('Cap value', 'The limit.', 'An amount for "absolute"; a fraction of earnings for "pct_income".'),
+  ('Penalty before age / Penalty', 'Early-access charge.',
+   'A 10% charge before 60 is entered as age 60, penalty 10%. The penalty is handled inside the same exact tax solve, so the net delivered is still right.'),
+  ('Forced draws from', 'Age at which minimum distributions begin.',
+   '999 means never. Set it to the age your system mandates; the divisor table is shared and applies to every wrapper that mandates draws.'),
+  ('Locked until', 'Age before which the wrapper cannot be touched at all.',
+   'Different from a penalty: locked means unavailable, not expensive.'),
+  ('Liquid', 'Whether the drawdown engine may sell it.',
+   'Untick for property or a business. Illiquid holdings still count in net worth but are never sold to fund spending.'),
+]) }}
+
+<h2>Worked examples</h2>
+<h3>A UK-style pension</h3>
+<p>Deductible 100%, withdrawal taxable 75% (reflecting the 25% tax-free element
+taken across the drawdown), gains not realised, cap <code>pct_income</code> at your
+annual allowance, locked until 55&ndash;57, forced draws never.</p>
+
+<h3>A US-style traditional 401(k)</h3>
+<p>Deductible 100%, withdrawal taxable 100%, penalty 10% before 59.5, forced draws
+from 73&ndash;75, cap <code>absolute</code>.</p>
+
+<h3>A Roth or ISA</h3>
+<p>Deductible 0%, withdrawal taxable 0%, no penalty, no forced draws, cap
+<code>absolute</code>.</p>
+
+<h3>A taxable brokerage account</h3>
+<p>Deductible 0%, withdrawal taxable 0%, <strong>Realises gains ticked</strong>.
+The taxable fraction of each withdrawal is then the unrealised gain share of the
+account &mdash; <code>1 &minus; basis/value</code> &mdash; multiplied by the capital
+gains inclusion rate from the tax page. Set the cost basis on the accounts page; if
+you leave it equal to the balance, early withdrawals are treated as return of
+capital and taxed lightly, which is usually the right starting assumption.</p>
+
+{% call note('why', 'Why the draw order matters so much here') %}
+<p>Because wrappers tax withdrawals differently, the order you empty them changes
+the lifetime tax bill substantially. Drawing from a taxable account first while a
+pension compounds untouched is the common default, but it is not always optimal
+&mdash; filling the lower tax bands from the pension in the early retirement years,
+before forced draws and state pensions push you into higher bands, often beats it.
+The model will show you the difference: change the draw order on the accounts page
+and compare lifetime tax in the reports.</p>
+{% endcall %}
+
+<h2>What is not modelled</h2>
+<ul>
+  <li><strong>Conversions between wrappers</strong> (Roth conversions and their
+      equivalents) are not automated. You can approximate one with a withdrawal and
+      a contribution in the same year.</li>
+  <li><strong>Catch-up contributions</strong> exist as fields but are not editable
+      in this web form; they are preserved from the plan JSON.</li>
+  <li><strong>Growth taxed annually</strong> is carried on the wrapper but the web
+      editor does not expose it; the sample data sets it correctly for cash and
+      taxable accounts.</li>
+</ul>
+{% endblock %}

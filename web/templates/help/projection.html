@@ -1,0 +1,258 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('portfolios', 'Open portfolios') }}, pick one, then <em>Project</em>.</p>
+<p>A projection runs your current holdings forward thousands of times, each time with
+a different random sequence of returns, and reports the spread of where they end up.
+It is separate from the retirement plan's simulation: it works holding by holding,
+from real price data, over a horizon you choose (ten years by default), with your own
+contributions and withdrawals.</p>
+
+<h2>Running one</h2>
+{% call steps() %}
+<li><strong>Years ahead</strong> (1&ndash;60) and whether the table is <strong>by
+    year or by quarter</strong>. The simulation itself always runs quarterly; the
+    choice only changes how the results are reported.</li>
+<li><strong>Return model</strong> &mdash; see <a href="#models">the three models</a>.
+    Lognormal is the sensible default.</li>
+<li><strong>Trials.</strong> 5,000 is plenty for the median and the P10; use more if
+    you care about P5 or a goal probability to the nearest point.</li>
+<li><strong>Goal</strong> (optional), in today's money: the value you hope to reach.</li>
+<li><strong>Money in and out</strong>: any number of contributions and withdrawals.</li>
+<li>Under <em>Assumptions, fees, rebalancing and stress</em>: where expected returns
+    come from, inflation, an annual fee, rebalancing, a percentage withdrawal, a
+    crisis to open every trial with, the random seed, a name for the run, and your
+    own return or volatility for any holding.</li>
+<li><strong>Run projection.</strong> The settings are remembered for this portfolio,
+    and the run is saved: the last ten runs per portfolio are kept, each re-drawn
+    exactly as it was from the stored numbers.</li>
+{% endcall %}
+<p>Only priced holdings take part; an unpriced one counts as zero. A symbol held in
+two accounts is one asset. The weights are today's values, and they are the target
+mix that contributions buy and rebalancing restores.</p>
+
+<h2 id="assumptions">Where the assumptions come from</h2>
+<p>Each holding needs three things: an expected return, a volatility, and its
+correlation with every other holding. The table <em>Holdings as the model sees
+them</em> shows all three and, in the <em>From</em> columns, exactly where each came
+from.</p>
+
+<h3>Volatility: recent and long-run, blended</h3>
+<p>Two estimates are available for most securities: the last year's realised
+volatility from daily returns (needs at least 60 trading days), and the long-run
+volatility from up to 20 years of monthly returns. They are blended with equal weight
+<em>in variance</em>:</p>
+<p class="mono">&sigma; = &radic;( &frac12;&middot;&sigma;<sub>1y</sub>&sup2; + &frac12;&middot;&sigma;<sub>long run</sub>&sup2; )</p>
+<p>so one calm year does not make the next thirty look safe, and one violent year does
+not make them look terrifying. With only one estimate, that one is used; with
+neither, the asset class's assumption. Cash always uses the cash assumption (1%).</p>
+
+<h3>Expected return: mostly the class assumption</h3>
+<p>The expected return is <strong>never</strong> the last year's average return. It
+starts from the asset class's long-run assumption (see
+<a href="{{ url_for('help_portfolios') }}">the class table</a>) and, depending on
+<em>Expected returns from</em>:</p>
+{{ field_table([
+  ("blend (default)", "The class assumption, moved towards the security’s own long-run history in proportion to how much history there is.",
+   "Weight on history w = min(years, 20) / 40, so 10 years of history gets 25%, 20 or more gets the maximum 50%. μ = (1 − w)·μ_class + w·μ_history."),
+  ("history", "The security’s own long-run return alone.",
+   "Tempting for a fund that has done well; see the warning below."),
+  ("assumption", "The class assumption alone.", "Every equity fund then expects the same return, which is honest."),
+  ("your override", "A figure you type for one holding.", "Wins over everything. Also available for volatility."),
+]) }}
+<p>History is used only when there are at least three years of it; otherwise the class
+assumption applies whatever the setting. The long-run return is converted from the
+monthly log returns (mean <em>m</em>, standard deviation <em>s</em>) to an arithmetic
+annual return: <span class="mono">&sigma; = s&middot;&radic;12</span>,
+<span class="mono">&mu; = exp(12m + &sigma;&sup2;/2) &minus; 1</span>.</p>
+
+{% call note('why', 'Why a year of prices cannot tell you the expected return') %}
+<p>The uncertainty in an average return shrinks only with the square root of the time
+observed: the standard error of the mean is roughly <span class="mono">&sigma; /
+&radic;T</span>, with T in years. For an equity fund with 17% volatility and one year
+of data that is <span class="mono">17% / &radic;1 = 17</span> percentage points &mdash;
+a fund that returned 25% last year has a true expected return anywhere from about
+&minus;8% to +58% at 95% confidence. Even twenty years of data leaves
+<span class="mono">17% / &radic;20 &asymp; 3.8</span> points of uncertainty, which is
+why the history gets at most half the weight. Volatility is different: it is estimated
+from the <em>spread</em> of many daily returns, and a year of those pins it down
+well.</p>
+{% endcall %}
+
+<h3>Correlation: the data, shrunk towards sense</h3>
+<p>For each pair of holdings with at least 60 overlapping daily returns, the sample
+correlation is blended 70/30 with a long-run correlation for their two classes:</p>
+<p class="mono">&rho; = 0.7&middot;&rho;<sub>sample</sub> + 0.3&middot;&rho;<sub>class</sub></p>
+<p>Pairs without enough overlap use the class figure alone: 0.9 within a class,
+0 with cash, 0.5 with anything unclassified, and published-style long-run figures
+between classes (US and international equity 0.8, equity and bonds 0.1, and so on).
+A matrix assembled pair by pair can be internally impossible; if so it is shrunk
+towards no correlation, 1% at a time, by the smallest amount that makes it valid,
+and the run's notes say how much.</p>
+{% call note('trap', 'Last year’s winner, projected forever') %}
+<p>Choosing <em>history</em>, or overriding a fund with its recent return, is the most
+common way to build an absurd projection. A security's own past is a small sample
+of one path. Leave the default unless you have a reason you could defend to a
+sceptic.</p>
+{% endcall %}
+
+<h2 id="models">The three return models</h2>
+<p>Each quarter, every holding's value is multiplied by a random gross return. The
+models differ only in how that random number is drawn.</p>
+
+<h3>Lognormal (correlated GBM)</h3>
+<p>From each holding's arithmetic annual &mu; and &sigma;, the lognormal parameters
+that reproduce them exactly are:</p>
+<p class="mono">s&sup2; = ln(1 + (&sigma; / (1 + &mu;))&sup2;) &nbsp;&nbsp;&nbsp;
+m = ln(1 + &mu;) &minus; s&sup2;/2</p>
+<p>and a quarter's gross return is <span class="mono">exp(m/4 + (s/2)&middot;z)</span>,
+where z is a standard normal made correlated across holdings with the Cholesky factor
+of the correlation matrix. A value can never go below zero, and the median grows more
+slowly than the mean &mdash; at about &mu; &minus; &sigma;&sup2;/2 &mdash; which is
+real, not a flaw.</p>
+
+<h3>Fat tails (Student-t, 5 degrees of freedom)</h3>
+<p>The same, but each quarter the correlated normals are divided by one shared
+random factor, <span class="mono">z&middot;&radic;((&nu;&minus;2)/W)</span> with
+W drawn from a chi-square with &nu; = 5 degrees of freedom. The scaling keeps the
+variance unchanged, so the average spread is the same; what changes is that extreme
+quarters are much more common. Because W is shared, a bad draw hits every holding at
+once &mdash; which is how crashes behave, and why diversification disappoints in
+them.</p>
+
+<h3>Bootstrap of last year's daily returns</h3>
+<p>Instead of a formula, the shocks are real history. Every overlapping 21-trading-day
+window of the stored year is taken, on the dates <em>all</em> risky holdings share, so
+each window carries the actual co-movement of your holdings on those days. A quarter is
+three windows drawn at random and added up.</p>
+<p>Each holding's windows are first centred on zero and rescaled so a quarter has
+exactly the blended volatility above; the drift <span class="mono">m/4</span> is then
+added. <strong>The data supplies the shape</strong> &mdash; fat tails, skew, which
+holdings fall together &mdash; <strong>and the assumptions supply the level</strong>.
+A year holds only about twelve independent months, far too few to set either the
+mean or the volatility, which is why the level does not come from them. The bootstrap
+needs at least 84 common trading days; with less (one recently listed holding is
+enough) the run falls back to lognormal and says so.</p>
+
+<h2>Money in and out</h2>
+{{ field_table([
+  ("Add / Withdraw", "A contribution or a withdrawal, per year.", "Add as many rows as you need; a row with no amount is ignored."),
+  ("From year / To year", "Which projected years it runs in, inclusive.", "Year 1 is the next twelve months. From 1 to 10 is the whole of a ten-year run."),
+  ("Amount / year", "The yearly amount in today’s money.",
+   "Spread evenly: a quarter of it at the start of each quarter."),
+  ("Inflation-linked", "Grows with the inflation assumption.",
+   "Ticked (the default) keeps the amount constant in today’s money; unticked keeps it constant in currency units, so it shrinks in real terms."),
+  ("Extra growth", "Growth per year on top of that.", "3% for contributions that rise with pay. Counted from the row’s first year."),
+]) }}
+<p>So a quarter's amount is <span class="mono">amount/4 &times; (1 + growth)<sup>year
+&minus; from</sup> &times; (1 + inflation)<sup>quarters elapsed / 4</sup></span>
+(the last factor only when inflation-linked). Contributions buy the target mix.
+Withdrawals are taken pro rata from every holding.</p>
+<ul>
+  <li><strong>Withdraw a % each year</strong> takes that percentage of the
+      <em>current</em> value, a quarter of it each quarter, on top of any fixed
+      withdrawals. It can never run the portfolio out; it just shrinks with it.</li>
+  <li><strong>Running out.</strong> If a quarter's withdrawals exceed the value, what
+      there is is taken, the value is zero, and that trial is counted as having run
+      out from then on. Later contributions still arrive.</li>
+  <li><strong>Annual fee</strong>: an adviser or platform charge on top of what the
+      funds charge (fund costs are already inside their prices), taken quarterly as
+      <span class="mono">(1 + fee)<sup>&frac14;</sup> &minus; 1</span> after returns.</li>
+  <li><strong>Rebalance</strong>: back to the target mix at the end of every quarter,
+      every fourth quarter, or never &mdash; in which case winners grow into a bigger
+      share and the risk drifts.</li>
+  <li><strong>Inflation</strong> is a fixed rate. Today's money is simply the future
+      value divided by <span class="mono">(1 + inflation)<sup>years</sup></span>.</li>
+</ul>
+
+<h2 id="fan">Reading the fan chart</h2>
+<p>The x-axis is time; each point on it is the end of a year (or quarter). At each
+point, all the trials are sorted by value:</p>
+<ul>
+  <li>The <strong>inner band</strong> is P25 to P75: half of all futures end the
+      period inside it.</li>
+  <li>The <strong>outer band</strong> is P10 to P90: eight futures in ten.</li>
+  <li>The <strong>line</strong> is the median, P50: half above, half below.</li>
+  <li>The <strong>expected-return path</strong>, when shown, is what happens if every
+      holding earned exactly its expected return every quarter, with the same flows
+      and fee. It compounds the <em>arithmetic</em> mean, so it normally runs
+      <em>above</em> the median. The gap is volatility drag: the typical outcome of a
+      volatile portfolio is below the outcome of its average return.</li>
+  <li>A <strong>goal</strong> line appears in today's money if you set one.</li>
+</ul>
+<p>Hover over a point for its percentiles, the median return that period, and the
+share of futures that have reached the goal or run out by then.</p>
+{% call note('trap', 'The median line is not a path') %}
+<p>No single future looks like the median line. The P50 at year 5 and the P50 at year 10
+are usually different trials, and every real trial is far more jagged. That is what
+<em>Three futures, year by year</em> is for: the actual trials that ended nearest the
+10th, 50th and 90th percentiles of real final value, period by period. Notice that
+even the middle one has losing years.</p>
+{% endcall %}
+<p><strong>Today's money</strong> versus <strong>future money</strong>: the buttons
+above the tiles switch every value between real (deflated to today's purchasing power)
+and nominal (the number on a future statement). Plan in today's money.</p>
+
+<h2>The tiles</h2>
+{{ field_table([
+  ("Median / Bad luck (P10) / Good luck (P90)", "Final value at the horizon.", "One future in ten ends below the P10."),
+  ("Typical growth", "The median of each trial’s annualised time-weighted return, after fees.",
+   "Time-weighted means flows are excluded: it measures the investments, not your saving. P10 alongside."),
+  ("Reach your goal", "Share of futures whose real value reached the goal at any quarter-end within the horizon.",
+   "Counted once reached, even if it later falls back. The ± figure is a 95% interval from the trial count."),
+  ("Runs out", "Share of futures that could not pay every withdrawal in full.", "Shown only when above zero."),
+  ("Ends below money put in", "Share where the final nominal value is below start + contributions − withdrawals.", "The chance your money did nothing for you in cash terms."),
+  ("Typical worst fall", "Median of each trial’s largest peak-to-trough fall.",
+   "Measured on the time-weighted index, so a withdrawal is not a fall. 1 in 10 futures suffer worse than the P10 shown."),
+]) }}
+<p><em>What the model assumed</em> gives the portfolio's expected return
+(<span class="mono">&Sigma; w<sub>i</sub>&mu;<sub>i</sub></span>, arithmetic) and
+volatility (<span class="mono">&radic;(w&#7488;&Sigma;w)</span>), the typical worst
+single year, total contributions and median total withdrawals, the expected-return
+path's end value (nominal), and any notes from the run.</p>
+
+<h2>The table and the other charts</h2>
+{{ field_table([
+  ("In / Out (median)", "Contributions in the period (the average across trials) and the median withdrawal.", "Out is a median because % withdrawals and running out vary by trial."),
+  ("P10 … P90", "The value at the end of the period.", "The fan chart, in numbers."),
+  ("Return P10 / median / P90", "That period’s time-weighted return, after fees, excluding flows.", "How good and bad a single year (or quarter) can be."),
+  ("Growth / yr", "Median annualised return from today to the end of the period.", "Settles towards the long-run figure as time passes."),
+  ("Loss this period", "Share of futures with a negative return in the period.", "For an all-equity mix, roughly one year in three."),
+  ("Goal reached / Run out", "Share that have reached the goal, or run out, by the end of the period.", "Shown when relevant."),
+]) }}
+<ul>
+  <li><strong>Return in each period</strong>: the P10&ndash;P90 range of the period
+      return, median marked.</li>
+  <li><strong>Where it ends up</strong>: a histogram of final real value (the top 2%
+      are cut off to keep the scale readable), with the full P5&ndash;P95 in both
+      bases.</li>
+  <li><strong>Worst fall along the way</strong>: a histogram of each trial's maximum
+      drawdown.</li>
+  <li><strong>Share of risk</strong> in the holdings table:
+      <span class="mono">w<sub>i</sub>(&Sigma;w)<sub>i</sub> / &sigma;<sub>p</sub>&sup2;</span>,
+      the part of the portfolio's variance each holding is responsible for. A 10%
+      crypto position can easily be half of the risk.</li>
+</ul>
+
+<h2>The CSV</h2>
+<p>The <em>CSV</em> button downloads the period table in both bases, one row per year
+or quarter, with these columns: <code>period</code>, <code>years</code>,
+<code>nominal_p5</code> &hellip; <code>nominal_p95</code>, <code>real_p5</code>
+&hellip; <code>real_p95</code> (P5, P10, P25, P50, P75, P90, P95),
+<code>mean_nominal</code>, <code>return_p10</code>, <code>return_p50</code>,
+<code>return_p90</code>, <code>return_mean</code>, <code>median_cagr_to_date</code>,
+<code>contributions</code>, <code>withdrawals_median</code>,
+<code>p_loss_in_period</code>, <code>p_depleted_by_end</code>,
+<code>p_above_start_real</code> (share whose real value is at least today's value)
+and, with a goal, <code>p_goal_by_end</code>. Returns and probabilities are
+fractions (0.05 is 5%).</p>
+
+<h2>Seeds and reproducibility</h2>
+<p>The same holdings, prices and settings with the same seed give the same answer, to
+the last digit. But prices change every day, so re-running tomorrow will differ
+slightly even with the same seed. To see whether a setting matters, change only that
+setting and keep the seed; to see how much of a result is noise, change only the
+seed.</p>
+<p>See <a href="{{ url_for('help_stress_tests') }}">stress tests</a> for opening every
+trial with a historical crisis.</p>
+{% endblock %}

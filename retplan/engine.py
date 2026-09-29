@@ -51,6 +51,7 @@ class Results:
     regime: np.ndarray
     taxable_income: np.ndarray
     ages: np.ndarray             # (T+1,)
+    employer: np.ndarray = None  # employer contributions (part of `contribution`)
 
     @property
     def terminal(self):
@@ -245,7 +246,7 @@ class Projection:
 
         out = {k: np.zeros((n, T + 1)) for k in
                ("income", "spend", "tax", "withdrawal", "contribution", "fees",
-                "ret_rate", "shortfall", "taxable_income", "mrd")}
+                "ret_rate", "shortfall", "taxable_income", "mrd", "employer")}
         bal_w = np.zeros((n, T + 1, NW))
         bal_tot = np.zeros((n, T + 1))
         bal_close = np.zeros((n, T + 1))
@@ -367,21 +368,32 @@ class Projection:
                 wr = p.wrappers[lg.wrapper]
                 if self.hh_retired[k]:
                     continue
-                want = lg.contribution + lg.contribution_pct_income * self.pensionable[k]
-                want += (min(lg.contribution_pct_income, lg.employer_match_cap_pct)
-                         * self.pensionable[k] * lg.employer_match_pct)
+                pay = self.pensionable[k]
+                pct_want = lg.contribution_pct_income * pay
+                want = lg.contribution + pct_want
                 cap = (np.inf if wr.cap_type == "none" else
                        wr.cap_value if wr.cap_type == "absolute" else
-                       wr.cap_value * self.pensionable[k])
+                       wr.cap_value * pay)
                 if age >= wr.catch_up_age:
                     cap = cap + wr.catch_up_amount
+                # your own saving comes out of the household's surplus ...
                 add = np.minimum(surplus, min(max(0.0, want), cap))
                 if k == T:
                     add = np.zeros(n)
-                S[:, i, :] += add[:, None] * self.w[i, k, :]
-                basis[:, i] += add
+                # ... the employer's match does not: it is new money, paid on the
+                # percentage-of-pay saving you actually managed this year (which
+                # the surplus goes to first), up to the match cap, inside the cap
+                emp = np.zeros(n)
+                if lg.employer_match_pct > 0 and pay > 0 and k < T:
+                    own_pct = np.minimum(add, pct_want) / pay
+                    emp = (np.minimum(own_pct, lg.employer_match_cap_pct)
+                           * pay * lg.employer_match_pct)
+                    emp = np.minimum(emp, np.maximum(0.0, cap - add))
+                S[:, i, :] += (add + emp)[:, None] * self.w[i, k, :]
+                basis[:, i] += add + emp
                 surplus -= add
-                contrib += add
+                contrib += add + emp
+                out["employer"][:, k] += emp
             # anything left over sweeps into the last contribution priority
             if np.any(surplus > 1e-9) and NL:
                 j = min(max(0, pol.sweep_ledger), NL - 1)
@@ -437,7 +449,8 @@ class Projection:
                        fees=out["fees"], ret_rate=out["ret_rate"],
                        shortfall=out["shortfall"], debt_balance=debt_bal,
                        net_worth=nw, regime=gen["regime"],
-                       taxable_income=out["taxable_income"], ages=self.age)
+                       taxable_income=out["taxable_income"], ages=self.age,
+                       employer=out["employer"])
 
     # ------------------------------------------------------------- components
     @staticmethod

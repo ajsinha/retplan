@@ -1,0 +1,101 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>Every model simplifies. This page lists where RetPlan does, so you can judge
+whether the simplification matters for <em>your</em> plan. None of it is hidden
+elsewhere; it is collected here so you do not have to find it.</p>
+
+{% call note('warn', 'Not advice') %}
+<p>RetPlan projects the consequences of assumptions you supply. It does not predict
+markets, does not know your tax law beyond the bands you type, and its outputs are
+not financial, tax or investment advice.</p>
+{% endcall %}
+
+<h2>Time and structure</h2>
+<ul>
+  <li><strong>Annual periods.</strong> The plan moves one year at a time. Timing within
+      a year &mdash; a salary stopping in March, a monthly withdrawal &mdash; is not
+      modelled. (Portfolio projections are the exception: they run quarterly.)</li>
+  <li><strong>No random lifespan.</strong> The plan is funded for the full horizon you
+      set; it does not draw an age of death. Planning age only decides when a
+      person&rsquo;s income falls to its survivor share.</li>
+  <li><strong>Everyone retires together in the solver.</strong> The earliest-retirement
+      solver gives every person the same age, and never extends a salary row beyond
+      the age you entered.</li>
+</ul>
+
+<h2>Tax</h2>
+<ul>
+  <li><strong>Household-level tax.</strong> A couple&rsquo;s income is taxed as one
+      unit. Where individuals are taxed separately and incomes are uneven, the model
+      overstates tax.</li>
+  <li><strong>Allowances and tapers are bands.</strong> That keeps the schedule exactly
+      invertible, but anything that is not a band &mdash; a credit, a means-tested
+      benefit &mdash; must be approximated as one.</li>
+  <li><strong>Capital gains</strong> are the gain share of a withdrawal times an
+      inclusion rate, taxed under the ordinary bands. There is no separate gains
+      schedule and no annual gains exemption.</li>
+  <li><strong>The allowance is fixed by income before withdrawals</strong> each year;
+      a withdrawal cannot taper its own allowance. The error is second order.</li>
+</ul>
+
+<h2>Markets</h2>
+<ul>
+  <li><strong>Your assumptions drive everything.</strong> Expected returns, volatility,
+      correlations, regimes and crash parameters are yours. The model is as good as
+      they are.</li>
+  <li><strong>The deterministic view ignores diversification.</strong> By default the
+      fixed-return projection grows each asset at its own typical (median) rate. A
+      diversified portfolio compounds slightly faster than the average of its parts,
+      so this errs a little on the cautious side. Choosing <em>average</em> on the
+      Markets page instead errs on the optimistic side.</li>
+  <li><strong>Income yield is informational.</strong> The taxable drag of dividends and
+      interest inside a taxable account is not charged separately.</li>
+</ul>
+
+<h2>Features not built</h2>
+<ul>
+  <li>Long-term care, annuity purchase, equity release, conversions between wrappers
+      and bracket-filling optimisation. Care costs can be entered as a spending row
+      with a probability; an annuity as an income row with the premium taken off a
+      balance.</li>
+  <li>Monthly periods.</li>
+  <li>An Excel (<code>.xlsx</code>) version of the workbook.</li>
+  <li>Stochastic mortality, as above.</li>
+</ul>
+
+<h2>Portfolios</h2>
+<ul>
+  <li><strong>One year of daily prices is kept.</strong> It estimates volatility and
+      correlation well and the mean hardly at all, so expected returns lean on the
+      long-run asset-class assumptions (blended with up to twenty years of monthly
+      history where available).</li>
+  <li><strong>Yahoo&rsquo;s endpoints are unofficial.</strong> They can change, fail or
+      throttle without notice. A symbol that cannot be priced counts as zero.</li>
+  <li><strong>No transaction ledger.</strong> Holdings are a snapshot of what you own
+      now. The &ldquo;year of value&rdquo; chart is a back-cast &mdash; today&rsquo;s
+      holdings valued on each past day &mdash; not a record of how your money actually
+      performed.</li>
+  <li><strong>Currency risk only as far as the stored year.</strong> Foreign holdings
+      are converted day by day with the stored FX pair, so exchange-rate risk enters a
+      projection only as it showed up in that history.</li>
+  <li><strong>Crisis replays are approximate.</strong> They use rounded index paths, not
+      a precise record of any fund.</li>
+  <li><strong>No tax inside portfolio projections.</strong> Contributions, withdrawals
+      and growth are projected pre-tax; for after-tax answers use the plan.</li>
+</ul>
+
+<h2>Where the answer will be wrong</h2>
+<p>Assume the figures are least reliable when:</p>
+<ul>
+  <li>a large share of wealth is in one illiquid asset, such as a business or a home
+      you intend to sell;</li>
+  <li>tax depends heavily on rules that are not bands, or on two people&rsquo;s separate
+      assessments;</li>
+  <li>the plan relies on the exact month of an event;</li>
+  <li>the success rate sits within its error bar of your target &mdash; see
+      {{ goto('help_simulation', 'Running a simulation') }}.</li>
+</ul>
+<p>The method behind all of this is written up on the method page.
+{{ goto('method', 'Read the method') }}</p>
+{% endblock %}

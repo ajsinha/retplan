@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Stress tests · {{ pf.name }}{% endblock %}
+{% block content %}
+{% call ui.page_head('Stress tests', 'Five real crises replayed on today\'s mix of ' ~ pf.name ~ ': how deep the fall, and how long to recover afterwards at expected returns. No contributions or withdrawals, so this is the portfolio\'s own behaviour.', eyebrow='Portfolio · ' ~ pf.name, help=url_for('help_stress_tests')) %}
+  <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_project', pid=pf.id) }}"><i class="bi bi-graph-up" aria-hidden="true"></i> Project with a crisis first</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portfolio_view', pid=pf.id) }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Holdings</a>
+{% endcall %}
+{% if not rows %}
+<div class="card"><div class="card-body">{% call ui.empty('lightning', 'Nothing to test yet', 'Add priced holdings first.') %}{% endcall %}</div></div>
+{% else %}
+<div class="table-wrap mb-3"><div class="table-scroll"><table class="table align-middle mb-0">
+  <thead><tr><th>Crisis</th><th class="num">Worst point</th><th class="num">Value at the bottom</th><th class="num">At the end of the crisis</th><th class="num">Back to today's value</th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <td><a href="#st-{{ r.key }}" class="fw-semibold">{{ r.label }}</a><span class="cell-sub">{{ r.blurb }}</span></td>
+    <td class="num down fw-bold">{{ r.drawdown|pct(1) }}</td>
+    <td class="num">{{ r.trough|money }}</td>
+    <td class="num {{ 'down' if r.crisis_return < 0 else 'up' }}">{{ r.crisis_return|spct }}</td>
+    <td class="num">{% if r.recovered_quarter is not none %}{% if r.recovered_quarter <= r.crisis_quarters and r.crisis_return >= 0 %}by the end{% else %}{{ '%.1f'|format(r.recovered_quarter / 4) }} years{% endif %}{% else %}over 10 years{% endif %}</td></tr>{% endfor %}</tbody>
+</table></div></div>
+<p class="small-muted">Holdings follow the index of their asset class (US shares, US bonds, T-bills, REITs, commodities); international and emerging shares, crypto and "other" are scaled versions of US shares. The figures are rounded index approximations - the shape and depth of each episode, not a precise record. <a href="{{ url_for('help_stress_tests') }}">How this works</a>.</p>
+<div class="row g-3">
+  {% for r in rows %}
+  <div class="col-xl-6" id="st-{{ r.key }}">
+    {% call ui.chart_card(r.short, 'lightning', r.chart, 'worst ' ~ r.drawdown|pct(0)) %}
+      <table class="table table-sm"><thead><tr><th>Quarter</th><th class="num">Value</th><th class="num">vs today</th></tr></thead>
+        <tbody>{% for x in r.path %}<tr {% if loop.index0 == r.crisis_quarters %}class="fw-semibold"{% endif %}><td>{{ 'Start' if loop.first else loop.index0 }}{% if loop.index0 == r.crisis_quarters %} (crisis ends){% endif %}</td><td class="num">{{ x|money }}</td><td class="num">{{ (x / r.start - 1)|spct }}</td></tr>{% endfor %}</tbody></table>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

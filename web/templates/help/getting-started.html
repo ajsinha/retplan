@@ -1,0 +1,76 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, goto with context %}
+{% block help %}
+
+<p>A worked sample household is already loaded, so nothing is blank while you find
+your way around. You can explore it first and replace it later, or clear it and
+start from your own numbers immediately &mdash; <em>Start empty</em> in the plan
+sidebar does that.</p>
+
+<h2>The fifteen-minute path</h2>
+{% call steps() %}
+<li><strong>Household.</strong> Ages now, the age each person stops working, and how
+    long to plan for. {{ goto('plan_section', 'Open household', 'household') }}</li>
+<li><strong>Income.</strong> Salaries first, then pensions with the age each starts.
+    Amounts are per year and <em>before</em> tax.
+    {{ goto('plan_section', 'Open income', 'income') }}</li>
+<li><strong>Spending.</strong> The single most important input. Split it into
+    essential and discretionary rows &mdash; that split is what lets a flexible
+    withdrawal policy work later.
+    {{ goto('plan_section', 'Open spending', 'expenses') }}</li>
+<li><strong>Debt.</strong> Mortgage balance, rate and years left. Skip if none.
+    {{ goto('plan_section', 'Open debt', 'debt') }}</li>
+<li><strong>Wrappers.</strong> Check the shipped ones describe your country's account
+    types. This is where tax treatment lives.
+    {{ goto('plan_section', 'Open wrappers', 'wrappers') }}</li>
+<li><strong>Accounts.</strong> Balances, which wrapper each sits in, the asset mix,
+    and the order they are drawn down.
+    {{ goto('plan_section', 'Open accounts', 'accounts') }}</li>
+<li><strong>Tax.</strong> Replace the sample bands with your own. An allowance is
+    simply a 0% first band. {{ goto('plan_section', 'Open tax', 'tax') }}</li>
+<li><strong>Markets and policy.</strong> The defaults are reasonable; come back once
+    the rest is right.</li>
+<li><strong>Dashboard.</strong> Read the verdict, then press <em>Run simulation</em>.
+    {{ goto('dashboard', 'Open dashboard') }}</li>
+<li><strong>Audit.</strong> Before believing anything, check nothing failed.
+    {{ goto('audit', 'Open audit') }}</li>
+{% endcall %}
+
+<h2>What to enter first if you only have ten minutes</h2>
+<p>Four numbers carry most of the answer: your <strong>ages</strong>, your
+<strong>total annual spending</strong>, your <strong>total invested balance</strong>,
+and your <strong>guaranteed income</strong> (state and workplace pensions). Enter
+those four, leave everything else at its default, and the projection will already be
+roughly right. Refinement after that changes the answer at the margin, not in
+direction.</p>
+
+{% call note('tip', 'Spending is where the accuracy is') %}
+<p>People routinely know their portfolio to the nearest hundred and their spending
+to the nearest twenty thousand. A 10% error in spending moves the answer far more
+than a 10% error in expected return. If you only check one input twice, check this
+one.</p>
+{% endcall %}
+
+<h2>Two things the app does that will surprise you</h2>
+<h3>Everything is in today's money</h3>
+<p>Unless a column says otherwise, every figure is in today's purchasing power. A
+balance of 2.6M in thirty years' time means "what 2.6M buys today", not the nominal
+number that will appear on a statement. This is deliberate: nominal figures flatter
+long-horizon plans and make them impossible to compare.</p>
+
+<h3>Editing an input clears the simulation</h3>
+<p>Change anything and the cached Monte&nbsp;Carlo results are dropped, because
+stale probabilities beside fresh inputs are worse than no probabilities. The
+deterministic projection &mdash; the verdict, the funded ratio, the charts on the
+left &mdash; recomputes on every page load and is always current.</p>
+
+<h2>When you are done</h2>
+<ul>
+  <li>Download the plan as JSON from the editor sidebar. It is the whole plan in one
+      file: keep it, version it, mail it to yourself.</li>
+  <li>Look at the <a href="{{ url_for('help_recipes') }}">recipes</a> for the specific
+      question you actually want answered.</li>
+  <li>Read <a href="{{ url_for('help_limitations') }}">what this model does not do</a>
+      before you make a decision on it.</li>
+</ul>
+{% endblock %}

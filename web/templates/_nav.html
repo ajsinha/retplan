@@ -1,0 +1,122 @@
+{# The top navigation: one menu, defined once as data, rendered as MAYA's mega-menu panels.
+   Each top-level entry: (label, icon, [(column title, [(href, icon, label, description, match)])]).
+   `match` is a path prefix that also lights the item; None means an exact match only. #}
+{% set pf = workspace.portfolios %}
+{% set pf_first = url_for('portfolio_view', pid=pf[0].id) if pf|length == 1 else url_for('portfolios') %}
+{% set MENU = [
+  ('Plan', 'pencil-square', [
+    ('Get started', [
+      (url_for('wizard'), 'magic', 'Quick start', 'Six questions, a first answer in two minutes', '/start'),
+      (url_for('scenarios'), 'layers', 'Scenarios', 'Keep several versions of the plan and switch between them', '/scenarios'),
+      (url_for('plan_section', section='household'), 'people', 'Household', 'Who the plan covers, ages and horizon', '/plan/household')]),
+    ('Money in and out', [
+      (url_for('plan_section', section='income'), 'arrow-down-circle', 'Income', 'Salaries, pensions, rent, one-offs', '/plan/income'),
+      (url_for('plan_section', section='expenses'), 'arrow-up-circle', 'Spending', 'Essential and discretionary, lumpy costs', '/plan/expenses'),
+      (url_for('plan_section', section='debt'), 'bank', 'Debt', 'Mortgages and loans, amortised', '/plan/debt')]),
+    ('Savings and rules', [
+      (url_for('plan_section', section='accounts'), 'wallet2', 'Accounts', 'Balances, allocation, drawdown order', '/plan/accounts'),
+      (url_for('plan_section', section='wrappers'), 'shield-lock', 'Tax wrappers', 'When money is taxed: in, during or out', '/plan/wrappers'),
+      (url_for('plan_section', section='tax'), 'percent', 'Tax', 'A table of bands; no country assumed', '/plan/tax'),
+      (url_for('plan_section', section='markets'), 'graph-up-arrow', 'Markets', 'Returns, regimes, crashes, inflation', '/plan/markets'),
+      (url_for('plan_section', section='policy'), 'sliders', 'Withdrawal policy', 'How much to take out; what counts as success', '/plan/policy')])]),
+  ('Results', 'speedometer2', [
+    ('Outcome', [
+      (url_for('dashboard'), 'speedometer2', 'Dashboard', 'Verdict, success odds, charts', '/dashboard'),
+      (url_for('compare'), 'columns-gap', 'Compare scenarios', 'Side by side: odds, wealth, tax, spending', '/compare')]),
+    ('Year by year', [
+      (url_for('report', name='cashflow'), 'table', 'Cash flow', 'Income, spending, tax and withdrawals', '/reports/cashflow'),
+      (url_for('report', name='balance'), 'journal-text', 'Balance sheet', 'Accounts, debt and net worth', '/reports/balance'),
+      (url_for('report', name='tax'), 'receipt', 'Tax', 'Taxable income and tax by year', '/reports/tax'),
+      (url_for('audit'), 'clipboard-check', 'Audit', 'Reconciliation and plan checks', '/audit')])]),
+  ('Portfolio', 'briefcase', [
+    ('Your holdings', [
+      (url_for('portfolios'), 'briefcase', 'Portfolios', 'Holdings, value, allocation and risk checks', '/portfolios'),
+      (url_for('builder'), 'file-earmark-spreadsheet', 'Build from a spreadsheet', 'Upload your positions; RetPlan works out the rest', '/portfolios/build'),
+      (url_for('portfolio_new'), 'plus-square', 'New portfolio', 'Type holdings or paste them from a spreadsheet', '/portfolios/new')]),
+    ('Look ahead', [
+      (pf_first, 'graph-up', 'Projection', 'Monte Carlo over 10+ years, yearly or quarterly', None),
+      (pf_first, 'lightning', 'Stress tests', '2008, dot-com, 2022 and more, replayed on your mix', None)]),
+    ('Market data', [
+      (url_for('securities'), 'search', 'Securities', 'Look up any symbol; admins add, amend and delete', '/securities'),
+      (url_for('prices'), 'cloud-download', 'Prices', 'Daily closes from Yahoo, kept for a year', '/prices')])]),
+  ('Help', 'question-circle', [
+    ('Learn', [
+      (url_for('help'), 'book', 'Help centre', 'Every screen and idea, searchable', '/help'),
+      (url_for('help_getting_started'), 'play-circle', 'Getting started', 'The first fifteen minutes', None),
+      (url_for('method'), 'braces', 'Method', 'The mathematics, in plain words', '/method')]),
+    ('About', [
+      (url_for('about'), 'info-circle', 'About RetPlan', 'What it is, what it is not, credits', '/about'),
+      (url_for('system'), 'hdd-stack', 'System', 'Database, configuration, price collector', '/system')])]),
+] %}
+{% macro _on(href, match) -%}{{ 'yes' if (path == href.split('?')[0]) or (match and path.startswith(match)) else '' }}{%- endmacro %}
+
+<nav class="navbar navbar-expand-lg rp-nav fixed-top" aria-label="Main">
+  <div class="container-fluid">
+    <a class="navbar-brand rp-brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='img/rp-mark-white.svg') }}" alt="">
+      <span><span class="name">RETPLAN</span><small>{{ app_tagline }}</small>
+        <small class="creed">{{ app_slogan|trim('.') }}</small></span></a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#rp-menu"
+            aria-controls="rp-menu" aria-expanded="false" aria-label="Toggle navigation">
+      <i class="bi bi-list" aria-hidden="true"></i></button>
+    <div class="collapse navbar-collapse" id="rp-menu">
+      <ul class="navbar-nav me-auto">
+      {% for label, icon, columns in MENU %}
+        {% set ns = namespace(active=False) %}
+        {% for _t, items in columns %}{% for href, _i, _l, _d, match in items %}{% if _on(href, match) %}{% set ns.active = True %}{% endif %}{% endfor %}{% endfor %}
+        <li class="nav-item dropdown mega">
+          <a class="nav-link dropdown-toggle {% if ns.active %}active{% endif %}" href="#" role="button"
+             data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+             {% if ns.active %}aria-current="true"{% endif %}>
+            <i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</a>
+          <div class="dropdown-menu mega-panel cols-{{ columns|length }}">
+            {% for title, items in columns %}
+            <div class="mega-col">
+              <div class="mega-title">{{ title }}</div>
+              {% for href, i, l, d, match in items %}
+              {% set on = _on(href, match) %}
+              <a class="mega-item {% if on %}active{% endif %}" href="{{ href }}" {% if on %}aria-current="page"{% endif %}>
+                <span class="mega-icon"><i class="bi bi-{{ i }}" aria-hidden="true"></i></span>
+                <span><span class="mega-label">{{ l }}</span><span class="mega-desc">{{ d }}</span></span></a>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </li>
+      {% endfor %}
+      </ul>
+      <form class="rp-search" action="{{ url_for('search') }}" method="get" role="search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <label class="visually-hidden" for="global-search">Search RetPlan</label>
+        <input id="global-search" name="q" type="search" placeholder="Search…  Ctrl-K" value="{{ q or '' }}">
+      </form>
+      <div class="rp-tools">
+        {% include "_theme_menu.html" %}
+        <div class="dropdown">
+          <button class="tool user dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"
+                  title="Active plan: {{ workspace.plan_name or '—' }}">
+            <span class="avatar" aria-hidden="true"><i class="bi bi-layers"></i></span>
+            <span class="uname d-none d-xl-inline">{{ (workspace.plan_name or 'Plan')|truncate(22, True, '…') }}</span></button>
+          <div class="dropdown-menu dropdown-menu-end rp-user-menu">
+            <div class="px-3 py-2"><div class="small-muted">Active plan</div>
+              <div class="fw-semibold">{{ workspace.plan_name or '—' }}</div></div>
+            {% if workspace.scenarios|length > 1 %}
+            <div class="dropdown-divider"></div>
+            <div class="px-3 pb-1 small-muted">Switch to</div>
+            {% for s in workspace.scenarios if not s.is_active %}
+            <form method="post" action="{{ url_for('scenario_activate', plan_id=s.id) }}">
+              <input type="hidden" name="next" value="{{ path }}">
+              <button class="dropdown-item" type="submit"><i class="bi bi-arrow-right-circle" aria-hidden="true"></i> {{ s.name }}</button></form>
+            {% endfor %}
+            {% endif %}
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="{{ url_for('scenarios') }}"><i class="bi bi-layers" aria-hidden="true"></i> Manage scenarios</a>
+            <a class="dropdown-item" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Quick start a new plan</a>
+            <a class="dropdown-item" href="{{ url_for('export_plan') }}"><i class="bi bi-download" aria-hidden="true"></i> Export plan (JSON)</a>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="{{ url_for('portfolios') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Portfolios ({{ pf|length }})</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>

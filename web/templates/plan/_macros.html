@@ -43,8 +43,8 @@
     <tr>
       <th style="width:30px"></th>
       {% for f in fields %}
-        <th {% if f.kind in ('money','pct','number','int') %}class="num"{% endif %}
-            {% if f.help %}title="{{ f.help }}"{% endif %}>{{ f.label }}</th>
+        <th class="{{ 'num' if f.kind in ('money','pct','number','int') }} {{ 'adv' if f.adv }}"
+            {% if f.help %}title="{{ f.help }}"{% endif %}>{{ f.label }}{% if f.kind == 'pct' %} <span class="small-muted">%</span>{% endif %}{% if f.help %} <i class="bi bi-info-circle small-muted" aria-hidden="true"></i>{% endif %}</th>
       {% endfor %}
       <th style="width:40px"></th>
     </tr>
@@ -55,7 +55,7 @@
     <tr>
       <td class="muted num" style="font-size:.74rem">{{ loop.index }}</td>
       {% for f in fields %}
-        <td>{{ field(prefix ~ '-' ~ i ~ '-' ~ f.name, f, row[f.name], wrappers) }}</td>
+        <td class="{{ 'adv' if f.adv }}">{{ field(prefix ~ '-' ~ i ~ '-' ~ f.name, f, row[f.name], wrappers) }}</td>
       {% endfor %}
       <td>
         <input type="checkbox" class="d-none" name="delete-{{ prefix }}-{{ i }}">
@@ -71,11 +71,17 @@
   </tbody>
 </table>
 </div>
+{% set helped = fields|selectattr('help')|list %}
+{% if helped %}
+<details class="table-twin"><summary>What the columns mean</summary>
+  <dl class="kv mt-2 small">{% for f in helped %}<dt>{{ f.label }}</dt><dd>{{ f.help }}</dd>{% endfor %}</dl>
+</details>
+{% endif %}
 {% endmacro %}
 
 {% macro save_bar(section, count=None) %}
 <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
-  <button type="submit" class="btn btn-accent btn-sm"><i class="bi bi-check2"></i> Save changes</button>
+  <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check2"></i> Save changes</button>
   <button type="submit" class="btn btn-outline-secondary btn-sm"
           formaction="{{ url_for('plan_add_row', section=section) }}" formnovalidate>
     <i class="bi bi-plus-lg"></i> Add row

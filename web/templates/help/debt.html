@@ -1,0 +1,61 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the debt editor', 'debt') }}</p>
+<p>Loans are modelled in <strong>nominal</strong> terms, because that is what a loan
+contract is: a fixed schedule in future currency. Inflation therefore erodes the
+real cost of a fixed-rate mortgage, and the projection shows that.</p>
+
+<h2>The columns</h2>
+{{ field_table([
+  ('Balance', 'What is outstanding now.', 'The number on the statement today.'),
+  ('Rate', 'Nominal annual interest rate.', 'The rate you actually pay, not a real rate.'),
+  ('Years left', 'Remaining term.', 'Used to compute the level payment.'),
+  ('Type', 'amortising, interest_only or bullet.',
+   'Amortising is the ordinary repayment mortgage. Interest-only pays interest and nothing else until the end. Bullet pays nothing until maturity, then all of it.'),
+  ('Overpayment / year', 'Extra principal per year, nominal.',
+   'Added on top of the scheduled payment; shortens the term.'),
+  ('Starts in year', 'Offset from the plan start.', '0 for an existing loan. Use a future year for a planned borrowing.'),
+]) }}
+
+<h2>How the schedule works</h2>
+<p>The level payment is computed once from the opening balance, rate and term, the
+standard annuity formula. Each year the model charges interest on the outstanding
+balance, applies the payment plus any overpayment as principal, and carries the
+remainder forward. The final year clears whatever is left, so the balance lands
+exactly on zero rather than drifting.</p>
+<p>Debt service appears on the dashboard inside first-year spending and in the cash
+flow report as its own column. The outstanding balance is subtracted from net
+worth.</p>
+
+<h2>Pay it off, or invest?</h2>
+<p>Paying down debt earns a guaranteed return equal to the loan rate, after tax and
+with zero volatility. Investing earns an uncertain return. The comparison that
+matters is the loan rate against the portfolio's expected return <em>after</em> fees
+and the tax on the account the money would go into &mdash; not against the headline
+return.</p>
+<p>To test it properly, see the
+<a href="{{ url_for('help_recipes') }}">recipe</a>: the money must come from the same
+place in both runs, or you are comparing two different plans.</p>
+
+{% call note('why', 'Why clearing debt helps the bad paths most') %}
+<p>A mortgage is a fixed obligation. In the futures where markets disappoint, that
+fixed payment is a larger share of a smaller portfolio, and it forces selling at the
+worst time. Clearing it does not just change the average outcome; it removes a
+liability specifically from the paths where you can least afford it. That is why
+the success probability often improves more than the median terminal wealth
+suggests it should.</p>
+{% endcall %}
+
+<h2>What is not modelled</h2>
+<ul>
+  <li><strong>Variable rates.</strong> The rate you enter is fixed for the term.
+      For a tracker, either enter a rate you consider a fair long-run average, or
+      run the plan twice at the ends of a plausible range.</li>
+  <li><strong>Refinancing.</strong> Model it as the loan ending and a new row
+      starting in the relevant year.</li>
+  <li><strong>Interest deductibility.</strong> Interest does not reduce taxable
+      income. Where that matters (some rental structures), reduce the net rental
+      income instead.</li>
+</ul>
+{% endblock %}

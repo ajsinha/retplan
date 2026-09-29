@@ -1,0 +1,87 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the policy editor', 'policy') }}</p>
+<p>The policy decides how much you take out each year and how that changes when
+markets misbehave. It is the second most consequential setting after spending
+itself.</p>
+
+<h2>The six rules</h2>
+<table class="table table-sm">
+  <thead><tr><th>Policy</th><th>What it does</th><th>Suits</th></tr></thead>
+  <tbody>
+    <tr><td><code>fixed_real</code></td>
+      <td>Spends the same purchasing power every year, whatever markets do.</td>
+      <td>The default and the baseline everything else is compared against. Maximum certainty of lifestyle, maximum risk of depletion.</td></tr>
+    <tr><td><code>fixed_nominal</code></td>
+      <td>Spends the same number of currency units, so real spending falls with inflation.</td>
+      <td>Rarely what anyone wants; useful to show what inflation does if you ignore it.</td></tr>
+    <tr><td><code>pct_portfolio</code></td>
+      <td>Takes a fixed percentage of the current portfolio.</td>
+      <td>Can never run out - but income swings with markets, which most people cannot live with.</td></tr>
+    <tr><td><code>vpw</code></td>
+      <td>Amortises the remaining portfolio over the remaining years at an assumed rate.</td>
+      <td>Spends more, later, than a percentage rule; deliberately runs the balance down to nothing by the horizon.</td></tr>
+    <tr><td><code>guardrails</code></td>
+      <td>Fixed real spending, but cut after bad markets and raised after good ones.</td>
+      <td>The practical middle. Usually supports a higher starting spend at the same risk.</td></tr>
+    <tr><td><code>table</code></td>
+      <td>Divides the portfolio by a factor that falls with remaining years.</td>
+      <td>Mimics a mandated minimum-distribution schedule.</td></tr>
+  </tbody>
+</table>
+
+{% call note('why', 'Why any flexible rule beats a fixed one') %}
+<p>A fixed real withdrawal has to survive the worst path you might land on, so it has
+to be set low enough for that path &mdash; which means spending far too little on
+the other 90% of them. A rule that cuts a little after bad years can start higher,
+because it no longer has to pre-fund the disaster. The cost is uncertainty in
+lifestyle; the benefit is usually thousands a year.</p>
+{% endcall %}
+
+<h2>How guardrails behave</h2>
+<p>The rule watches your current withdrawal <em>rate</em> &mdash; spending divided by
+portfolio &mdash; against the rate you started with.</p>
+{{ field_table([
+  ('Upper trigger', 'If the rate rises this far above its starting level, spending is cut.',
+   '20% means: start at 4%, cut when the rate reaches 4.8%. That happens when the portfolio falls or spending rises.'),
+  ('Lower trigger', 'If the rate falls this far below its start, spending is raised.',
+   '20% means: raise when the rate drops to 3.2%, i.e. after markets have done well.'),
+  ('Cut / Raise', 'The size of each adjustment.', '10% of current spending is the conventional step.'),
+  ('No cuts in the last N years', 'Suspends cuts near the end of the plan.',
+   'Late on, a high withdrawal rate is expected, not a warning. 15 years is the usual setting.'),
+  ('Skip the inflation rise after a loss', 'Holds spending flat for one year after a negative return.',
+   'The cheapest flexibility there is: no cut in nominal terms, just no increase. Leave it on.'),
+]) }}
+<p>Cuts never breach the essential floor. If your spending is entirely essential,
+guardrails have nothing to work with &mdash; which is why the split on the spending
+page matters so much.</p>
+
+<h2>Goals</h2>
+{{ field_table([
+  ('Legacy target', 'Real terminal wealth you want left.',
+   'Success is redefined against it: 0 means "do not run out"; 500,000 means "do not run out AND leave 500,000 in today’s money".'),
+  ('Confidence level', 'What the solvers aim at.',
+   '85% is a common choice. 100% is not a goal - it guarantees underspending. 70-80% is defensible if you have flexibility and guaranteed income.'),
+  ('Funded-ratio discount rate', 'The rate used to present-value future flows.',
+   'A lower rate is more conservative. The portfolio’s expected real return is a reasonable default.'),
+]) }}
+
+<h2>Choosing a confidence level honestly</h2>
+<p>A 90% plan and a 75% plan are not "safe" and "unsafe". They are different
+trade-offs between spending now and the risk of adjusting later. What should move
+the dial:</p>
+<ul>
+  <li><strong>How much guaranteed income you have.</strong> If pensions cover your
+      essential floor, a failure means cutting discretionary spending, not
+      destitution &mdash; and a lower confidence level is rational.</li>
+  <li><strong>How flexible you really are.</strong> See the split on the spending
+      page, and be honest.</li>
+  <li><strong>Whether you have a backstop</strong> &mdash; property to downsize,
+      family, the ability to work again.</li>
+</ul>
+<p>"Failure" in this model means the plan could not meet its need in some year, not
+that you end up with nothing. Look at the median total shortfall on the dashboard:
+a plan that fails at 94 by a small margin is a very different thing from one that
+fails at 72 by a large one.</p>
+{% endblock %}

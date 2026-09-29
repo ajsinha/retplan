@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Help{% endblock %}
+{% block content %}
+<section class="help-hero">
+  <i class="bi bi-book hero-ico" aria-hidden="true"></i>
+  <h1>Help &amp; documentation</h1>
+  <p>Every screen and every idea in RetPlan, in plain words. Search, or browse by subject.</p>
+  <div class="d-flex flex-wrap gap-2 justify-content-center mt-3 position-relative">
+    <a class="btn btn-light" href="{{ url_for('help_getting_started') }}"><i class="bi bi-flag" aria-hidden="true"></i> Getting started</a>
+    <a class="btn btn-outline-light" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Quick start a plan</a>
+    <a class="btn btn-outline-light" href="{{ url_for('method') }}"><i class="bi bi-braces" aria-hidden="true"></i> The method</a>
+    <a class="btn btn-outline-light" href="{{ url_for('about') }}"><i class="bi bi-info-circle" aria-hidden="true"></i> About RetPlan</a>
+  </div>
+</section>
+
+<div class="help-toolbar">
+  <div class="help-search">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <label class="visually-hidden" for="help-q">Search help</label>
+    <input id="help-q" type="search" autocomplete="off" placeholder="Search help - e.g. guardrails, bootstrap, wrapper, rebalance, sequence risk…">
+  </div>
+  <div class="cat-chips">
+    {% for c in categories %}<a class="chip" href="#cat-{{ c.id }}"><i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }} <span>{{ c.topics|length }}</span></a>{% endfor %}
+  </div>
+</div>
+
+{% for c in categories %}
+<details class="help-cat" id="cat-{{ c.id }}" open>
+  <summary><span class="cat-name"><span class="cat-ico"><i class="bi {{ c.icon }}" aria-hidden="true"></i></span> {{ c.name }}</span>
+    <span class="cat-count">{{ c.topics|length }}</span></summary>
+  <p class="cat-blurb">{{ c.blurb }}</p>
+  <div class="row g-3 cat-body">
+    {% for t in c.topics %}
+    <div class="col-md-6 col-xl-4 help-item" data-search="{{ (t.title ~ ' ' ~ t.summary ~ ' ' ~ t.keywords ~ ' ' ~ c.name)|lower }}">
+      <a class="card help-card h-100" href="{{ url_for('help_' ~ t.slug|replace('-','_')) }}">
+        <div class="card-body">
+          <div class="hc-title"><span class="hc-ico"><i class="bi {{ t.icon }}" aria-hidden="true"></i></span>
+            <span>{{ t.title }}{% if t.badge %} <span class="badge">{{ t.badge }}</span>{% endif %}</span></div>
+          <p>{{ t.summary }}</p>
+          <span class="more">Read more <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endfor %}
+<div id="help-none" class="help-none" hidden><i class="bi bi-search" aria-hidden="true"></i> No help topic matches that search.</div>
+
+<section class="card mt-2">
+  <div class="card-header"><i class="bi bi-lightning" aria-hidden="true"></i> Quick reference</div>
+  <div class="card-body"><div class="row g-4">
+    <div class="col-md-4"><h3>Run it</h3>
+      <div class="small"><code>.venv/bin/python run_retplan_web.py</code><br>then open <code>http://127.0.0.1:5007</code></div>
+      <div class="small mt-2">Database and price collection are set in <code>config/retplan.toml</code>; see <a href="{{ url_for('help_system') }}">System and database</a>.</div></div>
+    <div class="col-md-4"><h3>Three ways in</h3>
+      <div class="small"><a href="{{ url_for('wizard') }}">Quick start</a> - six questions, a plan in two minutes.<br>
+        <a href="{{ url_for('plan_section', section='household') }}">The editor</a> - every assumption, table by table.<br>
+        <a href="{{ url_for('portfolios') }}">Portfolios</a> - holdings, prices and a ten-year projection.</div></div>
+    <div class="col-md-4"><h3>Keys</h3>
+      <div class="small"><kbd>Ctrl</kbd>+<kbd>K</kbd> search from any page<br>
+        Every chart has <em>Show the numbers</em> beneath it<br>
+        Every table exports: plan JSON, projection CSV</div></div>
+  </div></div>
+</section>
+{% endblock %}

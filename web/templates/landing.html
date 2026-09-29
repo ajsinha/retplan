@@ -1,55 +1,77 @@
+{# The landing page, after MAYA's second-edition landing: a centred hero, a strip of numbers,
+   capability cards, the three ways in, and a closing call. Colour comes entirely from the
+   tokens, so it is the same page in all four themes. #}
 {% extends "base.html" %}
-{% block title %}{{ app_name }} - {{ app_tagline }}{% endblock %}
+{% block title %}{{ app_tagline }}{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-9">
-    <div class="card">
-      <div class="card-body p-4">
-        <h1 class="mb-2">Retirement planning you can audit</h1>
-        <p class="lede mb-3">
-          RetPlan projects a household's income, spending, debt, tax and investments
-          year by year, then stress-tests the plan against thousands of simulated
-          market histories. Nothing is country-specific: tax is a table of bands you
-          type, and account types are wrappers that say <em>when</em> money is taxed.
-        </p>
-        <div class="d-flex flex-wrap gap-2 mb-4">
-          <a class="btn btn-accent" href="{{ url_for('dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Open the dashboard
-          </a>
-          <a class="btn btn-outline-secondary" href="{{ url_for('plan') }}">
-            <i class="bi bi-pencil-square"></i> Edit the plan
-          </a>
-          <a class="btn btn-outline-secondary" href="{{ url_for('method') }}">
-            <i class="bi bi-braces"></i> How it works
-          </a>
-        </div>
-        <div class="row g-3">
-          <div class="col-md-4">
-            <h6><i class="bi bi-percent"></i> Tax that inverts exactly</h6>
-            <p class="form-hint">An allowance is a 0% band; a taper is a band with the
-              higher effective rate. Keeping the schedule piecewise linear means
-              "how much must I withdraw to spend X after tax" is solved in one pass,
-              not by a circular reference.</p>
-          </div>
-          <div class="col-md-4">
-            <h6><i class="bi bi-activity"></i> Markets in three layers</h6>
-            <p class="form-hint">A Markov regime (bear / normal / bull), correlated
-              shocks that can be fat-tailed, and a separate jump process for crashes
-              with per-asset transmission - so bonds can gain while equities fall.</p>
-          </div>
-          <div class="col-md-4">
-            <h6><i class="bi bi-clipboard-check"></i> Checked, not asserted</h6>
-            <p class="form-hint">The same engine backs a LibreOffice workbook whose
-              formulas agree with it to 7&times;10<sup>-12</sup> over 61 years. Every
-              page carries an audit view and a table twin for every chart.</p>
-          </div>
-        </div>
-        <p class="muted small mt-4 mb-0">
-          A worked sample household is loaded so you can look around immediately.
-          Educational model &mdash; not financial advice.
-        </p>
-      </div>
+<section class="lp2-hero">
+  <div class="lp2-hero-inner">
+    <div class="lp2-badge"><i class="bi bi-circle-fill" aria-hidden="true"></i>
+      {{ app_tagline }} · version {{ app_version }} · self-hosted, no accounts</div>
+    <h1 class="lp2-title">Will the money last?<br><span class="lp2-gradient">See every future,</span> not just the average.</h1>
+    <p class="lp2-sub">RetPlan projects your income, spending, tax and savings year by year, then tests the plan
+      against thousands of market histories - bear markets, crashes, bad sequences. Track your real portfolio,
+      priced every day, and see where it could be in ten or thirty years.</p>
+    <div class="lp2-actions">
+      <a class="lp2-btn lp2-btn-primary" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start in two minutes</a>
+      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> Explore the sample plan</a>
+      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('portfolios') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Track a portfolio</a>
     </div>
   </div>
-</div>
+</section>
+
+<section class="lp2-stats" aria-label="RetPlan in numbers">
+  <div><span class="lp2-num">6</span><span class="lp2-label">questions to a first answer</span></div>
+  <div><span class="lp2-num">25,000</span><span class="lp2-label">simulated futures a run</span></div>
+  <div><span class="lp2-num">3</span><span class="lp2-label">portfolio return models</span></div>
+  <div><span class="lp2-num">5</span><span class="lp2-label">historical crises replayed</span></div>
+  <div><span class="lp2-num">0</span><span class="lp2-label">countries hard-coded</span></div>
+  <div><span class="lp2-num">2</span><span class="lp2-label">databases: SQLite or PostgreSQL</span></div>
+</section>
+
+<section class="lp2-section">
+  <div class="lp2-centre">
+    <div class="lp2-eyebrow">What it does</div>
+    <h2 class="lp2-h2">A plan you can check, and a portfolio you can see ahead</h2>
+    <p class="lp2-desc">Every number traces back to a visible row. Every assumption is yours to change.</p>
+  </div>
+  <div class="lp2-grid">
+    {% for icon, title, text, route in [
+      ('speedometer2', 'The odds, honestly', 'A success probability with its error bar, the range of outcomes, and the age the money runs out in a bad future.', 'dashboard'),
+      ('layers', 'What if…?', 'Copy the plan, retire two years later or spend a little less, and compare the scenarios side by side.', 'scenarios'),
+      ('briefcase', 'Your real holdings', 'Search any Yahoo symbol, paste from your broker, see value, gains, allocation and risk checks.', 'portfolios'),
+      ('graph-up', 'Ten years out, or forty', 'Correlated Monte Carlo on your actual mix, with contributions, withdrawals and a goal - by year or by quarter.', 'portfolios'),
+      ('lightning', 'Crisis replays', 'What 2008, the dot-com bust or the 2022 rate shock would do to today\'s portfolio, and how long it would take to recover.', 'portfolios'),
+      ('shield-lock', 'Any country\'s tax', 'Tax bands you type and account wrappers you define: a 401(k), an ISA, a TFSA - all one model.', 'help')] %}
+    <a class="lp2-card" href="{{ url_for(route) }}"><i class="bi bi-{{ icon }}" aria-hidden="true"></i><h3>{{ title }}</h3><p>{{ text }}</p></a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="lp2-section">
+  <div class="lp2-centre">
+    <div class="lp2-eyebrow">Three ways in</div>
+    <h2 class="lp2-h2">Start simple. Go as deep as you like.</h2>
+  </div>
+  <div class="row g-3">
+    {% for n, icon, title, text, route, cta in [
+      ('1', 'magic', 'Quick start', 'Ages, income, savings, spending, a risk level. Six short steps and a complete plan.', 'wizard', 'Start the wizard'),
+      ('2', 'pencil-square', 'The full editor', 'Every income stream, wrapper, tax band, market regime and withdrawal rule, table by table.', 'plan', 'Open the editor'),
+      ('3', 'briefcase', 'Portfolios', 'Holdings priced daily, projected forward, and copied into the plan in one click.', 'portfolio_new', 'Create a portfolio')] %}
+    <div class="col-md-4"><div class="card h-100"><div class="card-body p-4">
+      <div class="d-flex align-items-center gap-2 mb-2"><span class="mega-icon"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></span><h3 class="h5 mb-0">{{ title }}</h3></div>
+      <p class="small-muted">{{ text }}</p>
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for(route) }}">{{ cta }} <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div></div></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="lp2-cta">
+  <h2>Ready when you are</h2>
+  <p>Nothing to install beyond this app, no account to create, and nothing leaves your machine except price lookups.</p>
+  <div class="lp2-actions">
+    <a class="lp2-btn lp2-btn-light" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start a plan</a>
+    <a class="lp2-btn lp2-btn-ghost" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Read the help</a>
+  </div>
+</section>
 {% endblock %}

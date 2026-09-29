@@ -1,0 +1,71 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('plan_section', 'Open the income editor', 'income') }}</p>
+<p>One row per stream. Amounts are <strong>per year</strong> and <strong>gross of
+tax</strong> &mdash; the model works out the tax itself, and entering net amounts
+will silently double-count the relief.</p>
+
+<h2>The columns</h2>
+{{ field_table([
+  ('Label', 'Your description.', 'Anything; it appears only in the editor.'),
+  ('Owner', 'Which person the stream belongs to.',
+   'Decides whose ages the start and end are measured against, and whose death triggers the survivor rule.'),
+  ('Category', 'What kind of income this is.',
+   'Employment and self-employment count as earnings for percentage-of-salary contributions and employer matching. The rest are informational except for tax_free.'),
+  ('Amount / year', 'Gross annual amount in the chosen basis.', 'Before tax, before deductions.'),
+  ('Basis', 'real or nominal.',
+   '"real" keeps pace with inflation - use it for anything index-linked. "nominal" is a fixed number of future currency units, which loses purchasing power every year.'),
+  ('Growth', 'Growth per year in the chosen basis.',
+   'On a real basis, 1% means 1% ABOVE inflation. On a nominal basis it is plain growth. Most salaries: real, 0.5-1.5%. Most indexed pensions: real, 0%.'),
+  ('From age / To age', 'When the stream runs, in the owner’s age.',
+   'A state pension from 67 to 130. A salary until the retirement age. A five-year consultancy from 65 to 70.'),
+  ('Taxable', 'Share of the amount that is taxable.',
+   '100% for salary and most pensions. 0% for a tax-free benefit. 75% where a quarter arrives tax free.'),
+  ('Survivor', 'Share that continues after the owner’s planning age.',
+   '50% is a common spousal pension. 0% for a salary. 100% for rent from a jointly owned property.'),
+  ('Probability', 'Scales the amount.',
+   'Use it for uncertain income such as an inheritance. In the projection it scales the amount; in simulation it is drawn.'),
+]) }}
+
+<h2>Common streams, and how to enter them</h2>
+<h3>Salary</h3>
+<p>Category <code>employment</code>, real basis, growth 0.5&ndash;1.5% (real wage
+growth), from your current age to your retirement age, taxable 100%, survivor 0%.</p>
+
+<h3>State or social pension</h3>
+<p>Category <code>state_pension</code>, real basis, growth 0% if it is index-linked
+(the real basis already keeps it whole), from the claim age to 130. Set survivor to
+whatever your system continues &mdash; often 0% or 50%.</p>
+{% call note('tip', 'Testing a later claim') %}
+<p>Many systems pay more if you claim later. Model it by changing the start age and
+raising the amount by the actuarial uplift. Comparing the two runs is a genuinely
+useful exercise: deferring is usually the cheapest longevity insurance available.</p>
+{% endcall %}
+
+<h3>Defined-benefit / final-salary pension</h3>
+<p>Category <code>db_pension</code>. If it has a capped escalation (say CPI capped at
+3%), a real basis with 0% growth slightly overstates it in high-inflation paths;
+a small negative real growth is a reasonable approximation.</p>
+
+<h3>Rental income</h3>
+<p>Enter it <strong>net</strong> of voids, management and maintenance &mdash; this is
+the one place a net figure is right, because those costs are not modelled as
+spending rows. Keep the property itself on the accounts page, in an illiquid
+wrapper, so it is not sold to fund spending unless you intend it.</p>
+
+<h3>An inheritance or other windfall</h3>
+<p>Category <code>one_off</code>, from and to the same age, with a probability below
+1 if it is uncertain. The sample plan carries one, switched off.</p>
+
+<h3>Annuity income</h3>
+<p>Enter the income it pays as a stream starting at the purchase age. The purchase
+itself &mdash; converting a balance into that income &mdash; is not modelled
+automatically; reduce the account balance by the premium to represent it.</p>
+
+{% call note('trap', 'The two ends of a salary') %}
+<p>If you change a retirement age on the household page and the numbers barely move,
+the salary row is still running. Its "To age" is independent, and the model will
+happily have you earning at 75.</p>
+{% endcall %}
+{% endblock %}

@@ -1,23 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} - {{ app_name }}{% endblock %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <ul class="nav nav-pills">
-    {% for key, label in reports %}
-      <li class="nav-item">
-        <a class="nav-link btn-sm py-1 px-3 {{ 'active' if key == active }}"
-           href="{{ url_for('report', name=key) }}">{{ label }}</a>
-      </li>
-    {% endfor %}
-    <li class="nav-item"><a class="nav-link btn-sm py-1 px-3" href="{{ url_for('audit') }}">Audit</a></li>
-  </ul>
-  <span class="muted small ms-auto">All figures in today's money. Deterministic projection.</span>
-</div>
-<div class="card">
-  <div class="card-header"><span><i class="bi bi-table"></i>{{ title }}</span></div>
-  <div class="card-body">
-    <p class="lede">{{ blurb }}</p>
-    {% block table %}{% endblock %}
-  </div>
-</div>
+{% call ui.page_head(title, blurb, eyebrow='Results · ' ~ plan.label, help=url_for('help_reports')) %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> Dashboard</a>
+{% endcall %}
+<ul class="nav nav-tabs mb-3">
+  {% for key, label in reports %}
+  <li class="nav-item"><a class="nav-link {{ 'active' if key == active }}" href="{{ url_for('report', name=key) }}" {% if key == active %}aria-current="page"{% endif %}>{{ label }}</a></li>
+  {% endfor %}
+  <li class="nav-item"><a class="nav-link {{ 'active' if active == 'audit' }}" href="{{ url_for('audit') }}">Audit</a></li>
+  <li class="nav-item ms-auto small-muted align-self-center">Today's money · fixed-return projection</li>
+</ul>
+<div class="card"><div class="card-body">
+  {% block table %}{% endblock %}
+</div></div>
 {% endblock %}

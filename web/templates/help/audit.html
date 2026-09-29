@@ -1,0 +1,81 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('audit', 'Open the audit') }}</p>
+<p>The audit is a list of checks run against your plan and its fixed-return
+projection every time you open it. It is the web version of the workbook&rsquo;s audit
+sheet, and it exists so that you never have to take a number on trust.</p>
+
+<h2>Blocking and Review</h2>
+<ul>
+  <li><strong>Blocking</strong> checks fail as <code>FAIL</code>. They mean the model
+      is internally inconsistent or the inputs are impossible. The dashboard shows a
+      red banner while any of them fails; do not rely on any figure until it clears.</li>
+  <li><strong>Review</strong> checks fail as <code>REVIEW</code>. The model still works,
+      but an input is outside the range most people would defend. It may be
+      deliberate; make sure it is.</li>
+</ul>
+<p>The header pill summarises: the number of blocking failures, else the number to
+review, else &ldquo;all checks pass&rdquo;.</p>
+
+<h2>Every check</h2>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th style="width:32%">Check</th><th style="width:12%">Severity</th><th>What it proves, and the usual fix</th></tr></thead>
+  <tbody>
+    <tr><td>Balance roll-forward ties every year</td><td>Blocking</td><td>Closing balances equal opening balances plus every flow. The detail shows the worst relative error. See below.</td></tr>
+    <tr><td>No portfolio balance goes negative</td><td>Blocking</td><td>No account was overdrawn. A failure means a withdrawal took more than was there &mdash; an engine fault worth reporting.</td></tr>
+    <tr><td>At least one account holds money</td><td>Blocking</td><td>The opening balances add up to more than zero. Enter your balances on the accounts page.</td></tr>
+    <tr><td>At least one spending row is active</td><td>Blocking</td><td>The plan has at least one spending row. Without spending there is nothing to fund.</td></tr>
+    <tr><td>Retirement age is after current age</td><td>Blocking</td><td>For every person. If already retired, set the retirement age to the current age.</td></tr>
+    <tr><td>Planning age is after retirement age</td><td>Blocking</td><td>For every person.</td></tr>
+    <tr><td>Horizon covers the planning age</td><td>Review</td><td>The first person&rsquo;s age plus the horizon reaches their planning age. If not, the projection stops before the plan does. Raise the horizon on the household page.</td></tr>
+    <tr><td>Allocation sums to 100% (<em>account</em>)</td><td>Blocking</td><td>Shown only when an account&rsquo;s asset mix does not add to 100% (within 0.1 point). An all-zero mix is not flagged.</td></tr>
+    <tr><td>Correlations lie inside [&minus;1, 1]</td><td>Blocking</td><td>Every entry of the correlation matrix is a valid correlation.</td></tr>
+    <tr><td>Correlation matrix is symmetric</td><td>Review</td><td>The lower half mirrors the upper. The editor keeps it so; an imported file may not.</td></tr>
+    <tr><td>Regime row sums to 1 (<em>regime</em>)</td><td>Blocking</td><td>Shown only when a regime&rsquo;s transition probabilities do not add to 100%. In practice the market engine usually stops first; see the note at the end.</td></tr>
+    <tr><td>Tax bands ascend</td><td>Blocking</td><td>Each band starts above the one before.</td></tr>
+    <tr><td>Tax rates lie inside [0, 100%]</td><td>Blocking</td><td>No negative rate, none above 100%.</td></tr>
+    <tr><td>Expected returns are inside a defensible range</td><td>Review</td><td>Every asset&rsquo;s expected return is between &minus;5% and 15%.</td></tr>
+    <tr><td>Inflation assumption is plausible</td><td>Review</td><td>Mean inflation between &minus;2% and 10%.</td></tr>
+    <tr><td>Total fees are inside a plausible range</td><td>Review</td><td>Platform plus adviser fee no more than 3% a year. Fund costs are not included.</td></tr>
+    <tr><td>Spending is never negative</td><td>Blocking</td><td>A sanity check on the fixed-return path.</td></tr>
+    <tr><td>Every need is met on the fixed-return path</td><td>Review</td><td>Lists how many years had an unmet need (a shortfall) even with average returns. If any do, the plan fails before bad luck is considered.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>The roll-forward identity</h2>
+<p>This is the important one. For every year of the projection it checks</p>
+<p class="text-center"><code>closing = (opening &minus; withdrawals &minus; forced draws + paid in &minus; fees) &times; (1 + return)</code></p>
+<p>to a relative tolerance of one part in a million. The engine computes balances
+account by account and asset by asset; this check rebuilds the total from the
+reported flows alone. If a flow was dropped, counted twice, or taken from the wrong
+place, the two disagree and the check fails &mdash; regardless of how the numbers were
+produced.</p>
+{% call note('why', 'What it does not prove') %}
+<p>The return in the identity is inferred from the balances themselves, so the check
+proves that every flow is accounted for, not that the return is right. Whether your
+return assumptions are sensible is what the Review checks, and the
+&ldquo;what you are actually assuming&rdquo; panel on the dashboard, are for. The
+check also runs on the fixed-return projection only, not on every simulated trial.</p>
+{% endcall %}
+
+<h2>When something fails</h2>
+{% call steps() %}
+<li>Read the <strong>Detail</strong> column; it often names the account or regime.</li>
+<li>Fix the input on the page the check names &mdash; most failures are a typo or a
+    row that does not add to 100%. {{ goto('plan_section', 'Open accounts', 'accounts') }}
+    {{ goto('plan_section', 'Open markets', 'markets') }}</li>
+<li>Save, and reopen the audit: it re-runs on every visit.</li>
+<li>If the roll-forward or negative-balance check fails with sensible inputs, export
+    the plan as JSON and report it: that is a fault in the engine, not in your plan.</li>
+{% endcall %}
+
+{% call note('trap', 'Make regime rows add to exactly 100%') %}
+<p>The market engine refuses a transition row that does not add to 100% almost exactly,
+and it does so before the audit gets to run &mdash; so a bad row usually shows up as an
+error page on the dashboard and the audit rather than as a failed check here. Type the
+diagonal as 100% minus the rest of the row.</p>
+{% endcall %}
+{% endblock %}

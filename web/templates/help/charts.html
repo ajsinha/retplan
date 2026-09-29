@@ -1,0 +1,112 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>{{ goto('dashboard', 'Open the dashboard') }}</p>
+<p>Every chart is drawn on the server as plain SVG, on a single y-axis, in
+today&rsquo;s money unless it says otherwise. Most carry a <strong>Show the
+numbers</strong> link underneath that opens the same data as a table &mdash; use it
+whenever you want an exact figure rather than a reading off the axis.</p>
+
+<h2>Range of outcomes (the fan chart)</h2>
+<p>Net worth over time across every simulated future. Three nested bands in one
+colour, darkest in the middle:</p>
+<ul>
+  <li>the <strong>palest band</strong> spans the 5th to 95th percentile &mdash; nine
+      futures in ten fall inside it;</li>
+  <li>the <strong>middle band</strong> spans the 10th to 90th percentile (the middle 80%);</li>
+  <li>the <strong>darkest band</strong> spans the 25th to 75th (the middle 50%);</li>
+  <li>the <strong>line</strong> is the median, labelled with its final value.</li>
+</ul>
+<p>The table lists P5, P10, median, P90 and P95 every fifth year.</p>
+{% call note('trap', 'The median line is not a future anyone lives') %}
+<p>Each year&rsquo;s band is a cross-section: the median in 2040 and the median in
+2050 are usually different trials. Real paths wander from band to band &mdash; which
+is what the next chart is for. And the bottom edge at P5 is not the worst case; one
+future in twenty is below it.</p>
+{% endcall %}
+
+<h2>Twenty individual futures (spaghetti)</h2>
+<p>The first twenty simulated trials drawn as faint lines, with the median on top.
+They are not chosen to be typical, just the first twenty. The point is the shape:
+two futures with the same average return can end far apart depending on
+<em>when</em> the bad years fell. The axis starts at zero, so a path that goes
+negative runs off the bottom. Its table lists the first five futures every five years,
+beside the median.</p>
+
+<h2>Where you end up (histogram)</h2>
+<p>Final net worth across all trials, in 28 equal-width bars from the lowest outcome
+to the 99th percentile; the top 1% are gathered into the last bar, and a note under
+the chart says how many, so one extreme future cannot flatten the rest. Hover a bar
+for its range and share. The distribution is nearly always skewed: a long tail of very
+rich futures to the right pulls the <em>mean</em> up, which is why the dashboard
+quotes the median. A tall bar at the far left is the pile of futures that ran out.
+Its table gives the percentiles P5 to P95.</p>
+
+<h2>Chance the money has run out</h2>
+<p>For each age, the share of trials that have already had a year with an unmet
+need. It only ever rises. Read it for timing: a curve that stays flat until 85 and
+then climbs is a longevity problem; one that rises in the first five years of
+retirement is a sequence problem. The table shows every fifth age.</p>
+
+<h2>Success against spending (the sweep)</h2>
+<p>Only after <em>Full analysis</em>. The plan is re-run at 17 spending levels from
+50% to 150% of this year&rsquo;s essential plus discretionary spending (debt
+payments are not scaled), and the success rate is plotted at each. The slope is the
+answer to &ldquo;what does another thousand a year cost me in odds?&rdquo; A steep
+section around your current spending means small cuts buy a lot of safety.</p>
+
+<h2>What moves the answer (the tornado)</h2>
+<p>Only after <em>Full analysis</em>. Each driver is moved down and then up on its
+own, everything else unchanged, and the plan re-run. The bar spans the two success
+rates, and its label shows the higher of the two. Drivers are sorted by the width of
+the bar, so the top one matters most.</p>
+<div class="help-table-wrap">
+<table class="table table-sm">
+  <thead><tr><th>Driver</th><th>What is moved</th><th>By how much</th></tr></thead>
+  <tbody>
+    <tr><td>Expected returns</td><td>Every asset’s expected return</td><td>minus and plus 1 point</td></tr>
+    <tr><td>Inflation</td><td>The mean inflation rate</td><td>minus and plus 1 point</td></tr>
+    <tr><td>Spending</td><td>Every spending row</td><td>minus and plus 10%</td></tr>
+    <tr><td>Retirement age</td><td>Everyone’s retirement age and the end of every salary row</td><td>minus and plus 2 years</td></tr>
+    <tr><td>Fees</td><td>The platform fee</td><td>minus and plus 0.5 points</td></tr>
+    <tr><td>Longevity</td><td>Everyone’s planning age</td><td>minus and plus 5 years</td></tr>
+    <tr><td>Volatility</td><td>Every asset’s volatility</td><td>minus and plus 3 points, floored at zero</td></tr>
+    <tr><td>Crash frequency</td><td>The chance a crash starts each year</td><td>minus and plus 3 points, floored at zero</td></tr>
+  </tbody>
+</table>
+</div>
+{% call note('trap', 'Downside means moved down, not bad news') %}
+<p>In the table, <em>Downside</em> is the result with the driver lowered and
+<em>Upside</em> with it raised. For spending, fees or volatility, lowering the driver
+<em>improves</em> the odds, so the &ldquo;downside&rdquo; column holds the better
+number. Also note that the planning age does not change the length of the
+projection; it only moves the point at which survivor rules apply to income.</p>
+{% endcall %}
+
+<h2>The deterministic charts</h2>
+<ul>
+  <li><strong>Net worth</strong> (before a run) &mdash; the single fixed-return path.</li>
+  <li><strong>Where the money sits</strong> &mdash; a stacked area of the balance in each
+      tax wrapper at the start of each year. Watch how the order you draw accounts
+      down reshapes it.</li>
+  <li><strong>Money in, money out</strong> &mdash; income, spending (including debt
+      payments), tax, withdrawals and money paid in, one line each.</li>
+</ul>
+<p>All three have tables, and the full year-by-year detail is in the
+<a href="{{ url_for('report', name='cashflow') }}">reports</a>.</p>
+
+<h2>Portfolio charts and hovering</h2>
+<p>The portfolio pages draw a projection fan, per-period return range bars,
+histograms of final value and worst fall, a year of value history and the crisis
+replays. Those charts carry a hover layer: move across them and a crosshair and
+tooltip give every value at that point. The dashboard charts do not hover &mdash; use
+their tables. How to read the portfolio fan and its yearly or quarterly table is in
+{{ goto('help_projection', 'Projecting a portfolio') }}, and the crisis charts in
+{{ goto('help_stress_tests', 'Stress tests') }}.</p>
+
+{% call note('tip', 'The table is the authoritative copy') %}
+<p>Charts round for legibility. When you want to quote a number, or compare two runs
+precisely, open <em>Show the numbers</em>. It is also the keyboard- and
+screen-reader-friendly way to read every chart that has one.</p>
+{% endcall %}
+{% endblock %}

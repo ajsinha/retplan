@@ -49,8 +49,9 @@ def nice_ticks(lo: float, hi: float, count: int = 5):
         step = 10 * mag
     start = math.floor(lo / step) * step
     ticks, v = [], start
-    while v <= hi + step * 0.5:
-        ticks.append(round(v, 10))
+    # keep going until a tick covers the maximum, so no mark rises above the grid
+    while not ticks or ticks[-1] < hi - 1e-9 * max(1.0, abs(hi)):
+        ticks.append(round(v, 10) + 0.0)          # + 0.0 turns -0.0 into 0.0
         v += step
     return ticks
 
@@ -96,9 +97,20 @@ def _fmt_compact(v):
     return f"{sign}{a:,.0f}"
 
 
+def _fmt_x(v):
+    """Calendar years without a thousands separator; everything else with one."""
+    if 1800 <= v <= 2400 and abs(v - round(v)) < 1e-9:
+        return f"{v:.0f}"
+    return _fmt_compact(v) if abs(v) >= 10000 else f"{v:,.0f}"
+
+
+def _pct_fmt(v):
+    return f"{v * 100:.0f}%"
+
+
 def _axes(f: Frame, x_ticks, y_ticks, x_fmt=None, y_fmt=None) -> str:
     """Hairline grid + axis labels. Solid, never dashed; one shade off surface."""
-    x_fmt = x_fmt or (lambda v: f"{v:,.0f}")
+    x_fmt = x_fmt or _fmt_x
     y_fmt = y_fmt or _fmt_compact
     out = []
     for t in y_ticks:
@@ -185,19 +197,30 @@ def fan_chart(years, bands, median, title="", y_label="", deterministic=None):
             ("Middle 80%", SEQ[2]), ("Full 5-95% range", SEQ[1])]
     if deterministic:
         keys.append(("Deterministic projection", SERIES[1]))
-    return _legend(keys) + _svg(f, "".join(parts), title, y_label)
+    names = ["P5-P95", "P10-P90", "P25-P75"]
+    tips = []
+    for i, y in enumerate(years):
+        rows = [f"Year {_fmt_x(y)}", f"Median {_fmt_compact(median[i])}"]
+        rows += [f"{names[k] if k < 3 else 'band'}: {_fmt_compact(lo[i])} to {_fmt_compact(up[i])}"
+                 for k, (lo, up) in enumerate(bands)]
+        tips.append("\n".join(rows))
+    parts.append(_crosshair(f) + _hover(f, years, tips))
+    return (_legend(keys) + '<div class="viz-wrap">' + _svg(f, "".join(parts), title, y_label)
+            + '</div>')
 
 
-def line_chart(years, series, title="", y_label="", highlight=None):
+def line_chart(years, series, title="", y_label="", highlight=None, y_fmt=None,
+               x_name="Year"):
     """Multi-series lines on ONE axis. series: [(label, values)]."""
     if not years or not series:
         return '<p class="viz-empty">No data yet.</p>'
+    y_fmt = y_fmt or _fmt_compact
     f = Frame(height=300)
     f.x_lo, f.x_hi = years[0], years[-1]
     flat = [v for _, vals in series for v in vals]
     ticks_y = nice_ticks(min(min(flat), 0), max(flat))
     f.y_lo, f.y_hi = min(ticks_y), max(ticks_y)
-    parts = [_axes(f, nice_ticks(f.x_lo, f.x_hi, 6), ticks_y)]
+    parts = [_axes(f, nice_ticks(f.x_lo, f.x_hi, 6), ticks_y, y_fmt=y_fmt)]
     keys = []
     for i, (label, vals) in enumerate(series):
         colour = SERIES[i % len(SERIES)]
@@ -207,7 +230,16 @@ def line_chart(years, series, title="", y_label="", highlight=None):
             f'class="viz-line" stroke="{colour}" fill="none" '
             f'{"stroke-opacity=\'0.35\'" if dim else ""}/>')
         keys.append((label, colour))
-    return _legend(keys) + _svg(f, "".join(parts), title, y_label)
+    tips = [f"{x_name} {_fmt_x(y)}\n" + "\n".join(f"{l}: {y_fmt(v[i])}" for l, v in series)
+            for i, y in enumerate(years)]
+    parts.append(_crosshair(f) + _hover(f, years, tips))
+    return (_legend(keys) + '<div class="viz-wrap">' + _svg(f, "".join(parts), title, y_label)
+            + '</div>')
+
+
+def _crosshair(f: Frame) -> str:
+    return ('<line class="viz-hover" x1="0" x2="0" '
+            f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
 
 
 def stacked_area(years, series, title="", y_label=""):
@@ -232,7 +264,11 @@ def stacked_area(years, series, title="", y_label=""):
                      f'class="viz-band"/>')
         running = upper
         keys.append((label, colour))
-    return _legend(keys) + _svg(f, "".join(parts), title, y_label)
+    tips = [f"Year {_fmt_x(y)}\n" + "\n".join(f"{l}: {_fmt_compact(v[i])}" for l, v in series)
+            + f"\nTotal: {_fmt_compact(totals[i])}" for i, y in enumerate(years)]
+    parts.append(_crosshair(f) + _hover(f, years, tips))
+    return (_legend(keys) + '<div class="viz-wrap">' + _svg(f, "".join(parts), title, y_label)
+            + '</div>')
 
 
 def histogram(values, title="", x_label="", bins=28):
@@ -240,6 +276,12 @@ def histogram(values, title="", x_label="", bins=28):
     vals = [v for v in values if v is not None and math.isfinite(v)]
     if not vals:
         return '<p class="viz-empty">No data yet.</p>'
+    # A long right tail would squash everything into one bar: show up to the
+    # 99th percentile and say so, rather than let one outlier set the scale.
+    ordered = sorted(vals)
+    cap = ordered[min(len(ordered) - 1, int(0.99 * len(ordered)))]
+    beyond = sum(1 for v in vals if v > cap)
+    vals = [min(v, cap) for v in vals]
     lo, hi = min(vals), max(vals)
     if hi - lo < 1e-9:
         hi = lo + 1.0
@@ -252,18 +294,26 @@ def histogram(values, title="", x_label="", bins=28):
     f.x_lo, f.x_hi = lo, hi
     ticks_y = nice_ticks(0, max(counts))
     f.y_lo, f.y_hi = 0, max(ticks_y)
-    parts = [_axes(f, nice_ticks(lo, hi, 5), ticks_y)]
+    parts = [_axes(f, nice_ticks(lo, hi, 5), ticks_y, x_fmt=_fmt_compact,
+                   y_fmt=lambda v: f"{v:,.0f}")]
     bw = f.plot_w / bins
+    n = len(vals)
     for i, c in enumerate(counts):
         if c <= 0:
             continue
         x = f.pad_left + i * bw
         y = f.y(c)
         h = f.y(0) - y
+        a, b = lo + i * width, lo + (i + 1) * width
+        tip = (f"{_fmt_compact(a)} to {_fmt_compact(b)}"
+               + (" and above" if i == bins - 1 and beyond else "")
+               + f"\n{c:,} trials ({c / n:.1%})")
         parts.append(f'<rect class="viz-bar" x="{x + 1:.1f}" y="{y:.1f}" '
                      f'width="{max(1.0, bw - 2):.1f}" height="{h:.1f}" '
-                     f'rx="2" fill="{SERIES[0]}"/>')
-    return _svg(f, "".join(parts), title, x_label)
+                     f'rx="2" fill="{SERIES[0]}" data-tip="{_e(tip)}"/>')
+    note = (f'<p class="small-muted mb-0">The last bar also holds the {beyond:,} '
+            f'trials above {_fmt_compact(cap)} (the top 1%).</p>' if beyond else "")
+    return '<div class="viz-wrap">' + _svg(f, "".join(parts), title, x_label) + '</div>' + note
 
 
 def tornado(rows, title=""):
@@ -311,3 +361,254 @@ def spaghetti(years, paths, median=None, title="", y_label=""):
             f'class="viz-line" stroke="{SERIES[1]}" fill="none"/>')
     keys = [("Sampled futures", SEQ[3])] + ([("Median", SERIES[1])] if median else [])
     return _legend(keys) + _svg(f, "".join(parts), title, y_label)
+
+
+# --------------------------------------------------------------------------- #
+# Portfolio charts. Each carries a hover layer: one transparent column per x
+# whose data-tip lists every value at that x (web/static/js/retplan.js draws the
+# crosshair and tooltip). The table-view twin in the template stays the
+# authoritative, keyboard-reachable copy of the numbers.
+# --------------------------------------------------------------------------- #
+def _hover(f: Frame, xs, tips) -> str:
+    if not tips:
+        return ""
+    out = []
+    n = len(xs)
+    for i, (x, tip) in enumerate(zip(xs, tips)):
+        left = f.x(xs[i - 1]) if i else f.x(x) - (f.x(xs[1]) - f.x(x) if n > 1 else 10)
+        right = f.x(xs[i + 1]) if i < n - 1 else f.x(x) + (f.x(x) - f.x(xs[i - 1]) if n > 1 else 10)
+        x0 = max(f.pad_left, (left + f.x(x)) / 2)
+        x1 = min(f.width - f.pad_right, (f.x(x) + right) / 2)
+        out.append(f'<rect class="viz-hit" x="{x0:.1f}" y="{f.pad_top}" '
+                   f'width="{max(1.0, x1 - x0):.1f}" height="{f.plot_h:.1f}" '
+                   f'fill="transparent" data-x="{f.x(x):.1f}" data-tip="{_e(tip)}"/>')
+    return "".join(out)
+
+
+def _label_ticks(xs, labels, max_ticks=8):
+    """Every k-th categorical label so ticks never collide."""
+    n = len(xs)
+    step = max(1, math.ceil(n / max_ticks))
+    return [(xs[i], labels[i]) for i in range(0, n, step)]
+
+
+def _axes_labelled(f: Frame, xticks, y_ticks, y_fmt=None) -> str:
+    """Like _axes, but x ticks are (position, text) pairs."""
+    y_fmt = y_fmt or _fmt_compact
+    out = [_axes(f, [], y_ticks, y_fmt=y_fmt)]
+    for x, text in xticks:
+        out.append(f'<text class="viz-tick" x="{f.x(x):.1f}" '
+                   f'y="{f.height - f.pad_bottom + 18:.1f}" text-anchor="middle">'
+                   f'{_e(text)}</text>')
+    return "".join(out)
+
+
+def projection_fan(labels, bands, median, *, start=None, expected=None, target=None,
+                   tips=None, title="", desc="", y_fmt=None):
+    """Portfolio value over time: P10-P90 and P25-P75 bands in one hue, the
+    median as the line, the no-volatility expectation dashed, a goal as a
+    reference line. ``start`` prepends today's value at x = 0."""
+    if not labels:
+        return '<p class="viz-empty">No data yet.</p>'
+    xs = list(range(1, len(labels) + 1))
+    if start is not None:
+        xs = [0] + xs
+        labels = ["Today"] + list(labels)
+        bands = [([start] + list(lo), [start] + list(hi)) for lo, hi in bands]
+        median = [start] + list(median)
+        if expected:
+            expected = [start] + list(expected)
+        if tips:
+            tips = [f"Today\nValue {_fmt_compact(start)}"] + list(tips)
+    f = Frame(height=360, pad_left=64)
+    f.x_lo, f.x_hi = xs[0], xs[-1]
+    hi = max([max(u) for _, u in bands] + [max(median)] + ([max(expected)] if expected else [])
+             + ([target] if target else []))
+    ticks_y = nice_ticks(0, hi)
+    f.y_lo, f.y_hi = 0, max(ticks_y)
+    parts = [_axes_labelled(f, _label_ticks(xs, labels), ticks_y, y_fmt)]
+    shades = [SEQ[1], SEQ[3]]
+    for i, (low, up) in enumerate(bands):
+        top = [(f.x(x), f.y(v)) for x, v in zip(xs, up)]
+        bot = [(f.x(x), f.y(v)) for x, v in zip(xs, low)][::-1]
+        d = _path(top) + " L" + " L".join(f"{x:.1f},{y:.1f}" for x, y in bot) + " Z"
+        parts.append(f'<path d="{d}" fill="{shades[i % 2]}" '
+                     f'fill-opacity="{0.45 if i == 0 else 0.6}" stroke="none"/>')
+    if target:
+        parts.append(f'<line class="viz-target" x1="{f.pad_left}" x2="{f.width - f.pad_right}" '
+                     f'y1="{f.y(target):.1f}" y2="{f.y(target):.1f}"/>'
+                     f'<text class="viz-tick" x="{f.pad_left + 6}" y="{f.y(target) - 5:.1f}">'
+                     f'Goal {_e(_fmt_compact(target))}</text>')
+    if expected:
+        parts.append(f'<path d="{_path([(f.x(x), f.y(v)) for x, v in zip(xs, expected)])}" '
+                     f'class="viz-line viz-line-alt" stroke="{SERIES[1]}"/>')
+    parts.append(f'<path d="{_path([(f.x(x), f.y(v)) for x, v in zip(xs, median)])}" '
+                 f'class="viz-line" stroke="{SEQ[5]}" stroke-width="2.5"/>')
+    parts.append(f'<text class="viz-label" x="{f.x(xs[-1]) - 4:.1f}" '
+                 f'y="{f.y(median[-1]) - 9:.1f}" text-anchor="end">'
+                 f'Median {_e(_fmt_compact(median[-1]))}</text>')
+    parts.append('<line class="viz-hover" x1="0" x2="0" '
+                 f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
+    parts.append(_hover(f, xs, tips))
+    keys = [("Median", SEQ[5]), ("Middle 50% (P25-P75)", SEQ[3]),
+            ("Middle 80% (P10-P90)", SEQ[1])]
+    if expected:
+        keys.append(("Expected-return path", SERIES[1]))
+    return (_legend(keys) + '<div class="viz-wrap">'
+            + _svg(f, "".join(parts), title, desc) + '</div>')
+
+
+def range_bars(labels, lo, mid, hi, *, tips=None, title="", desc="", pct=True):
+    """Period returns: a P10-P90 bar per period with the median as a tick.
+    Diverging around zero, so the zero line is drawn and labelled."""
+    if not labels:
+        return '<p class="viz-empty">No data yet.</p>'
+    n = len(labels)
+    f = Frame(height=280, pad_left=56)
+    xs = list(range(n))
+    f.x_lo, f.x_hi = -0.6, n - 0.4
+    ticks_y = nice_ticks(min(min(lo), 0), max(max(hi), 0), 6)
+    f.y_lo, f.y_hi = min(ticks_y), max(ticks_y)
+    fmt = (lambda v: f"{v * 100:.0f}%") if pct else _fmt_compact
+    parts = [_axes_labelled(f, _label_ticks(xs, labels, 10), ticks_y, fmt)]
+    parts.append(f'<line class="viz-axis" x1="{f.pad_left}" x2="{f.width - f.pad_right}" '
+                 f'y1="{f.y(0):.1f}" y2="{f.y(0):.1f}"/>')
+    bw = min(26.0, f.plot_w / n * 0.62)
+    for i in range(n):
+        x = f.x(i)
+        y1, y2 = f.y(hi[i]), f.y(lo[i])
+        parts.append(f'<rect class="viz-bar" x="{x - bw / 2:.1f}" y="{y1:.1f}" '
+                     f'width="{bw:.1f}" height="{max(2.0, y2 - y1):.1f}" rx="4" '
+                     f'fill="{SEQ[2]}" fill-opacity="0.8"/>')
+        parts.append(f'<line x1="{x - bw / 2:.1f}" x2="{x + bw / 2:.1f}" '
+                     f'y1="{f.y(mid[i]):.1f}" y2="{f.y(mid[i]):.1f}" '
+                     f'stroke="{SEQ[5]}" stroke-width="2.5" stroke-linecap="round"/>')
+    parts.append('<line class="viz-hover" x1="0" x2="0" '
+                 f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
+    parts.append(_hover(f, xs, tips))
+    keys = [("Median return", SEQ[5]), ("P10-P90 range", SEQ[2])]
+    return (_legend(keys) + '<div class="viz-wrap">'
+            + _svg(f, "".join(parts), title, desc) + '</div>')
+
+
+def binned_histogram(counts, edges, *, x_fmt=None, marker=None, marker_label="",
+                     title="", desc="", unit="trials"):
+    """A pre-binned distribution (the projection stores counts, not samples)."""
+    if not counts or not any(counts):
+        return '<p class="viz-empty">No data yet.</p>'
+    x_fmt = x_fmt or _fmt_compact
+    n = len(counts)
+    f = Frame(height=250, pad_left=52)
+    f.x_lo, f.x_hi = edges[0], edges[-1]
+    ticks_y = nice_ticks(0, max(counts), 4)
+    f.y_lo, f.y_hi = 0, max(ticks_y)
+    xt = nice_ticks(edges[0], edges[-1], 5)
+    parts = [_axes(f, [], ticks_y, y_fmt=lambda v: f"{v:,.0f}")]
+    for t in xt:
+        if edges[0] <= t <= edges[-1]:
+            parts.append(f'<text class="viz-tick" x="{f.x(t):.1f}" '
+                         f'y="{f.height - f.pad_bottom + 18:.1f}" text-anchor="middle">'
+                         f'{_e(x_fmt(t))}</text>')
+    total = sum(counts) or 1
+    for i, c in enumerate(counts):
+        if c <= 0:
+            continue
+        x0, x1 = f.x(edges[i]), f.x(edges[i + 1])
+        y = f.y(c)
+        tip = (f"{x_fmt(edges[i])} to {x_fmt(edges[i + 1])}\n"
+               f"{c:,} {unit} ({c / total:.1%})")
+        parts.append(f'<rect class="viz-bar" x="{x0 + 1:.1f}" y="{y:.1f}" '
+                     f'width="{max(1.0, x1 - x0 - 2):.1f}" height="{f.y(0) - y:.1f}" '
+                     f'rx="3" fill="{SERIES[0]}" data-tip="{_e(tip)}"/>')
+    if marker is not None and edges[0] <= marker <= edges[-1]:
+        x = f.x(marker)
+        parts.append(f'<line class="viz-target" x1="{x:.1f}" x2="{x:.1f}" '
+                     f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}"/>'
+                     f'<text class="viz-label" x="{x + 5:.1f}" y="{f.pad_top + 11}">'
+                     f'{_e(marker_label)}</text>')
+    return '<div class="viz-wrap">' + _svg(f, "".join(parts), title, desc) + '</div>'
+
+
+def date_line(dates, series, *, title="", desc="", y_fmt=None, zero_floor=False,
+              height=280, reference=None, reference_label=""):
+    """Daily series against dates (ISO strings). series: [(label, values)].
+    Month ticks; a crosshair tooltip lists every series on the hovered day."""
+    if not dates or not series or not any(len(v) for _, v in series):
+        return '<p class="viz-empty">No prices stored yet.</p>'
+    y_fmt = y_fmt or _fmt_compact
+    n = len(dates)
+    xs = list(range(n))
+    f = Frame(height=height, pad_left=58)
+    f.x_lo, f.x_hi = 0, max(1, n - 1)
+    flat = [v for _, vals in series for v in vals if v is not None]
+    lo, hi = min(flat), max(flat)
+    if reference is not None:
+        lo, hi = min(lo, reference), max(hi, reference)
+    pad = (hi - lo) * 0.08 or abs(hi) * 0.05 or 1
+    ticks_y = nice_ticks(0 if zero_floor else lo - pad, hi + pad, 5)
+    f.y_lo, f.y_hi = min(ticks_y), max(ticks_y)
+    # a tick at the first trading day of each month (every other if crowded)
+    months, last = [], None
+    for i, d in enumerate(dates):
+        if d[:7] != last:
+            months.append((i, d))
+            last = d[:7]
+    step = 1 if len(months) <= 8 else 2
+    names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+             "Nov", "Dec"]
+    xt = [(i, f"{names[int(d[5:7]) - 1]} {d[2:4]}") for i, d in months[::step]]
+    parts = [_axes_labelled(f, xt, ticks_y, y_fmt)]
+    if reference is not None:
+        parts.append(f'<line class="viz-target" x1="{f.pad_left}" x2="{f.width - f.pad_right}" '
+                     f'y1="{f.y(reference):.1f}" y2="{f.y(reference):.1f}"/>'
+                     f'<text class="viz-tick" x="{f.pad_left + 6}" y="{f.y(reference) - 5:.1f}">'
+                     f'{_e(reference_label)}</text>')
+    keys = []
+    for k, (label, vals) in enumerate(series):
+        colour = SERIES[k % len(SERIES)]
+        pts = [(f.x(i), f.y(v)) for i, v in zip(xs, vals) if v is not None]
+        if pts:
+            parts.append(f'<path d="{_path(pts)}" class="viz-line" stroke="{colour}"/>')
+        keys.append((label, colour))
+    tips = []
+    for i, d in enumerate(dates):
+        lines = [d] + [f"{label}: {y_fmt(vals[i])}" for label, vals in series
+                       if i < len(vals) and vals[i] is not None]
+        tips.append("\n".join(lines))
+    parts.append('<line class="viz-hover" x1="0" x2="0" '
+                 f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
+    parts.append(_hover(f, xs, tips))
+    return (_legend(keys) + '<div class="viz-wrap">'
+            + _svg(f, "".join(parts), title, desc) + '</div>')
+
+
+def quarter_path(values, *, crisis_quarters=0, title="", desc="", start_label="Start"):
+    """A deterministic value path by quarter, with the crisis window shaded."""
+    if not values:
+        return '<p class="viz-empty">No data yet.</p>'
+    xs = list(range(len(values)))
+    f = Frame(height=280, pad_left=60)
+    f.x_lo, f.x_hi = 0, max(1, len(values) - 1)
+    lo, hi = min(values), max(values)
+    ticks_y = nice_ticks(lo * 0.9, hi * 1.05, 5)
+    f.y_lo, f.y_hi = min(ticks_y), max(ticks_y)
+    xt = [(i, f"Q{i}" if i else start_label) for i in range(0, len(values),
+                                                           max(1, len(values) // 8))]
+    parts = []
+    if crisis_quarters:
+        x0, x1 = f.x(0), f.x(min(crisis_quarters, len(values) - 1))
+        parts.append(f'<rect x="{x0:.1f}" y="{f.pad_top}" width="{x1 - x0:.1f}" '
+                     f'height="{f.plot_h:.1f}" fill="var(--rp-crimson-tint)"/>'
+                     f'<text class="viz-tick" x="{x0 + 6:.1f}" y="{f.pad_top + 12}">'
+                     f'crisis</text>')
+    parts.append(_axes_labelled(f, xt, ticks_y))
+    parts.append(f'<line class="viz-target" x1="{f.pad_left}" x2="{f.width - f.pad_right}" '
+                 f'y1="{f.y(values[0]):.1f}" y2="{f.y(values[0]):.1f}"/>')
+    parts.append(f'<path d="{_path([(f.x(i), f.y(v)) for i, v in zip(xs, values)])}" '
+                 f'class="viz-line" stroke="{SERIES[0]}"/>')
+    tips = [f"{'Start' if i == 0 else f'Quarter {i}'}\nValue {_fmt_compact(v)}\n"
+            f"{v / values[0] - 1:+.1%} vs start" for i, v in enumerate(values)]
+    parts.append('<line class="viz-hover" x1="0" x2="0" '
+                 f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
+    parts.append(_hover(f, xs, tips))
+    return '<div class="viz-wrap">' + _svg(f, "".join(parts), title, desc) + '</div>'
