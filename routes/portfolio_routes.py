@@ -1,9 +1,8 @@
-"""Portfolios: accounts, holdings, prices, allocation, risk checks, projections.
+"""Portfolios: selections of accounts, and of other portfolios.
 
     /portfolios                               list and create
     /portfolios/{pid}                         net worth, accounts, allocation, history
-    /portfolios/{pid}/accounts/dialog         add or edit an account (a dialog)
-    /portfolios/{pid}/accounts/{aid}          an investment account: its positions
+    /portfolios/{pid}/members                 choose its accounts and sub-portfolios
     /portfolios/{pid}/project                 Monte Carlo projection of investable assets
     /portfolios/{pid}/stress                  historical crisis replays on the current mix
     /securities/{symbol}                      one security: a year of prices, statistics
@@ -11,8 +10,10 @@
     /api/tickers?q=                           symbol autocomplete
     /api/portfolios/{pid}                     valuation as JSON
 
-A portfolio is a collection of accounts (portfolio/account_types.py):
-investments hold positions, cash and property carry a value, debts pay down.
+Accounts are the workspace's (routes/account_routes.py); a portfolio holds
+references to some of them, and may include other portfolios, whose accounts it
+then includes too - each account counted once. Reading a portfolio reads its
+accounts as they are now, so it is always current.
 Everything is scoped to the browser's workspace; another workspace's portfolio
 is a 404, never a 403, so ids reveal nothing.
 
@@ -31,7 +32,6 @@ from portfolio import account_types as at
 from portfolio import yahoo
 from portfolio.assets import CASH_SYMBOL, CLASS_OPTIONS, CLASSES
 from portfolio.checks import rebalance, run_checks
-from portfolio.importer import parse as parse_holdings
 from portfolio.prices import collect_in_background
 from portfolio.projection import (METHODS, REBALANCE, RETURN_SOURCES, CashFlow,
                                   Settings, assets_from_db, replay, simulate)
@@ -58,42 +58,6 @@ def _f(form, key, default=None):
         return default
 
 
-def _q(name, question, hint="", widget=None, required=False, **kw):
-    return dict(name=name, question=question, hint=hint, widget=widget, required=required, **kw)
-
-
-def _account_steps(info: dict, row: dict, editing: bool) -> list[dict]:
-    """The questions for one account, a step at a time (see plan/_dialog_macros.html)."""
-    kind = info["kind"]
-    same_kind = [(t["key"], t["label"]) for t in at.of_kind(kind)]
-    first = [_q("name", "What do you call it?", "As your statements do - 'Fidelity "
-                "brokerage', 'Chase savings'.", "text", True),
-             _q("owner_person", "Whose is it?", "", "radio",
-                options=[(str(k), label) for k, label in at.OWNERS]),
-             _q("institution", "Where is it held?" if kind != "debt" else "Who is the lender?",
-                "Optional.", "text")]
-    if editing:
-        first.insert(1, _q("type", "What kind of account is it?", "", "select",
-                           options=same_kind))
-    if kind == "investments":
-        return [dict(title="The account", fields=first)]
-    if kind in ("cash", "property"):
-        return [dict(title="The account", fields=first),
-                dict(title="Its value", fields=[
-                    _q("value", "What is it worth today?" if kind == "property"
-                       else "What is the balance today?",
-                       "A fair estimate is fine; update it now and then." if kind == "property"
-                       else "Update it now and then; RetPlan remembers when.", "money", True)])]
-    return [dict(title="The loan", fields=first),
-            dict(title="What you owe", fields=[
-                _q("value", "How much is owed today?", "", "money", True),
-                _q("rate", "At what interest rate?", "The yearly rate.", "pct", True),
-                _q("years", "How many years are left?", "For a credit card, how long it "
-                   "would take to clear.", "number", True),
-                _q("payment", "What do you pay each month?",
-                   "Optional - worked out from the rate and years if left blank.", "money")])]
-
-
 class PortfolioRoutes:
     def __init__(self, app: FastAPI, store):
         self.app = app
@@ -118,22 +82,14 @@ class PortfolioRoutes:
             name="portfolio_duplicate", **r)
         add("/portfolios/{pid}/record", self.record, methods=["POST"],
             name="portfolio_record", **r)
-        add("/portfolios/{pid}/accounts/dialog", self.account_dialog, methods=["GET"],
-            name="account_dialog", **r)
-        add("/portfolios/{pid}/accounts/save", self.account_save, methods=["POST"],
-            name="account_save", **r)
-        add("/portfolios/{pid}/accounts/{aid}", self.account_view, methods=["GET"],
-            name="account_view", **r)
-        add("/portfolios/{pid}/accounts/{aid}/delete", self.account_delete,
-            methods=["POST"], name="account_delete", **r)
-        add("/portfolios/{pid}/accounts/{aid}/holdings", self.add_holding,
-            methods=["POST"], name="holding_add", **r)
-        add("/portfolios/{pid}/accounts/{aid}/import", self.import_holdings,
-            methods=["POST"], name="holding_import", **r)
-        add("/portfolios/{pid}/accounts/{aid}/holdings/save", self.save_holdings,
-            methods=["POST"], name="holdings_save", **r)
-        add("/portfolios/{pid}/holdings/{hid}/delete", self.delete_holding,
-            methods=["POST"], name="holding_delete", **r)
+        add("/portfolios/{pid}/members", self.members, methods=["GET"],
+            name="portfolio_members", **r)
+        add("/portfolios/{pid}/members", self.save_members, methods=["POST"],
+            name="portfolio_members_save", **r)
+        add("/portfolios/{pid}/accounts/{aid}/remove", self.remove_account, methods=["POST"],
+            name="portfolio_remove_account", **r)
+        add("/portfolios/{pid}/parts/{cid}/remove", self.remove_part, methods=["POST"],
+            name="portfolio_remove_part", **r)
         add("/portfolios/{pid}/refresh", self.refresh, methods=["POST"],
             name="portfolio_refresh", **r)
         add("/portfolios/{pid}/targets", self.save_targets, methods=["POST"],
@@ -159,9 +115,19 @@ class PortfolioRoutes:
         sid = session_id(request)
         return sid, self.repo.get(sid, int(pid))
 
-    def _missing(self, request, what="portfolio"):
+    def _missing(self, request):
         return render(request, "error.html", status_code=404, code=404,
-                      message=f"That {what} does not exist in this workspace.")
+                      message="That portfolio does not exist in this workspace.")
+
+    def _choices(self, sid, pid=None):
+        """Every account, grouped by kind, and the portfolios that may be included
+        in ``pid`` (none that would make it contain itself)."""
+        accts = self.repo.accounts(sid)
+        groups = [(key, label, icon, [a for a in accts if at.get(a["type"])["kind"] == key])
+                  for key, label, icon, _ in at.KINDS]
+        parts = [p for p in self.repo.list(sid)
+                 if pid is None or self.repo.can_include(sid, pid, p["id"])]
+        return groups, parts
 
     # -- list / create -----------------------------------------------------
     async def index(self, request: Request):
@@ -169,14 +135,19 @@ class PortfolioRoutes:
         cards = []
         for p in self.repo.list(sid):
             v = self.repo.valuation(sid, p["id"])
-            cards.append(dict(p, val=v, by_class=v.by("asset_class")))
-        return render(request, "portfolio/index.html", cards=cards,
-                      total=sum(c["val"].net_worth for c in cards),
+            cards.append(dict(p, val=v, by_class=v.by("asset_class"),
+                              parts=self.repo.children(sid, p["id"])))
+        everything = self.repo.all_valuation(sid)
+        return render(request, "portfolio/index.html", cards=cards, everything=everything,
+                      n_accounts=len(everything.accounts),
                       scheduler=self.app.state.scheduler.status(),
                       last_run=self.repo.last_successful_run())
 
     async def new_form(self, request: Request):
-        return render(request, "portfolio/new.html", currencies=CURRENCIES)
+        sid = session_id(request)
+        groups, parts = self._choices(sid)
+        return render(request, "portfolio/new.html", currencies=CURRENCIES, groups=groups,
+                      parts=parts, home=self.repo.home_currency(sid))
 
     async def create(self, request: Request):
         sid = session_id(request)
@@ -184,13 +155,16 @@ class PortfolioRoutes:
         try:
             pid = self.repo.create(sid, form.get("name") or "My portfolio",
                                    form.get("currency") or "USD",
-                                   form.get("description") or "")
-        except Exception as exc:  # noqa: BLE001
-            flash_error_and_log(request, "Could not create the portfolio", exc)
+                                   form.get("description") or "",
+                                   accounts=[int(a) for a in form.getlist("accounts")
+                                             if str(a).isdigit()])
+            self.repo.set_children(sid, pid, [int(c) for c in form.getlist("parts")
+                                              if str(c).isdigit()])
+        except (NotFound, ValueError) as exc:
+            flash(request, f"Could not create the portfolio: {exc}", "error")
             return redirect_to(request, "portfolio_new")
-        return redirect_to(request, "portfolio_view", pid=pid, flash_message=
-                           "Portfolio created. Now add its accounts - investments, cash, "
-                           "property and debts.")
+        collect_in_background(self.app.state.collector, self.repo.missing_fx_pairs(), "fx")
+        return redirect_to(request, "portfolio_view", pid=pid, flash_message="Portfolio created.")
 
     # -- overview ----------------------------------------------------------
     async def view(self, request: Request, pid: int):
@@ -199,6 +173,12 @@ class PortfolioRoutes:
         except NotFound:
             return self._missing(request)
         v = self.repo.valuation(sid, pid)
+        direct = {a["id"] for a in self.repo.direct_accounts(sid, pid)}
+        parts = self.repo.children(sid, pid)
+        via = {}
+        for ch in parts:
+            for a in self.repo.accounts_in(sid, ch["id"]):
+                via.setdefault(a["id"], ch["name"])
         secs = {p.symbol: (self.repo.security(p.symbol) or {}) for p in v.positions
                 if not p.synthetic}
         hist = self.repo.value_history(sid, pid)
@@ -221,13 +201,15 @@ class PortfolioRoutes:
         rb = rebalance(v, targets, _f(request.query_params, "new_money", 0.0) or 0.0) \
             if targets else None
         return render(request, "portfolio/view.html", pf=pf, v=v, secs=secs,
+                      direct=direct, via=via, parts=parts,
+                      parents=self.repo.parents(sid, pid),
                       chart_hist=chart_hist, hist=hist, change_1y=change_1y,
                       chart_nw=chart_nw, nw_hist=nw_hist,
                       by_class=v.by("asset_class"), by_account=v.by("account"),
                       by_tax=v.by_tax(), by_owner=v.by_owner(),
                       checks=run_checks(v, secs), classes=CLASS_OPTIONS,
                       class_info=CLASSES, targets=targets, rb=rb, kinds=at.KINDS,
-                      types=at.TYPES, currencies=CURRENCIES,
+                      currencies=CURRENCIES,
                       running=self.app.state.collector.running,
                       linked_plans=self._linked_plans(sid, pid),
                       plan_name=self.store.get(sid).label,
@@ -253,7 +235,7 @@ class PortfolioRoutes:
                              description=form.get("description") or "")
         except NotFound:
             return self._missing(request)
-        collect_in_background(self.app.state.collector, self.repo.fx_pairs_needed(), "fx")
+        collect_in_background(self.app.state.collector, self.repo.missing_fx_pairs(), "fx")
         return redirect_to(request, "portfolio_view", pid=pid, flash_message="Saved.")
 
     async def delete(self, request: Request, pid: int):
@@ -263,8 +245,9 @@ class PortfolioRoutes:
             return self._missing(request)
         self.repo.delete(sid, pid)
         self.app.state.networth.forget(sid, pid)
-        return redirect_to(request, "portfolios",
-                           flash_message=f"Deleted '{pf['name']}'.")
+        return redirect_to(request, "portfolios", flash_message=
+                           f"Deleted '{pf['name']}'. Its accounts are untouched - they are "
+                           "under Accounts, and in any other portfolio that has them.")
 
     async def duplicate(self, request: Request, pid: int):
         try:
@@ -272,8 +255,9 @@ class PortfolioRoutes:
         except NotFound:
             return self._missing(request)
         new = self.repo.duplicate(sid, pid)
-        return redirect_to(request, "portfolio_view", pid=new,
-                           flash_message="Copied - try a different mix without touching the original.")
+        return redirect_to(request, "portfolio_view", pid=new, flash_message=
+                           "Copied: a new portfolio of the same accounts. Change its selection "
+                           "freely - the accounts themselves are shared.")
 
     async def record(self, request: Request, pid: int):
         """Record today's net worth now, rather than waiting for the next price run."""
@@ -283,6 +267,7 @@ class PortfolioRoutes:
         except NotFound:
             return self._missing(request)
         ok = record_one(self.repo, self.app.state.networth, sid, pid)
+        record_one(self.repo, self.app.state.networth, sid)
         if ok:
             flash(request, "Today's net worth recorded.", "success")
         else:
@@ -290,258 +275,61 @@ class PortfolioRoutes:
                            "portfolio is empty.", "warning")
         return redirect_to(request, "portfolio_view", pid=pid)
 
-    # -- accounts ----------------------------------------------------------
-    async def account_dialog(self, request: Request, pid: int):
-        """Add or edit an account: first the type, then a few questions."""
+    # -- what it is made of ------------------------------------------------
+    async def members(self, request: Request, pid: int):
         try:
             sid, pf = self._get(request, pid)
         except NotFound:
             return self._missing(request)
-        q = request.query_params
-        partial = q.get("partial") == "1"
-        acct, typ = None, q.get("type") or ""
-        if q.get("aid"):
-            try:
-                acct = self.repo.account(sid, pid, int(q["aid"]))
-                typ = acct["type"]
-            except (NotFound, ValueError):
-                return self._missing(request, "account")
-        ctx = dict(pf=pf, partial=partial, acct=acct, kinds=at.KINDS, types=at.TYPES,
-                   kind=q.get("kind") or "", owners=at.OWNERS, sections=[],
-                   heading=(acct["name"] if acct else ""))
-        if typ not in at.BY_KEY:
-            return render(request, "portfolio/account_dialog.html", mode="types", **ctx)
-        info = at.BY_KEY[typ]
-        row = dict(acct) if acct else dict(
-            name=info["label"], type=typ, owner_person=0, institution="", value=0.0,
-            rate=at.DEBT_DEFAULTS.get(typ, (None, None))[0], payment=None,
-            term_months=(at.DEBT_DEFAULTS[typ][1] * 12) if typ in at.DEBT_DEFAULTS else None,
-            notes="")
-        if row.get("term_months"):
-            row["years"] = round(row["term_months"] / 12, 1)
-        ctx["heading"] = acct["name"] if acct else f"A new {info['label'].lower()} account" \
-            if info["kind"] in ("investments", "cash") else info["label"]
-        return render(request, "portfolio/account_dialog.html", mode="steps", info=info,
-                      row=row, steps=_account_steps(info, row, bool(acct)), **ctx)
+        groups, parts = self._choices(sid, pid)
+        return render(request, "portfolio/members.html", pf=pf, groups=groups, parts=parts,
+                      partial=request.query_params.get("partial") == "1",
+                      direct={a["id"] for a in self.repo.direct_accounts(sid, pid)},
+                      children={c["id"] for c in self.repo.children(sid, pid)},
+                      heading=pf["name"])
 
-    async def account_save(self, request: Request, pid: int):
+    async def save_members(self, request: Request, pid: int):
         form = await request.form()
-        try:
-            sid, _ = self._get(request, pid)
-        except NotFound:
-            return self._missing(request)
-        typ = form.get("type") or ""
-        if typ not in at.BY_KEY:
-            flash(request, "Choose what kind of account it is.", "error")
-            return redirect_to(request, "portfolio_view", pid=pid)
-        info = at.BY_KEY[typ]
-        fields = dict(name=(form.get("name") or "").strip() or info["label"], type=typ,
-                      owner_person=int(_f(form, "owner_person", 0) or 0),
-                      institution=(form.get("institution") or "").strip(),
-                      notes=(form.get("notes") or "").strip())
-        if info["kind"] != "investments":
-            value = _f(form, "value", 0.0) or 0.0
-            if value < 0:
-                flash(request, "A value can't be negative - a debt is entered as what you owe.",
-                      "error")
-                return redirect_to(request, "portfolio_view", pid=pid)
-            fields["value"] = value
-        if info["kind"] == "debt":
-            rate = _f(form, "rate")
-            years = _f(form, "years")
-            payment = _f(form, "payment")
-            fields["rate"] = rate / 100 if rate is not None else None
-            fields["term_months"] = int(round(years * 12)) if years else None
-            fields["payment"] = payment if payment else (
-                at.monthly_payment(fields["value"], fields["rate"] or 0.0, years)
-                if years else None)
-        aid = _f(form, "aid")
-        try:
-            if aid:
-                acct = self.repo.account(sid, pid, int(aid))
-                if at.get(acct["type"])["kind"] == "investments" and info["kind"] != "investments" \
-                        and self.repo.holdings(sid, pid, int(aid)):
-                    flash(request, "That account holds positions, so it stays an investment "
-                                   "account. Move or remove them first.", "error")
-                    return redirect_to(request, "portfolio_view", pid=pid)
-                if info["kind"] != "investments":
-                    fields["as_of"] = date.today().isoformat()
-                self.repo.update_account(sid, pid, int(aid), **fields)
-                msg, target = f"Saved '{fields['name']}'.", int(aid)
-            else:
-                target = self.repo.create_account(
-                    sid, pid, fields["name"], typ, fields["owner_person"],
-                    fields["institution"], fields.get("value", 0.0), None,
-                    fields.get("rate"), fields.get("payment"), fields.get("term_months"),
-                    fields["notes"])
-                msg = f"Added '{fields['name']}'."
-        except (NotFound, ValueError) as exc:
-            flash(request, f"Could not save the account: {exc}", "error")
-            return redirect_to(request, "portfolio_view", pid=pid)
-        if info["kind"] == "investments" and not aid:
-            return redirect_to(request, "account_view", pid=pid, aid=target, flash_message=
-                               msg + " Now add what it holds: upload your broker's file, "
-                                     "paste the positions, or add them one by one.")
-        return redirect_to(request, "portfolio_view", pid=pid, flash_message=msg)
-
-    async def account_view(self, request: Request, pid: int, aid: int):
         try:
             sid, pf = self._get(request, pid)
-            acct = self.repo.account(sid, pid, aid)
-        except NotFound:
-            return self._missing(request, "account")
-        info = at.get(acct["type"])
-        if info["kind"] != "investments":
-            return redirect_to(request, "portfolio_view", pid=pid)
-        v = self.repo.valuation(sid, pid, aid)
-        return render(request, "portfolio/account.html", pf=pf, acct=acct, info=info,
-                      a=v.accounts[0], v=v, classes=CLASS_OPTIONS,
-                      others=[x for x in self.repo.accounts(sid, pid)
-                              if at.get(x["type"])["kind"] == "investments" and x["id"] != aid],
-                      owner_label=at.OWNER_LABEL.get(acct["owner_person"], "You"),
-                      drafts=self.repo.drafts(sid))
-
-    async def account_delete(self, request: Request, pid: int, aid: int):
-        try:
-            sid, _ = self._get(request, pid)
-            acct = self.repo.account(sid, pid, aid)
-        except NotFound:
-            return self._missing(request, "account")
-        self.repo.delete_account(sid, pid, aid)
-        return redirect_to(request, "portfolio_view", pid=pid,
-                           flash_message=f"Removed '{acct['name']}'.")
-
-    # -- holdings ----------------------------------------------------------
-    def _import_rows(self, sid, pid, aid, text):
-        added, bad = [], []
-        for row in parse_holdings(text):
-            if row.error:
-                bad.append(f"line {row.line}: {row.error}")
-                continue
-            try:
-                self.repo.add_holding(sid, pid, aid, row.symbol, row.quantity,
-                                      row.cost_basis, row.asset_class)
-                added.append(normalise_symbol(row.symbol))
-            except Exception as exc:  # noqa: BLE001
-                bad.append(f"line {row.line}: {exc}")
-        fetch = [s for s in added if s != CASH_SYMBOL]
-        if fetch:
-            collect_in_background(self.app.state.collector, fetch)
-        return added, bad
-
-    async def add_holding(self, request: Request, pid: int, aid: int):
-        form = await request.form()
-        try:
-            sid, _ = self._get(request, pid)
-            self.repo.account(sid, pid, aid)
-        except NotFound:
-            return self._missing(request, "account")
-        back = dict(pid=pid, aid=aid)
-        sym = normalise_symbol(form.get("symbol") or "")
-        qty = _f(form, "quantity")
-        if not sym or qty is None:
-            flash(request, "A holding needs a symbol and a quantity (for cash, the amount).",
-                  "error")
-            return redirect_to(request, "account_view", **back)
-        cost = _f(form, "cost_basis")
-        if cost is not None and form.get("cost_mode") == "per_unit":
-            cost = cost * qty
-        try:
-            self.repo.add_holding(sid, pid, aid, sym, qty, cost, form.get("asset_class") or "")
-        except Exception as exc:  # noqa: BLE001
-            flash_error_and_log(request, "Could not add the holding", exc)
-            return redirect_to(request, "account_view", **back)
-        if sym != CASH_SYMBOL:
-            sec = self.repo.security(sym) or {}
-            if not sec.get("last_price"):
-                # price it now, synchronously, so the page shows a value at once
-                try:
-                    self.app.state.collector.collect([sym], reason="new-symbol")
-                except Exception:  # noqa: BLE001
-                    logger.exception("first price for %s failed", sym)
-                sec = self.repo.security(sym) or {}
-                if sec.get("fetch_error"):
-                    flash(request, f"Added {sym}, but it could not be priced: "
-                                   f"{sec['fetch_error']}. Check the symbol.", "warning")
-                    return redirect_to(request, "account_view", **back)
-        return redirect_to(request, "account_view", flash_message=f"Added {sym}.", **back)
-
-    async def import_holdings(self, request: Request, pid: int, aid: int):
-        form = await request.form()
-        try:
-            sid, _ = self._get(request, pid)
-            self.repo.account(sid, pid, aid)
-        except NotFound:
-            return self._missing(request, "account")
-        text = form.get("text") or ""
-        upload = form.get("file")
-        if upload is not None and hasattr(upload, "read"):
-            raw = await upload.read()
-            if raw:
-                text = raw.decode("utf-8-sig", errors="replace")
-        if form.get("replace"):
-            for h in self.repo.holdings(sid, pid, aid):
-                self.repo.delete_holding(sid, pid, h["id"])
-        added, bad = self._import_rows(sid, pid, aid, text)
-        if bad:
-            flash(request, f"{len(bad)} line(s) skipped: " + "; ".join(bad[:6]), "warning")
-        if added:
-            flash(request, f"Imported {len(added)} holding(s). Prices are being fetched "
-                           "in the background - reload in a few seconds.", "success")
-        elif not bad:
-            flash(request, "Nothing to import.", "warning")
-        return redirect_to(request, "account_view", pid=pid, aid=aid)
-
-    async def save_holdings(self, request: Request, pid: int, aid: int):
-        """The holdings table is one form: edit quantities, costs, classes; move to
-        another account."""
-        form = await request.form()
-        try:
-            sid, _ = self._get(request, pid)
-            self.repo.account(sid, pid, aid)
-        except NotFound:
-            return self._missing(request, "account")
-        moved = 0
-        for h in self.repo.holdings(sid, pid, aid):
-            k = f"h-{h['id']}-"
-            if form.get(k + "delete"):
-                self.repo.delete_holding(sid, pid, h["id"])
-                continue
-            if (k + "quantity") not in form:
-                continue
-            fields = dict(quantity=_f(form, k + "quantity", h["quantity"]),
-                          cost_basis=_f(form, k + "cost_basis"),
-                          asset_class=form.get(k + "asset_class") or "")
-            if fields["asset_class"] == "__inherit__":
-                fields["asset_class"] = ""
-            move = _f(form, k + "account_id")
-            if move and int(move) != aid:
-                fields["account_id"] = int(move)
-                moved += 1
-            try:
-                self.repo.update_holding(sid, pid, h["id"], **fields)
-            except (NotFound, ValueError) as exc:
-                flash(request, f"{h['symbol']}: {exc}", "error")
-        return redirect_to(request, "account_view", pid=pid, aid=aid, flash_message=
-                           "Holdings saved." + (f" {moved} moved to another account."
-                                                if moved else ""))
-
-    async def delete_holding(self, request: Request, pid: int, hid: int):
-        try:
-            sid, _ = self._get(request, pid)
-            h = self.repo.holding(sid, pid, hid)
+            self.repo.set_members(sid, pid, [int(a) for a in form.getlist("accounts")
+                                             if str(a).isdigit()])
+            self.repo.set_children(sid, pid, [int(c) for c in form.getlist("parts")
+                                              if str(c).isdigit()])
         except NotFound:
             return self._missing(request)
-        self.repo.delete_holding(sid, pid, hid)
-        return redirect_to(request, "account_view", pid=pid, aid=h["account_id"],
-                           flash_message="Removed.")
+        except ValueError as exc:
+            flash(request, str(exc).capitalize() + ".", "error")
+            return redirect_to(request, "portfolio_view", pid=pid)
+        collect_in_background(self.app.state.collector, self.repo.missing_fx_pairs(), "fx")
+        n = len(self.repo.accounts_in(sid, pid))
+        return redirect_to(request, "portfolio_view", pid=pid, flash_message=
+                           f"'{pf['name']}' is now {n} account{'' if n == 1 else 's'}.")
+
+    async def remove_account(self, request: Request, pid: int, aid: int):
+        try:
+            sid, pf = self._get(request, pid)
+        except NotFound:
+            return self._missing(request)
+        self.repo.remove_from_portfolio(sid, pid, aid)
+        return redirect_to(request, "portfolio_view", pid=pid, flash_message=
+                           f"Taken out of '{pf['name']}'. The account itself is untouched.")
+
+    async def remove_part(self, request: Request, pid: int, cid: int):
+        try:
+            sid, pf = self._get(request, pid)
+        except NotFound:
+            return self._missing(request)
+        self.repo.remove_child(sid, pid, cid)
+        return redirect_to(request, "portfolio_view", pid=pid, flash_message=
+                           f"No longer part of '{pf['name']}'.")
 
     async def refresh(self, request: Request, pid: int):
         try:
             sid, _ = self._get(request, pid)
         except NotFound:
             return self._missing(request)
-        syms = sorted({h["symbol"] for h in self.repo.holdings(sid, pid)
+        syms = sorted({h["symbol"] for h in self.repo.holdings_in(sid, pid)
                        if h["symbol"] != CASH_SYMBOL})
         syms = sorted(set(syms) | set(self.repo.fx_pairs_needed()))
         if not syms:
@@ -556,9 +344,6 @@ class PortfolioRoutes:
             collect_in_background(self.app.state.collector, syms, "manual")
             flash(request, f"Refreshing {len(syms)} symbols in the background; reload in "
                            "a moment.", "info")
-        back = request.query_params.get("aid")
-        if back and back.isdigit():
-            return redirect_to(request, "account_view", pid=pid, aid=int(back))
         return redirect_to(request, "portfolio_view", pid=pid)
 
     async def save_targets(self, request: Request, pid: int):
@@ -715,8 +500,7 @@ class PortfolioRoutes:
         """This workspace's symbols (and the FX pairs they need) - prices are
         shared, but what other workspaces hold is theirs."""
         sid = session_id(request)
-        mine = {h["symbol"] for p in self.repo.list(sid)
-                for h in self.repo.holdings(sid, p["id"])}
+        mine = {h["symbol"] for h in self.repo.all_holdings(sid)}
         secs = [s for s in self.repo.securities()
                 if s["symbol"] in mine or s["symbol"].endswith("=X")]
         return render(request, "portfolio/prices.html", secs=secs,

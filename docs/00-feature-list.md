@@ -44,7 +44,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 |---|---|---|
 | F-WIZ-1 | Six steps — you, income, savings, spending, assumptions, review — kept as a draft in the session | `/start`, `web/wizard.py` |
 | F-WIZ-2 | Optional partner, salaries, pensions, other income, accounts by type (401(k), Roth 401(k), IRA, Roth IRA, HSA, brokerage, savings, pension pot, tax-free savings) with balances and saving, employer match, spending and retirement spending %, mortgage | `wizard.DEFAULTS` |
-| F-WIZ-5 | Savings from a portfolio: its investment and cash accounts listed, asking only what goes into each a year (workplace plans as % of pay plus match, others as an amount; 529s skipped); no mortgage question, debts come from the portfolio; the plan built is linked to it | `/start`, `web/plan_link.py` |
+| F-WIZ-5 | Savings from a portfolio: the portfolio's investment and cash accounts listed, asking only what goes into each a year (workplace plans as % of pay plus match, others as an amount; 529s skipped); no mortgage question, debts come from the portfolio; the plan built is linked to it | `/start`, `web/plan_link.py` |
 | F-WIZ-3 | Risk choice (conservative / balanced / growth) and tax choice (example bands / flat / none) | `wizard.RISK`, `wizard.TAX` |
 | F-WIZ-4 | Everything not asked is borrowed from the sample household; the result replaces the active plan or becomes a new scenario | `wizard.build_plan` |
 
@@ -91,7 +91,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-DEC-7 | Spending check: success at spending from 30% to 160% of today's, guardrails around the target, a raise / hold / trim verdict with the amount; savings can be restated after a market move | `levers.spending_check`, `/tools/spending` |
 | F-DEC-8 | Draw order: every order of the plan's wrappers screened at fixed returns, the best few simulated, compared on success, lifetime tax and after-tax wealth; applied to the plan or a scenario | `levers.draw_orders`, `/tools/draw-order` |
 | F-DEC-9 | Health and care: bridge health cover, later-life health costs above inflation, and long-term care as a stochastic risk (happens per future with its probability, random start age); tested before it is added | `retplan.plan.CareRisk`, `Projection._care`, `/tools/health` |
-| F-DEC-10 | Net worth history: each portfolio's assets, debts and a breakdown by kind (investments, cash, property, debt) recorded after every price run, one row a day, kept for good; "Record today's net worth" on demand; per portfolio, today's split and a history chart | `portfolio/networth.py`, `/networth` |
+| F-DEC-10 | Net worth history: assets, debts and a breakdown by kind (investments, cash, property, debt) recorded after every price run for every account together (each once) and for each portfolio, one row a day, kept for good; "Record today's net worth" on a portfolio records both; "Every account" first, then each portfolio, with today's split and a history chart | `portfolio/networth.py`, `/networth` |
 
 ## 7. Reports and audit — `F-RPT-*`
 
@@ -104,49 +104,55 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-RPT-5 | Method page describing the model | `/method` |
 | F-RPT-6 | One-page plan report to print or save as PDF | `/report/plan` |
 
-## 8. Portfolios — `F-PF-*`
+## 8. Accounts and portfolios — `F-AC-*`, `F-PF-*`
 
 | ID | Feature | Where |
 |---|---|---|
-| F-PF-1 | Any number of portfolios per workspace, all equal, each with a base currency; create, edit, duplicate, delete | `/portfolios` |
-| F-PF-1a | A portfolio is a collection of accounts of four kinds: investments (Brokerage, 401(k) / 403(b), Roth 401(k), Traditional IRA, Roth IRA, HSA, 529 plan, Pension pot, Tax-free savings), cash (Checking, Savings, CD / fixed term, Money market), property (Home, Other real estate, Vehicle, Other asset) and debts (Mortgage, Home equity loan, Car loan, Student loan, Credit card, Other loan); each with a name, owner (you, partner, joint), institution and a type that sets its tax treatment | `portfolio/account_types.py`, `accounts` table |
-| F-PF-1b | Add or update an account in a dialog: type from tiles grouped by kind, then a few questions a step at a time; cash, property and debt values show their age and are flagged after 90 days | `/portfolios/{pid}/accounts/dialog` |
+| F-AC-1 | Accounts belong to the workspace, not to a portfolio: the Accounts page lists every account by kind (Investments, Cash, Property, Debts) with net worth over all accounts (each once), investable, property, debts, a net-worth-over-time chart, and on each card the portfolios it is in (or "in no portfolio") | `/accounts`, `routes/account_routes.py` |
+| F-AC-2 | Add or update an account in a dialog: type from tiles grouped by kind, then a few questions a step at a time (name, owner, where it is held, currency; value for cash and property; owed, rate, years left and optional payment for debts), and an optional last step choosing the portfolios it is part of | `/accounts/dialog`, `/accounts/save` |
+| F-AC-3 | Each account has its own currency (default: the one most accounts use), converted daily into each portfolio's currency | `accounts.currency`, `portfolio/fx.py` |
+| F-AC-4 | An account page: holdings for investment accounts; value and its age (flagged after 90 days) for cash and property; owed today, rate, payment and time to pay off for debts; "In portfolios" chips (marked "through another" when included via a sub-portfolio) and checkboxes for the portfolios it is directly in; duplicate with holdings (the copy is in no portfolio); delete (removes it from every portfolio) | `/accounts/{aid}`, `/accounts/{aid}/portfolios`, `/accounts/{aid}/duplicate`, `/accounts/{aid}/delete` |
+| F-PF-1 | Any number of portfolios per workspace, all equal, each with a reporting currency; create (name, currency, notes, accounts and portfolios to include), edit, duplicate (a new portfolio of the same selection; accounts are shared, not copied), delete (accounts are never deleted) | `/portfolios` |
+| F-PF-1d | A portfolio is a selection of accounts (many-to-many: one account can be in any number of portfolios) and/or other portfolios; one made of others includes all their accounts, recursively, now and later, each counted once; a portfolio cannot contain itself, directly or through another | `portfolio_accounts`, `portfolio_children` tables |
+| F-PF-1e | On a portfolio's page: "Choose accounts" (the same checkboxes), "New account" (created and included), cards marked "through <part>" when they come from a sub-portfolio, "Take out of <portfolio>" (the account stays) or "Delete account", a "Made of … / Part of …" line with removable parts | `/portfolios/{pid}/members`, `/portfolios/{pid}/accounts/{aid}/remove`, `/portfolios/{pid}/parts/{cid}/remove` |
+| F-PF-1a | Accounts of four kinds: investments (Brokerage, 401(k) / 403(b), Roth 401(k), Traditional IRA, Roth IRA, HSA, 529 plan, Pension pot, Tax-free savings), cash (Checking, Savings, CD / fixed term, Money market), property (Home, Other real estate, Vehicle, Other asset) and debts (Mortgage, Home equity loan, Car loan, Student loan, Credit card, Other loan); each with a name, owner (you, partner, joint), institution, currency and a type that sets its tax treatment | `portfolio/account_types.py`, `accounts` table |
 | F-PF-1c | Debts pay down month by month from the date the balance was set, with the level payment from rate and term when no payment is given | `portfolio/account_types.py` |
 | F-PF-2 | Holdings by symbol in an investment account, with quantity, total cost basis, asset class and notes; the symbol `CASH` is a cash balance priced at 1 | `holdings` table |
 | F-PF-3 | Ticker autocomplete from Yahoo search | `/api/tickers` |
-| F-PF-4 | Paste or CSV import of holdings into one account, with or without a header row | `portfolio/importer.py`, `/portfolios/{pid}/accounts/{aid}/import` |
-| F-PF-5 | Bulk edit of an account's holdings on one form, including moving a holding to another investment account of the portfolio | `/portfolios/{pid}/accounts/{aid}/holdings/save` |
-| F-PF-6 | Valuation in the base currency: net worth, investable assets (investments plus cash accounts) with day change, property, debts; gain and gain % where a cost is known | `PortfolioRepo.valuation` |
+| F-PF-4 | Add one holding, or paste lines (symbol, quantity[, cost basis][, asset class]) into one account, with or without a header row | `portfolio/importer.py`, `/accounts/{aid}/holdings`, `/accounts/{aid}/import` |
+| F-PF-5 | Bulk edit of an account's holdings on one form, including moving a holding to another investment account | `/accounts/{aid}/holdings/save`, `/holdings/{hid}/delete` |
+| F-PF-6 | Valuation of a portfolio in its currency, over every account it includes: net worth, investable assets (investments plus cash accounts) with day change, property, debts; gain and gain % where a cost is known | `PortfolioRepo.valuation` |
 | F-PF-7 | Currency conversion through Yahoo FX pairs, including minor-unit quotes (GBp, ZAc, ILA, KWF) | `portfolio/fx.py` |
 | F-PF-8 | Allocation of investable assets by asset class, tax treatment, account and owner | `Valuation.by` |
 | F-PF-9 | A year of value: today's investable assets valued on each stored day (a back-cast); net worth over time from the daily records | `PortfolioRepo.value_history` |
 | F-PF-10 | Checks ("X-ray"): unpriced holdings, missing FX, stale prices, single-company concentration, large cash, crypto share, home bias, share/other split, missing cost basis, unclassified holdings | `portfolio/checks.py` |
 | F-PF-11 | Target mix by asset class, drift against it, rebalancing trades including new money, and a new-money-only plan that never sells | `checks.rebalance` |
-| F-PF-12 | Live link from a plan to a portfolio: every time the plan is read, each investment, cash and property account becomes a plan account (value, owner, cost basis, mix, a wrapper from its type) and each debt a loan; what the plan adds (contributions, match, order, glide path, rebalancing, paused) is kept; link, unlink (freezes today's figures), "Start a plan from it" | `web/plan_link.py`, `/plan/link`, `/plan/unlink` |
+| F-PF-12a | Live link: portfolios hold references, so a change to an account (holdings, prices, values, debts) is seen at once by every portfolio including it, directly or through a sub-portfolio, and by every plan linked to such a portfolio | `PortfolioRepo`, `web/plan_link.py` |
+| F-PF-12 | Live link from a plan to a portfolio: every time the plan is read, each of the portfolio's investment, cash and property accounts becomes a plan account (value, owner, cost basis, mix, a wrapper from its type) and each debt a loan; accounts leaving or joining the portfolio leave or join the plan; what the plan adds (contributions, match, order, glide path, rebalancing, paused) is kept; simulation results are dropped when the portfolio's accounts change; link, unlink (freezes today's figures), "Start a plan from it" | `web/plan_link.py`, `/plan/link`, `/plan/unlink` |
 | F-PF-13 | Nine asset classes with long-run return and volatility assumptions; a class guessed from Yahoo's instrument type and name, editable per holding | `portfolio/assets.py` |
 
 ## 9. Prices — `F-PX-*`
 
 | ID | Feature | Where |
 |---|---|---|
-| F-PX-1 | Daily closes for every held symbol and every FX pair a portfolio needs, from Yahoo's chart endpoint | `portfolio/prices.PriceCollector` |
+| F-PX-1 | Daily closes for every held symbol and every FX pair an account or portfolio needs (collected automatically), from Yahoo's chart endpoint | `portfolio/prices.PriceCollector` |
 | F-PX-2 | A new symbol gets a year of history; a known one gets only the gap since its last close | `prices._range_for` |
 | F-PX-3 | Background scheduler: daily at a configured local time, and at start-up when the last run is more than 20 hours old | `PriceScheduler` |
 | F-PX-4 | Closes older than the retention window (365 days by default) deleted after every run | `PortfolioRepo.prune` |
 | F-PX-5 | Long-run return and volatility from up to 20 years of monthly bars, refreshed every 30 days, stored as three numbers | `yahoo.long_run_stats` |
-| F-PX-6 | Refresh on demand per portfolio or for everything; a status page with the schedule, tracked securities and run log | `/prices` |
+| F-PX-6 | Refresh on demand per account, per portfolio or for everything; a status page with the schedule, tracked securities and run log | `/prices` |
 | F-PX-7 | One collection run from the command line for cron | `tools/fetch_prices.py` |
 
 ## 10. Portfolio builder — `F-BLD-*`
 
 | ID | Feature | Where |
 |---|---|---|
-| F-BLD-1 | Upload a broker or bank export (.xlsx, .xlsm, .csv or text, up to 10 MB); every sheet of an .xlsx is read; either into one account (every line goes there, optionally replacing its holdings) or as a multi-account file | `/portfolios/build`, `portfolio/builder.py` |
+| F-BLD-1 | Upload a broker or bank export (.xlsx, .xlsm, .csv or text, up to 10 MB); every sheet of an .xlsx is read; either from an account page into that account (every line goes there, optionally replacing its holdings) or as "Import a file of several accounts" (from the nav, the Accounts page or a portfolio's menu) | `/portfolios/build` (`?aid=` or `?pid=`), `portfolio/builder.py` |
 | F-BLD-2 | Finds the header row below any preamble and maps columns to roles by vocabulary: symbol, identifier (ISIN / CUSIP / SEDOL), name, quantity, price, value, cost (total or per unit), account, class, currency | `builder.find_header` |
 | F-BLD-3 | Skips totals, blank lines and headings; turns cash and money-market lines into `CASH`; derives quantity from value ÷ price | `builder.extract` |
 | F-BLD-4 | Identifies each security by cleaned symbol, then identifier lookup, then name search with similarity scoring; records a confidence and the alternatives | `builder.resolve` |
 | F-BLD-5 | Compares the file's stated value with price × quantity and flags large gaps (share class, pence/pound, wrong match); merges duplicates | `builder._check_value`, `builder.merge` |
-| F-BLD-6 | Review screen: every proposed holding editable; for a multi-account file each account name with a guessed type to confirm, positions without an account going to "Brokerage"; confirm into a new portfolio or an existing one (joining accounts of the same name); nothing saved before confirmation | `/portfolios/build/{did}` |
+| F-BLD-6 | Review screen: every proposed holding editable; for a multi-account file each account name with a guessed type to confirm, positions without an account going to "Brokerage"; one account per name found, joining an existing account of the same name; the destination is a new portfolio of them, an existing portfolio they are added to, or just the accounts; nothing saved before confirmation | `/portfolios/build/{did}` |
 | F-BLD-7 | Drafts kept between upload and confirmation, deleted after a week | `import_drafts` table |
 
 ## 11. Securities and administration — `F-SEC-*`
@@ -156,14 +162,14 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-SEC-1 | Live lookup of any symbol: a year of prices and statistics straight from Yahoo, nothing stored | `/securities/lookup` |
 | F-SEC-2 | Security page: price chart, statistics, holders in this workspace; set the class on this workspace's holdings | `/securities/{symbol}` |
 | F-SEC-3 | Administrator: add, amend and delete securities; type in or delete prices; manually priced securities (`source = manual`) for private funds or property, never fetched | `routes/security_routes.py` |
-| F-SEC-4 | A security still held in any portfolio cannot be deleted | `PortfolioRepo.holders` |
+| F-SEC-4 | A security still held in any account cannot be deleted | `PortfolioRepo.holders` |
 | F-SEC-5 | One administrator account: sign in, sign out, change password (stored as a salted PBKDF2 hash); a warning while the shipped default password is in force; optional "this computer is administrator" | `web/admin.py`, `/admin/*` |
 
 ## 12. Portfolio projection — `F-PRJ-*`
 
 | ID | Feature | Where |
 |---|---|---|
-| F-PRJ-1 | Monte Carlo of the investable assets (every investment account's holdings plus cash accounts as cash; property and debts not projected) over 1–60 years and 200–50,000 trials on a quarterly clock; yearly or quarterly reporting | `portfolio/projection.py` |
+| F-PRJ-1 | Monte Carlo of a portfolio's investable assets (the holdings of every investment account it includes plus cash accounts as cash; property and debts not projected) over 1–60 years and 200–50,000 trials on a quarterly clock; yearly or quarterly reporting | `portfolio/projection.py` |
 | F-PRJ-2 | Three return models: correlated lognormal, fat-tailed Student-t (5 df), block bootstrap of stored daily returns | `projection.METHODS` |
 | F-PRJ-3 | Expected return from the class assumption, the security's long-run history, or a blend; volatility blended from one year of daily and up to 20 years of monthly data; per-holding overrides | `projection.estimate` |
 | F-PRJ-4 | Contributions and withdrawals by year range, indexed or not, with extra growth; a % withdrawal; a fee; rebalancing annual, quarterly or never; inflation; a goal in today's money | `projection.Settings` |
@@ -186,7 +192,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-UI-7 | Guides: two tutorials and two catalogues (configuration, HTTP API) in Markdown with a contents rail | `/help/guides`, `web/guides/` |
 | F-UI-8 | Case studies: three worked households, figures computed live, each openable as a scenario | `/help/case-studies`, `web/cases.py` |
 | F-UI-9 | Landing page with three drawn figures (futures, sequence risk, audit ledger) and an SVG chain; comparison page by product category | `landing.html`, `landing.js`, `/about/compare` |
-| F-UI-2 | Site search (`Ctrl-K`) over pages, help topics, scenarios, portfolios and holdings | `/search` |
+| F-UI-2 | Site search (`Ctrl-K`) over pages, help topics, scenarios, accounts, portfolios and holdings | `/search` |
 | F-UI-3 | Four themes (Crimson, Dark, Blue, Green) over one design, remembered per browser | `web/static/css/tokens.css` |
 | F-UI-4 | Mega-menu navigation, gradient page heroes, about page | `_nav.html`, `about.html` |
 | F-UI-5 | Server-rendered SVG charts with a hover layer and a table view | `web/charts.py` |

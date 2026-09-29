@@ -114,8 +114,7 @@ class SecurityRoutes:
     # -- helpers -------------------------------------------------------------
     def _mine(self, request) -> set[str]:
         sid = session_id(request)
-        return {h["symbol"] for p in self.repo.list(sid)
-                for h in self.repo.holdings(sid, p["id"])}
+        return {h["symbol"] for h in self.repo.all_holdings(sid)}
 
     def _deny(self, request, symbol=None):
         flash(request, "Only an administrator can change the securities list. "
@@ -197,10 +196,9 @@ class SecurityRoutes:
                                  y_fmt=lambda v: f"{v:,.2f}")
         sid = session_id(request)
         held = []
-        for p in self.repo.list(sid):
-            for h in self.repo.holdings(sid, p["id"]):
-                if h["symbol"] == sym:
-                    held.append(dict(portfolio=p["name"], pid=p["id"], **h))
+        for h in self.repo.all_holdings(sid):
+            if h["symbol"] == sym:
+                held.append(h)
         return render(request, "securities/view.html", sec=sec, chart=chart,
                       stats=stats_for([a for _, _, a in rows]), mine=held,
                       classes=CLASS_OPTIONS, fx=is_fx(sym), admin=admin,
@@ -218,11 +216,10 @@ class SecurityRoutes:
             flash(request, "Choose an asset class.", "error")
             return redirect_to(request, "security", symbol=sym)
         n = 0
-        for p in self.repo.list(sid):
-            for h in self.repo.holdings(sid, p["id"]):
-                if h["symbol"] == sym:
-                    self.repo.update_holding(sid, p["id"], h["id"], asset_class=cls)
-                    n += 1
+        for h in self.repo.all_holdings(sid):
+            if h["symbol"] == sym:
+                self.repo.update_holding(sid, h["id"], asset_class=cls)
+                n += 1
         return redirect_to(request, "security", symbol=sym, flash_message=
                            f"{CLASSES[cls]['label']} set on {n} of your holding(s) of {sym}.")
 

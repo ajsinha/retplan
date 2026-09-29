@@ -52,4 +52,4 @@ a single page to print or save as a PDF.
 
 - **Plan → When to claim a pension** if a public pension is part of the picture.
 - **Plan → Conversion explorer** if you hold both taxed-on-the-way-out and tax-free accounts.
-- **Portfolio → New portfolio**, add your accounts (upload each broker's file), then link the plan to it - the balances then stay current on their own.
+- **Portfolio → Accounts**, add your accounts (upload each broker's file on the account's page), gather them into a portfolio with **Portfolio → Portfolios**, then link the plan to it - the balances then stay current on their own.

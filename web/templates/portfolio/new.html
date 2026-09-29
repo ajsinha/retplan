@@ -1,25 +1,27 @@
 {% extends "base.html" %}
 {% import "_macros/ui.html" as ui %}
+{% from "portfolio/_pickers.html" import pickers with context %}
 {% block title %}New portfolio{% endblock %}
 {% block content %}
-{% call ui.page_head('New portfolio', 'Name it and choose the currency you think in. Then add its accounts - each with a few questions.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Have a file listing several accounts? Start from it</a>
+{% call ui.page_head('New portfolio', 'A portfolio is any selection of your accounts - and of other portfolios. "Retirement" might be the 401(k) and the IRAs; "Household" everything; a what-if, a few accounts on their own.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Start from a file of several accounts</a>
 {% endcall %}
 <form class="card wizard-card" method="post" action="{{ url_for('portfolio_create') }}" data-busy="Creating…">
   <div class="card-body">
     <div class="row g-3">
       <div class="col-md-7"><label class="form-label" for="p-name">Name</label>
-        <input class="form-control" id="p-name" name="name" placeholder="e.g. Our household" required maxlength="80"></div>
-      <div class="col-md-5"><label class="form-label" for="p-cur">Base currency</label>
-        <select class="form-select" id="p-cur" name="currency">{% for c in currencies %}<option {% if c == 'USD' %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-        <div class="form-hint mt-1">Holdings quoted in other currencies are converted daily; cash, property and debts are in this currency.</div></div>
+        <input class="form-control" id="p-name" name="name" placeholder="e.g. Retirement, or Our household" required maxlength="80"></div>
+      <div class="col-md-5"><label class="form-label" for="p-cur">Currency to report in</label>
+        <select class="form-select" id="p-cur" name="currency">{% for c in currencies %}<option {% if c == home %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+        <div class="form-hint mt-1">Accounts and holdings in other currencies are converted daily.</div></div>
       <div class="col-12"><label class="form-label" for="p-desc">Notes <span class="small-muted">(optional)</span></label>
         <input class="form-control" id="p-desc" name="description" maxlength="300"></div>
     </div>
-    <p class="form-hint mt-3 mb-0">Most people keep one portfolio for the whole household. Others are useful for what-ifs: a model portfolio, a parent's money you look after.</p>
+    <h3 class="h6 mt-4">What is it made of?</h3>
+    {{ pickers(groups, parts) }}
     <div class="d-flex gap-2 mt-4">
       <a class="btn btn-outline-secondary" href="{{ url_for('portfolios') }}">Cancel</a>
-      <button class="btn btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Create and add accounts</button>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Create portfolio</button>
     </div>
   </div>
 </form>

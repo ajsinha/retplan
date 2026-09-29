@@ -2,21 +2,27 @@
 {% import "_macros/ui.html" as ui %}
 {% block title %}Portfolios{% endblock %}
 {% block content %}
-{% call ui.page_head('Portfolios', 'A portfolio is a collection of accounts - investments priced every day, cash, property and debts. Its net worth, allocation, projections and stress tests cover all of them, and a retirement plan can take its accounts straight from one.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+{% call ui.page_head('Portfolios', 'A portfolio is any selection of your accounts - or of other portfolios. Its allocation, projections, stress tests and checks cover the accounts in it, and a retirement plan can take its accounts straight from one.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
   <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> New portfolio</a>
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> From a multi-account file</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('accounts') }}"><i class="bi bi-wallet2" aria-hidden="true"></i> Your accounts</a>
   <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prices') }}"><i class="bi bi-cloud-download" aria-hidden="true"></i> Prices</a>
 {% endcall %}
 {% if not cards %}
 <div class="card"><div class="card-body">
-  {% call ui.empty('briefcase', 'No portfolios yet', 'Create one - "Our household", say - then add each account you have: a brokerage account, a 401(k), savings, your home, the mortgage. Investment accounts take your broker\'s file.') %}
+  {% if n_accounts %}
+  {% call ui.empty('briefcase', 'No portfolios yet', 'You have ' ~ n_accounts ~ ' account' ~ ('' if n_accounts == 1 else 's') ~ '. A portfolio is a selection of them - all of them, or just the retirement accounts - for projections, stress tests and your plan.') %}
     <a class="btn btn-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create a portfolio</a>
-    <a class="btn btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Or start from a file listing several accounts</a>
   {% endcall %}
+  {% else %}
+  {% call ui.empty('wallet2', 'Start with your accounts', 'Add each account you have - a brokerage account, a 401(k), savings, your home, the mortgage. Then make portfolios of them.') %}
+    <a class="btn btn-primary" href="{{ url_for('accounts') }}"><i class="bi bi-wallet2" aria-hidden="true"></i> Add accounts</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Or import a file of several accounts</a>
+  {% endcall %}
+  {% endif %}
 </div></div>
 {% else %}
 <div class="stat-grid">
-  {{ ui.kpi('Net worth', total|money, cards|length ~ ' portfolio' ~ ('' if cards|length == 1 else 's') ~ (' · mixed currencies' if cards|map(attribute='currency')|unique|list|length > 1 else '') ~ (' · an account may be in more than one' if cards|length > 1 else ''), 'bank') }}
+  {{ ui.kpi('Net worth', everything.net_worth|money, 'all ' ~ n_accounts ~ ' accounts, each counted once · ' ~ everything.currency, 'bank', '', url_for('accounts')) }}
   {{ ui.kpi('Prices collected', last_run.started_at|dt if last_run else 'never', 'next run ' ~ (scheduler.next_run|replace('T', ' ') if scheduler.next_run else ('off' if not scheduler.enabled else 'pending')), 'cloud-download', '' if last_run else 'warn', url_for('prices')) }}
 </div>
 <div class="row g-3">
@@ -36,7 +42,7 @@
           {% if c.val.debts %}<dt>Debts</dt><dd class="num down">−{{ c.val.debts|money }}</dd>{% endif %}
         </dl>
         {% if c.by_class %}{{ ui.allocation(c.by_class[:4], money_fmt=False) }}{% endif %}
-        <div class="small-muted mt-2">{{ c.n_accounts }} account{{ '' if c.n_accounts == 1 else 's' }} · {{ c.n_holdings }} holding{{ '' if c.n_holdings == 1 else 's' }}{% if c.val.as_of %} · priced {{ c.val.as_of }}{% endif %}{% if c.val.unpriced %} · <span class="down">{{ c.val.unpriced|length }} unpriced</span>{% endif %}</div>
+        <div class="small-muted mt-2">{{ c.n_accounts }} account{{ '' if c.n_accounts == 1 else 's' }}{% if c.parts %} · made of {{ c.parts|map(attribute='name')|join(', ') }}{% endif %} · {{ c.n_holdings }} holding{{ '' if c.n_holdings == 1 else 's' }}{% if c.val.as_of %} · priced {{ c.val.as_of }}{% endif %}{% if c.val.unpriced %} · <span class="down">{{ c.val.unpriced|length }} unpriced</span>{% endif %}</div>
       </div>
     </a>
   </div>

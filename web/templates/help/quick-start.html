@@ -16,7 +16,7 @@ you can open and change in the editor afterwards.</p>
 <li><strong>Income.</strong> Pay before tax, real pay growth, and a public or state
     pension with the age it starts. Other income (rent, part-time work, an annuity)
     sits under a fold.</li>
-<li><strong>Savings.</strong> Your accounts, taken from a portfolio you track in RetPlan,
+<li><strong>Savings.</strong> Your accounts, taken from a portfolio's accounts in RetPlan,
     or chosen by type by hand - 401(k), Roth 401(k), IRA, Roth IRA, HSA, brokerage,
     savings, pension pot, tax-free savings - with what goes into each every year (and,
     by hand, each one's balance).</li>
@@ -61,8 +61,8 @@ was edited out of order still cannot produce an impossible plan.</p>
 ]) }}
 
 <h3>Savings from a portfolio</h3>
-<p>If you track your accounts in a portfolio, the Savings step offers to take them from
-there: pick the portfolio and press <em>Use it</em>, or arrive from a portfolio's
+<p>If you track your accounts in RetPlan and have gathered them into a portfolio, the
+Savings step offers to take the portfolio's accounts: pick the portfolio and press <em>Use it</em>, or arrive from a portfolio's
 <em>Start a plan from it</em>. The step then lists the portfolio's investment and cash
 accounts and asks only what goes into each every year: workplace plans &mdash; 401(k),
 Roth 401(k), pension pot &mdash; as a % of pay plus the employer's match, the others as
@@ -175,10 +175,11 @@ wrappers and the withdrawal policy &mdash; is the sample household's. See
 drawn. Press <em>Run simulation</em> for the odds.</p>
 
 {% call note('tip', 'Start from a portfolio you track') %}
-<p>A portfolio holding every account &mdash; investments, bank balances, your home and
-its mortgage &mdash; makes the quickest and most accurate start: the plan takes its
-accounts and debts from it and stays linked, so there are no balances to type or keep
-up to date. {{ goto('portfolios', 'Open portfolios') }}</p>
+<p>A portfolio of every account &mdash; investments, bank balances, your home and its
+mortgage &mdash; makes the quickest and most accurate start: the plan takes the
+portfolio's accounts and debts and stays linked, so there are no balances to type or
+keep up to date. {{ goto('accounts', 'Open accounts') }}
+{{ goto('portfolios', 'Open portfolios') }}</p>
 {% endcall %}
 
 {% call note('why', 'Why a wizard at all') %}

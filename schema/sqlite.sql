@@ -65,36 +65,55 @@ CREATE TABLE IF NOT EXISTS securities (
     notes           TEXT NOT NULL DEFAULT ''
 );
 
--- An account in a portfolio: investments (holding positions), cash, property or
--- a debt. The type (portfolio/account_types.py) says which, and how it is taxed.
--- Investment accounts are valued from their holdings; the others carry a value
--- set by hand on as_of. A debt's value is what is owed on as_of; with a rate and
--- a monthly payment it is paid down month by month from then.
+-- An account: investments (holding positions), cash, property or a debt. The
+-- type (portfolio/account_types.py) says which, and how it is taxed. Accounts
+-- belong to a workspace (owner), not to a portfolio: a portfolio is a selection
+-- of them (portfolio_accounts), and one account can be in several. Investment
+-- accounts are valued from their holdings; the others carry a value set by hand
+-- on as_of, in the account's currency. A debt's value is what is owed on as_of;
+-- with a rate and a monthly payment it is paid down month by month from then.
 CREATE TABLE IF NOT EXISTS accounts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    portfolio_id INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    owner        TEXT    NOT NULL,
     name         TEXT    NOT NULL,
     type         TEXT    NOT NULL,                   -- account_types.TYPES key
     owner_person INTEGER NOT NULL DEFAULT 0,         -- 0 you, 1 partner, -1 joint
     institution  TEXT    NOT NULL DEFAULT '',
+    currency     TEXT    NOT NULL DEFAULT 'USD',     -- of the values typed in
     value        REAL    NOT NULL DEFAULT 0,         -- cash, property, debt
     as_of        TEXT,                               -- the date value was set
     rate         REAL,                               -- debts: annual interest
     payment      REAL,                               -- debts: monthly payment
     term_months  INTEGER,                            -- debts: months left on as_of
     notes        TEXT    NOT NULL DEFAULT '',
-    position     INTEGER NOT NULL DEFAULT 0,         -- display order
     created_at   TEXT    NOT NULL,
     updated_at   TEXT    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS ix_accounts_portfolio ON accounts (portfolio_id);
+CREATE INDEX IF NOT EXISTS ix_accounts_owner ON accounts (owner);
+
+-- Which accounts make up which portfolio, and in what order they are shown.
+CREATE TABLE IF NOT EXISTS portfolio_accounts (
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    account_id   INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (portfolio_id, account_id)
+);
+CREATE INDEX IF NOT EXISTS ix_portfolio_accounts_account ON portfolio_accounts (account_id);
+
+-- Portfolios made of other portfolios: a parent includes every account of each
+-- child, recursively, each account counted once. Cycles are refused by the app.
+CREATE TABLE IF NOT EXISTS portfolio_children (
+    parent_id    INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    child_id     INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (parent_id, child_id)
+);
+CREATE INDEX IF NOT EXISTS ix_portfolio_children_child ON portfolio_children (child_id);
 
 -- A position in an investment account. The symbol CASH is a cash balance priced
--- at 1. portfolio_id repeats the account's, so a portfolio's holdings are one
--- indexed read.
+-- at 1.
 CREATE TABLE IF NOT EXISTS holdings (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    portfolio_id INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
     account_id   INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     symbol       TEXT    NOT NULL REFERENCES securities (symbol),
     quantity     REAL    NOT NULL DEFAULT 0,
@@ -103,7 +122,6 @@ CREATE TABLE IF NOT EXISTS holdings (
     notes        TEXT    NOT NULL DEFAULT '',
     added_at     TEXT    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS ix_holdings_portfolio ON holdings (portfolio_id);
 CREATE INDEX IF NOT EXISTS ix_holdings_account ON holdings (account_id);
 CREATE INDEX IF NOT EXISTS ix_holdings_symbol ON holdings (symbol);
 
@@ -156,15 +174,16 @@ CREATE TABLE IF NOT EXISTS import_drafts (
 );
 CREATE INDEX IF NOT EXISTS ix_import_drafts_owner ON import_drafts (owner);
 
--- Net worth over time: each portfolio's assets and debts, recorded after every
--- price collection (kind 'portfolio', ref = portfolio id) and kept for good,
--- unlike the daily prices, which are pruned after a year.
+-- Net worth over time, recorded after every price collection and kept for good
+-- (unlike daily prices, which are pruned after a year): kind 'all' is every
+-- account the workspace has (ref ''); kind 'portfolio' is one portfolio (ref =
+-- its id). Assets, debts, and a JSON breakdown by kind of account.
 CREATE TABLE IF NOT EXISTS snapshots (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     owner       TEXT    NOT NULL,
     taken_on    TEXT    NOT NULL,                    -- ISO date
-    kind        TEXT    NOT NULL DEFAULT 'manual',   -- manual | portfolio
-    ref         TEXT    NOT NULL DEFAULT '',         -- portfolio id for 'portfolio'
+    kind        TEXT    NOT NULL DEFAULT 'all',      -- all | portfolio
+    ref         TEXT    NOT NULL DEFAULT '',         -- the portfolio id for 'portfolio'
     assets      REAL    NOT NULL DEFAULT 0,
     liabilities REAL    NOT NULL DEFAULT 0,
     data        TEXT    NOT NULL DEFAULT '{}',       -- JSON breakdown

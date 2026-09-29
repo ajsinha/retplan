@@ -28,8 +28,9 @@ portfolio projections, and financial advice.
 
 - **FR-WS-1 (M).** Every browser MUST get its own workspace, keyed by an opaque id
   in a signed session cookie. No sign-up is required to plan.
-- **FR-WS-2 (M).** A workspace MUST see only its own plans, portfolios, drafts and
-  projections; a request for another workspace's portfolio MUST return 404.
+- **FR-WS-2 (M).** A workspace MUST see only its own plans, accounts, portfolios,
+  drafts and projections; a request for another workspace's account or portfolio
+  MUST return 404.
 - **FR-WS-3 (M).** A new workspace MUST start with the sample household as its
   active plan.
 - **FR-WS-4 (M).** The session secret MUST persist across restarts (from
@@ -139,10 +140,28 @@ portfolio projections, and financial advice.
   sum to 1, tax bands ascend, rates in [0, 1]) and flag implausible assumptions for
   review.
 
-## 9. Portfolios and prices (F-PF, F-PX)
+## 9. Accounts, portfolios and prices (F-AC, F-PF, F-PX)
 
+- **FR-AC-1 (M).** Accounts MUST belong to the workspace, not to a portfolio. One
+  account MAY be in any number of portfolios; a portfolio MAY include accounts and
+  other portfolios. A portfolio's accounts MUST be its own plus, recursively, every
+  account of the portfolios it includes, each counted once, now and later.
+- **FR-AC-2 (M).** A portfolio MUST NOT contain itself, directly or through another;
+  such a choice MUST be refused.
+- **FR-AC-3 (M).** Deleting a portfolio MUST NOT delete any account; taking an
+  account out of a portfolio MUST leave the account; deleting an account MUST remove
+  it from every portfolio. Duplicating a portfolio MUST make a new portfolio of the
+  same selection, sharing the accounts rather than copying them; duplicating an
+  account MUST copy its holdings and leave the copy in no portfolio.
+- **FR-AC-4 (M).** Portfolios MUST hold references, not copies: a change to an
+  account (holdings, prices, values, debts) MUST be seen at once by every portfolio
+  including it, directly or through another, and by every plan linked to such a
+  portfolio.
+- **FR-AC-5 (M).** Each account MUST carry its own currency (by default the currency
+  most of the workspace's accounts use); its values MUST be converted into each
+  portfolio's currency at the latest daily rate.
 - **FR-PF-1 (M).** Holdings MUST be valued at the latest close converted to the
-  portfolio's base currency; a holding without a price MUST count as zero and be
+  portfolio's currency; a holding without a price MUST count as zero and be
   reported.
 - **FR-PF-2 (M).** A holding's own asset class MUST override the security's guessed
   class; setting a class from a security page MUST change only this workspace's
@@ -152,26 +171,29 @@ portfolio projections, and financial advice.
 - **FR-PF-4 (M).** Rebalancing MUST produce per-class trades that sum to the new
   money, and a new-money-only alternative that never sells.
 - **FR-PF-5 (M).** A plan linked to a portfolio MUST be brought in line with it
-  every time it is read: each investment, cash and property account a plan account
+  every time it is read: each of the portfolio's investment, cash and property
+  accounts (including those reached through other portfolios) a plan account
   (name, owner - joint as you - today's value, cost basis with holdings without a cost
   at today's value and none for tax-deferred accounts, and for investments the asset
   mix; a wrapper from its type), each debt a loan (owed today, rate, years left);
   accounts removed from the portfolio MUST leave the plan and new ones join it. What
   the plan adds to a linked account (contributions, match, order, glide path,
   rebalancing, paused) MUST be kept, and plan accounts with no link MUST be left
-  alone. Unlinking MUST keep today's figures as the plan's own.
-- **FR-PF-6 (M).** Every holding MUST belong to an investment account of its
-  portfolio; removing an account MUST remove its holdings.
+  alone. A linked plan's simulation results MUST be dropped when the portfolio's
+  accounts change. Unlinking MUST keep today's figures as the plan's own.
+- **FR-PF-6 (M).** Every holding MUST belong to an investment account; deleting an
+  account MUST delete its holdings.
 - **FR-PF-7 (M).** A debt MUST be paid down month by month from the date its balance
   was set, using the level payment from rate and term when no payment is given.
 - **FR-PF-8 (M).** Projections, stress tests, checks and the target mix MUST work on
-  investable assets only - investment accounts' holdings plus cash accounts as cash;
+  a portfolio's investable assets only - investment accounts' holdings plus cash accounts as cash;
   property and debts MUST count in net worth and nowhere else.
-- **FR-PF-9 (M).** After every price collection, and on request, each portfolio's
-  assets, debts and breakdown by kind MUST be recorded, one row per portfolio a day,
-  and kept after the daily prices are pruned.
-- **FR-PX-1 (M).** The collector MUST price every held symbol and every FX pair a
-  portfolio needs, and MUST report a failure for one symbol without aborting the run.
+- **FR-PF-9 (M).** After every price collection, and on request, the assets, debts
+  and breakdown by kind MUST be recorded for every account together (each counted
+  once) and for each portfolio, one row of each a day, and kept after the daily
+  prices are pruned.
+- **FR-PX-1 (M).** The collector MUST price every held symbol and every FX pair an
+  account or portfolio needs, and MUST report a failure for one symbol without aborting the run.
 - **FR-PX-2 (M).** Closes older than `prices.retention_days` MUST be deleted after
   every run. Monthly history MUST NOT be stored; only the three long-run numbers.
 - **FR-PX-3 (M).** The scheduler MUST run daily at `prices.run_at` and at start-up
@@ -185,12 +207,14 @@ portfolio projections, and financial advice.
   10 MB and MUST reject legacy .xls with an instruction to re-save.
 - **FR-BL-2 (M).** Every proposed holding MUST carry a confidence and the way it was
   identified; doubtful matches and value mismatches MUST be flagged.
-- **FR-BL-3 (M).** Nothing MUST reach a portfolio until the review is confirmed.
+- **FR-BL-3 (M).** Nothing MUST reach an account or portfolio until the review is
+  confirmed.
 - **FR-BL-5 (M).** Uploaded into one account, every position MUST go into that
   account. From a multi-account file, each account name MUST be offered with a
   guessed type for the user to confirm; each MUST become an account or join an
-  existing one of the same name, and positions without an account MUST go to
-  "Brokerage".
+  existing one of the workspace of the same name, and positions without an account
+  MUST go to "Brokerage". The user MUST choose where they go: a new portfolio of
+  them, an existing portfolio they are added to, or just the accounts.
 - **FR-BL-4 (M).** At most 2,000 positions are read from one file.
 
 ## 11. Securities and administration (F-SEC)
@@ -198,7 +222,7 @@ portfolio projections, and financial advice.
 - **FR-SE-1 (M).** Any user MAY look up any symbol; nothing is stored by a lookup.
 - **FR-SE-2 (M).** Adding, amending or deleting a security, and typing in or deleting
   prices, MUST require an administrator.
-- **FR-SE-3 (M).** A security held in any portfolio MUST NOT be deletable.
+- **FR-SE-3 (M).** A security held in any account MUST NOT be deletable.
 - **FR-SE-4 (M).** A manually priced security MUST never be fetched from Yahoo.
 - **FR-SE-5 (M).** Administrator passwords changed in the app MUST be stored only as
   a salted PBKDF2-SHA256 hash; while the shipped default password is in force, every

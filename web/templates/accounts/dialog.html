@@ -1,5 +1,5 @@
-{% extends "plan/_bare.html" if partial else "portfolio/_dialog_page.html" %}
-{#- Add or edit one account of a portfolio: the type first, then a few questions.
+{% extends "plan/_bare.html" if partial else "accounts/_dialog_page.html" %}
+{#- Add or edit one account: the type first, then a few questions.
     Loaded into the modal (partial=1), or shown as a page without script. -#}
 {% block dialog %}
 {% from "plan/_dialog_macros.html" import question with context %}
@@ -7,7 +7,7 @@
 
 {% if mode == 'types' %}
 <div class="modal-header">
-  <div><div class="eyebrow">Add to {{ pf.name }}</div>
+  <div><div class="eyebrow">{{ 'Add to ' ~ back_name if back_name else 'Add an account' }}</div>
     <h2 class="modal-title h5" id="rp-dialog-title">What kind of account?</h2></div>
   {% if partial %}{{ close }}{% endif %}
 </div>
@@ -17,7 +17,7 @@
   <p class="small-muted mb-2">{{ blurb }}</p>
   <div class="kind-grid">
     {% for t in types if t.kind == key %}
-    <a class="kind-tile" href="{{ url_for('account_dialog', pid=pf.id, type=t.key) }}" data-dialog>
+    <a class="kind-tile" href="{{ url_for('account_dialog', type=t.key, pid=back_pid) if back_pid else url_for('account_dialog', type=t.key) }}" data-dialog>
       <span class="ico"><i class="bi bi-{{ t.icon }}" aria-hidden="true"></i></span>
       <span><span class="t">{{ t.label }}</span><span class="d">{{ t.blurb }}</span></span>
     </a>
@@ -27,9 +27,10 @@
 </div>
 
 {% else %}
-<form method="post" action="{{ url_for('account_save', pid=pf.id) }}" class="dialog-form"
-      data-stepper data-save-from="{{ 0 if acct else steps|length - 1 }}" novalidate>
+<form method="post" action="{{ url_for('account_save') }}" class="dialog-form"
+      data-stepper data-save-from="{{ 0 if acct else ([steps|length - 2, 0]|max if steps[-1].optional else steps|length - 1) }}" novalidate>
   <input type="hidden" name="aid" value="{{ acct.id if acct else '' }}">
+  <input type="hidden" name="back_pid" value="{{ back_pid }}">
   {% if not acct %}<input type="hidden" name="type" value="{{ info.key }}">{% endif %}
   <div class="modal-header">
     <div class="min-w-0">
@@ -50,6 +51,7 @@
     {% for st in steps %}
     <fieldset class="dialog-step" data-step="{{ loop.index0 }}">
       <legend class="visually-hidden">{{ st.title }}</legend>
+      {% if st.optional %}<p class="step-note"><i class="bi bi-lightbulb" aria-hidden="true"></i> Optional - you can save now, and add it to portfolios any time.</p>{% endif %}
       {% for q in st.fields %}{{ question(q, row) }}{% endfor %}
       {% if info.kind == 'investments' and loop.last and not acct %}
       <p class="step-note"><i class="bi bi-lightbulb" aria-hidden="true"></i> Next you add what it holds: upload your broker's file, paste the positions, or add them one by one.</p>

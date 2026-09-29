@@ -997,3 +997,13 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .link-box > .bi { font-size: 1.3rem; color: var(--rp-crimson); }
 .link-box .grow { flex: 1 1 18rem; }
 .link-box.linked { border-style: solid; border-color: var(--rp-crimson); background: var(--rp-crimson-tint); }
+.parts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.part-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .2rem .35rem .2rem .7rem; border-radius: 999px;
+  border: 1px solid var(--rp-crimson); background: var(--rp-crimson-tint); font-size: 13px; }
+.part-chip a { text-decoration: none; font-weight: 600; }
+.part-chip form { display: inline; }
+.pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .4rem; }
+.pick { display: flex; gap: .5rem; align-items: flex-start; padding: .5rem .7rem; border: 1px solid var(--rp-border); border-radius: 10px; cursor: pointer; }
+.pick:has(input:checked) { border-color: var(--rp-crimson); background: var(--rp-crimson-tint); }
+.pick .t { display: block; font-weight: 600; }
+.pick .d { display: block; font-size: 12px; color: var(--rp-slate); }

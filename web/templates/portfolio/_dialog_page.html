@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ heading or 'Add an account' }} · {{ pf.name }}{% endblock %}
+{% block title %}{{ heading }}{% endblock %}
 {% block content %}
-{# The account dialog as a page of its own, for a browser without script. #}
+{# A portfolio dialog as a page of its own, for a browser without script. #}
 <div class="dialog-page mx-auto">
   <a class="small" href="{{ url_for('portfolio_view', pid=pf.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ pf.name }}</a>
   <div class="card mt-2"><div class="modal-content border-0">{% block dialog %}{% endblock %}</div></div>

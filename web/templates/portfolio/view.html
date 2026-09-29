@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% import "_macros/ui.html" as ui %}
+{% from "accounts/_cards.html" import account_groups with context %}
 {% block title %}{{ pf.name }}{% endblock %}
 {% block content %}
-{% call ui.page_head(pf.name, pf.description or 'Every account you have - investments, cash, property and debts - in ' ~ pf.currency ~ '.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
-  <a class="btn btn-sm btn-primary" href="{{ url_for('account_dialog', pid=pf.id) }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> Add account</a>
+{% call ui.page_head(pf.name, pf.description or 'A selection of your accounts' ~ (' and portfolios' if parts else '') ~ ', in ' ~ pf.currency ~ '.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_members', pid=pf.id) }}" data-dialog><i class="bi bi-ui-checks" aria-hidden="true"></i> Choose accounts</a>
   <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_project', pid=pf.id) }}"><i class="bi bi-graph-up" aria-hidden="true"></i> Project</a>
   <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_stress', pid=pf.id) }}"><i class="bi bi-lightning" aria-hidden="true"></i> Stress test</a>
   <form method="post" action="{{ url_for('portfolio_refresh', pid=pf.id) }}" data-busy="Fetching…">
@@ -14,10 +15,11 @@
       <a class="dropdown-item" href="#settings" data-bs-toggle="collapse"><i class="bi bi-pencil" aria-hidden="true"></i> Rename, currency</a>
       <form method="post" action="{{ url_for('portfolio_record', pid=pf.id) }}"><button class="dropdown-item"><i class="bi bi-journal-plus" aria-hidden="true"></i> Record today's net worth</button></form>
       <form method="post" action="{{ url_for('portfolio_duplicate', pid=pf.id) }}"><button class="dropdown-item"><i class="bi bi-files" aria-hidden="true"></i> Duplicate</button></form>
-      <a class="dropdown-item" href="{{ url_for('builder') }}?pid={{ pf.id }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Import a multi-account file</a>
+      <a class="dropdown-item" href="{{ url_for('account_dialog', pid=pf.id) }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a new account to it</a>
+      <a class="dropdown-item" href="{{ url_for('builder') }}?pid={{ pf.id }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Import a file of several accounts</a>
       <a class="dropdown-item" href="{{ url_for('api_portfolio', pid=pf.id) }}"><i class="bi bi-filetype-json" aria-hidden="true"></i> As JSON</a>
       <div class="dropdown-divider"></div>
-      <form method="post" action="{{ url_for('portfolio_delete', pid=pf.id) }}" data-confirm="Delete '{{ pf.name }}', its accounts, holdings, history and projections? Prices are shared and stay."><button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete portfolio</button></form>
+      <form method="post" action="{{ url_for('portfolio_delete', pid=pf.id) }}" data-confirm="Delete the portfolio '{{ pf.name }}', its history and projections? Its accounts stay - they are yours, not the portfolio's."><button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete portfolio</button></form>
     </div>
   </div>
 {% endcall %}
@@ -38,73 +40,35 @@
   {{ ui.kpi('Past year', change_1y|spct if change_1y is not none else '-', "investable, today's holdings back-cast" if change_1y is not none else 'needs price history', 'calendar3', ('good' if change_1y >= 0 else 'bad') if change_1y is not none else '') }}
 </div>
 
-{# ---------------- accounts ---------------- #}
+{# ---------------- what it is made of ---------------- #}
 <div class="card" id="accounts">
-  <div class="card-header"><i class="bi bi-wallet2" aria-hidden="true"></i> Accounts <span class="small-muted fw-normal">{{ v.accounts|length }}</span>
-    <a class="ms-auto btn btn-sm btn-primary" href="{{ url_for('account_dialog', pid=pf.id) }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> Add account</a></div>
+  <div class="card-header"><i class="bi bi-wallet2" aria-hidden="true"></i> Accounts <span class="small-muted fw-normal">{{ v.accounts|length }}{% if parts %}, {{ direct|length }} of them chosen directly{% endif %}</span>
+    <span class="ms-auto d-flex gap-2">
+      <a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_members', pid=pf.id) }}" data-dialog><i class="bi bi-ui-checks" aria-hidden="true"></i> Choose</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('account_dialog', pid=pf.id) }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> New account</a>
+    </span></div>
   <div class="card-body">
+  {% if parts or parents %}
+    <div class="parts mb-3">
+      {% if parts %}<span class="small-muted me-1">Made of {{ 'these portfolios' if parts|length > 1 else 'the portfolio' }} - each account counted once:</span>
+        {% for c in parts %}<span class="part-chip"><a href="{{ url_for('portfolio_view', pid=c.id) }}"><i class="bi bi-briefcase" aria-hidden="true"></i> {{ c.name }}</a>
+          <form method="post" action="{{ url_for('portfolio_remove_part', pid=pf.id, cid=c.id) }}"><button type="submit" class="btn btn-link btn-sm p-0" aria-label="Take {{ c.name }} out"><i class="bi bi-x" aria-hidden="true"></i></button></form></span>{% endfor %}
+      {% endif %}
+      {% if parents %}<div class="small-muted mt-1">Part of {% for p in parents %}<a href="{{ url_for('portfolio_view', pid=p.id) }}">{{ p.name }}</a>{{ ', ' if not loop.last }}{% endfor %}.</div>{% endif %}
+    </div>
+  {% endif %}
   {% if not v.accounts %}
     <div class="item-empty">
-      <p class="mb-2"><strong>No accounts yet.</strong> Add each one you have - a few questions each. Investment accounts then take your broker's file.</p>
+      <p class="mb-2"><strong>No accounts in it yet.</strong> Choose from the accounts you have, include other portfolios, or add a new account.</p>
       <div class="kind-chips">
+        <a class="kind-chip" href="{{ url_for('portfolio_members', pid=pf.id) }}" data-dialog><i class="bi bi-ui-checks" aria-hidden="true"></i> Choose accounts and portfolios</a>
         {% for key, label, icon, blurb in kinds %}
-        <a class="kind-chip" href="{{ url_for('account_dialog', pid=pf.id, kind=key) }}" data-dialog><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</a>
+        <a class="kind-chip" href="{{ url_for('account_dialog', pid=pf.id, kind=key) }}" data-dialog><i class="bi bi-{{ icon }}" aria-hidden="true"></i> New {{ label|lower }}</a>
         {% endfor %}
       </div>
     </div>
   {% else %}
-    {% for key, label, icon, blurb in kinds %}
-    {% set group = v.of_kind(key) %}
-    <div class="acct-group">
-      <div class="acct-group-head">
-        <h3 class="h6 mb-0"><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</h3>
-        {% if group %}<span class="num fw-semibold">{{ '−' if key == 'debt' }}{{ v.kind_total(key)|money }}</span>{% endif %}
-        <a class="small ms-2" href="{{ url_for('account_dialog', pid=pf.id, kind=key) }}" data-dialog>+ add</a>
-      </div>
-      {% if group %}
-      <ul class="item-list">
-        {% for a in group %}
-        <li class="item-card">
-          <span class="ico"><i class="bi bi-{{ a.icon }}" aria-hidden="true"></i></span>
-          <div class="body">
-            {% if a.kind == 'investments' %}
-            <a class="title stretched-link" href="{{ url_for('account_view', pid=pf.id, aid=a.id) }}">{{ a.name }}</a>
-            {% else %}
-            <a class="title stretched-link" href="{{ url_for('account_dialog', pid=pf.id, aid=a.id) }}" data-dialog>{{ a.name }}</a>
-            {% endif %}
-            <div class="detail">{{ a.label }} · {{ a.owner_label }}{% if a.institution %} · {{ a.institution }}{% endif %}</div>
-            <div class="chips">
-              {% if a.kind == 'investments' %}
-                <span class="chip">{{ a.n_holdings }} holding{{ '' if a.n_holdings == 1 else 's' }}</span>
-                {% if a.tax != 'none' %}<span class="chip">{{ {'taxable': 'taxable', 'deferred': 'tax-deferred', 'free': 'tax-free'}[a.tax] }}</span>{% endif %}
-                {% if a.gain is not none %}<span class="chip {{ 'up' if a.gain >= 0 else 'down' }}">{{ a.gain|smoney }} on cost</span>{% endif %}
-                {% if a.unpriced %}<span class="chip chip-paused">{{ a.unpriced }} unpriced</span>{% endif %}
-                {% if not a.n_holdings %}<span class="chip chip-paused">add holdings</span>{% endif %}
-              {% elif a.kind == 'debt' %}
-                {% if a.rate is not none %}<span class="chip">{{ (a.rate * 100)|round(2) }}%</span>{% endif %}
-                {% if a.payment %}<span class="chip">{{ a.payment|money }} a month</span>{% endif %}
-                {% if a.months_left %}<span class="chip">{{ (a.months_left / 12)|round(1) }} years left</span>{% endif %}
-              {% endif %}
-              {% if a.age_days is not none %}<span class="chip {{ 'chip-paused' if a.age_days > 90 }}">{{ 'updated today' if a.age_days == 0 else 'updated ' ~ a.age_days ~ ' days ago' }}</span>{% endif %}
-            </div>
-          </div>
-          <div class="amount num {{ 'down' if a.kind == 'debt' }}">{{ '−' if a.kind == 'debt' }}{{ a.value|money }}</div>
-          <div class="dropdown actions">
-            <button class="btn btn-sm btn-link" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More for {{ a.name }}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
-            <ul class="dropdown-menu dropdown-menu-end">
-              {% if a.kind == 'investments' %}<li><a class="dropdown-item" href="{{ url_for('account_view', pid=pf.id, aid=a.id) }}"><i class="bi bi-list-ul" aria-hidden="true"></i> Holdings</a></li>{% endif %}
-              <li><a class="dropdown-item" href="{{ url_for('account_dialog', pid=pf.id, aid=a.id) }}" data-dialog><i class="bi bi-pencil" aria-hidden="true"></i> {{ 'Edit' if a.kind == 'investments' else 'Update value' }}</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><form method="post" action="{{ url_for('account_delete', pid=pf.id, aid=a.id) }}" data-confirm="Remove '{{ a.name }}'{{ ' and its ' ~ a.n_holdings ~ ' holdings' if a.n_holdings }}?">
-                <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Remove</button></form></li>
-            </ul>
-          </div>
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-    </div>
-    {% endfor %}
+    {{ account_groups(v, kinds, pf=pf, direct=direct, via=via) }}
   {% endif %}
   </div>
 </div>
@@ -228,7 +192,7 @@
     <thead><tr><th>Symbol</th><th>Account</th><th class="num">Quantity</th><th class="num">Value</th><th class="num">Weight</th><th>Class</th></tr></thead>
     <tbody>{% for p in real|sort(attribute='value', reverse=true) %}<tr>
       <td>{% if p.is_cash %}Cash{% else %}<a class="mono fw-bold" href="{{ url_for('security', symbol=p.symbol) }}">{{ p.symbol }}</a>{% endif %}<span class="cell-sub text-truncate" style="max-width:15rem">{{ p.name }}</span></td>
-      <td><a href="{{ url_for('account_view', pid=pf.id, aid=p.account_id) }}">{{ p.account }}</a></td>
+      <td><a href="{{ url_for('account_view', aid=p.account_id) }}">{{ p.account }}</a></td>
       <td class="num">{{ '%g'|format(p.quantity) }}</td><td class="num">{{ p.value|money }}</td><td class="num">{{ p.weight|pct }}</td><td>{{ p.class_label }}</td></tr>{% endfor %}</tbody>
   </table></div></div></details>
 {% endif %}

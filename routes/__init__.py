@@ -9,13 +9,14 @@
     simulation_routes  - JSON API that runs the Monte Carlo and the solvers
     report_routes      - year-by-year cash flow, balance sheet, tax, audit
     export_routes      - download / upload a plan
-    portfolio_routes   - portfolios, holdings, prices, projections, stress tests
+    account_routes     - accounts of every kind, their holdings and values
+    portfolio_routes   - portfolios (selections of accounts), prices, projections, stress
     builder_routes     - the portfolio builder: upload a spreadsheet, review, import
     security_routes    - securities: lookup for anyone; add, amend, delete for admins
     admin_routes       - administrator sign-in, sign-out and password change
     tools_routes       - what-if, levers, claiming, conversions, spending check,
                          draw order, health and care
-    networth_routes    - net worth snapshots and daily portfolio values
+    networth_routes    - net worth over time: every account, and each portfolio
     help_routes        - the help section, rendered from web/help_catalog.py
 
 Every handler is a class constructed with the FastAPI app and the plan store,
@@ -33,6 +34,7 @@ from .simulation_routes import SimulationRoutes
 from .report_routes import ReportRoutes
 from .export_routes import ExportRoutes
 from .builder_routes import BuilderRoutes
+from .account_routes import AccountRoutes
 from .portfolio_routes import PortfolioRoutes
 from .security_routes import SecurityRoutes
 from .admin_routes import AdminRoutes
@@ -41,10 +43,11 @@ from .networth_routes import NetWorthRoutes
 from .help_routes import HelpRoutes
 
 ALL_ROUTES = (NoAuthRoutes, WizardRoutes, ScenarioRoutes, PlanRoutes, DashboardRoutes,
-              SimulationRoutes, ReportRoutes, ExportRoutes, BuilderRoutes, PortfolioRoutes,
+              SimulationRoutes, ReportRoutes, ExportRoutes, BuilderRoutes, AccountRoutes,
+              PortfolioRoutes,
               SecurityRoutes, AdminRoutes, ToolsRoutes, NetWorthRoutes,
               HelpRoutes)
 
 __all__ = ["ALL_ROUTES", "NoAuthRoutes", "WizardRoutes", "ScenarioRoutes", "PlanRoutes",
            "DashboardRoutes", "SimulationRoutes", "ReportRoutes", "ExportRoutes",
-           "BuilderRoutes", "PortfolioRoutes", "SecurityRoutes", "AdminRoutes", "ToolsRoutes", "NetWorthRoutes", "HelpRoutes"]
+           "BuilderRoutes", "AccountRoutes", "PortfolioRoutes", "SecurityRoutes", "AdminRoutes", "ToolsRoutes", "NetWorthRoutes", "HelpRoutes"]

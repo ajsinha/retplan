@@ -38,7 +38,7 @@
     {% endif %}
     <div class="card"><div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> In your portfolios</div>
       <div class="card-body">
-        {% if mine %}<ul class="list-rows">{% for h in mine %}<li><span class="grow"><a href="{{ url_for('portfolio_view', pid=h.pid) }}">{{ h.portfolio }}</a><span class="cell-sub">{{ h.account or 'no account' }}</span></span><span class="num">{{ '%g'|format(h.quantity) }}</span></li>{% endfor %}</ul>
+        {% if mine %}<ul class="list-rows">{% for h in mine %}<li><span class="grow"><a href="{{ url_for('account_view', aid=h.account_id) }}">{{ h.account }}</a></span><span class="num">{{ '%g'|format(h.quantity) }}</span></li>{% endfor %}</ul>
         {% else %}<p class="small-muted mb-0">{{ 'An exchange rate, priced so holdings in ' ~ sec.symbol[:3] ~ ' can be converted.' if fx else 'Not in any of your portfolios.' }}</p>{% endif %}
       </div></div>
   </div>

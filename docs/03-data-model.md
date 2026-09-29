@@ -23,9 +23,9 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
   owned table filters by it.
 - **DR-6.** The two schema files MUST declare identical tables, columns and indexes
   (checked by `tests/test_portfolio.py`). There are no migrations. A database made
-  before portfolio accounts (holdings with a free-text `account` column and no
-  `accounts` table) must be rebuilt, or have the `accounts` table added and
-  `holdings` recreated by hand.
+  before accounts belonged to the workspace (an `accounts.portfolio_id` column,
+  `holdings.portfolio_id`, no `portfolio_accounts` or `portfolio_children`) must be
+  rebuilt.
 
 ### 1.2 Tables
 
@@ -34,41 +34,53 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 | `plans` | `id` | One scenario: `owner`, `name`, `data` (the plan JSON, §2), `is_active` (0/1; one active per owner), `created_at`, `updated_at` |
 | `portfolios` | `id` | `owner`, `name`, `currency` (base, default USD), `description`, `settings` (JSON: `targets` by asset class, and the last `projection` settings) |
 | `securities` | `symbol` | Shared by every workspace. Descriptive fields (`name`, `quote_type`, `currency`, `exchange`, `asset_class`), latest quote (`last_price`, `prev_close`, `last_price_date`, `fetched_at`, `fetch_error`), long-run statistics (`lt_return`, `lt_vol`, `lt_years`, `lt_updated`), `dividend_yield`, `source` (`yahoo` or `manual`), `notes` |
-| `accounts` | `id` | One account of a portfolio: `portfolio_id`, `name`, `type` (a key of `portfolio/account_types.TYPES`, which gives its kind - investments, cash, property, debt - and tax treatment), `owner_person` (0 you, 1 partner, −1 joint), `institution`, `value` (cash, property and debts), `as_of` (the date the value was set), `rate`, `payment` (monthly) and `term_months` (months left on `as_of`) for debts, `notes`, `position` (display order), `created_at`, `updated_at` |
-| `holdings` | `id` | A position in an investment account: `portfolio_id`, `account_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `asset_class` (blank = use the security's), `notes`, `added_at` |
+| `accounts` | `id` | One account of the workspace (not of a portfolio): `owner`, `name`, `type` (a key of `portfolio/account_types.TYPES`, which gives its kind - investments, cash, property, debt - and tax treatment), `owner_person` (0 you, 1 partner, −1 joint), `institution`, `currency` (of the values typed in; default the currency most of the workspace's accounts use), `value` (cash, property and debts), `as_of` (the date the value was set), `rate`, `payment` (monthly) and `term_months` (months left on `as_of`) for debts, `notes`, `created_at`, `updated_at` |
+| `portfolio_accounts` | (`portfolio_id`, `account_id`) | Which accounts a portfolio includes directly, many-to-many (one account can be in any number of portfolios), with `position` (display order) |
+| `portfolio_children` | (`parent_id`, `child_id`) | Portfolios made of other portfolios, with `position`: a parent includes every account of each child, recursively, each account counted once; the app refuses a cycle (a portfolio containing itself directly or through another) |
+| `holdings` | `id` | A position in an investment account: `account_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `asset_class` (blank = use the security's), `notes`, `added_at` |
 | `prices` | (`symbol`, `date`) | Daily `close`, `adj_close`, `volume`; `WITHOUT ROWID` on SQLite |
 | `fetch_runs` | `id` | One collection run: `reason` (schedule, startup, manual, new-symbol, admin), start/finish, counts of symbols, ok, failed, rows added and pruned, `message` |
 | `projections` | `id` | A saved portfolio projection: `portfolio_id`, `created_at`, `settings`, `summary`, `result` (all JSON) |
 | `import_drafts` | `id` | The portfolio builder's analysis of an upload: `owner`, `filename`, `created_at`, `data` (JSON) |
-| `snapshots` | `id` | Net worth over time: `owner`, `taken_on` (date), `kind` (`portfolio`; `manual` is no longer written), `ref` (portfolio id), `assets`, `liabilities`, `data` (JSON breakdown by kind: investments, cash, property, debt), `note`, `created_at`; one per owner, day, kind and ref, recorded after every price run or on request, kept for good |
+| `snapshots` | `id` | Net worth over time: `owner`, `taken_on` (date), `kind` (`all`: every account of the workspace, each once, `ref` blank; `portfolio`: one portfolio, `ref` = its id), `assets`, `liabilities`, `data` (JSON breakdown by kind: investments, cash, property, debt), `note`, `created_at`; one per owner, day, kind and ref, recorded after every price run or on request, kept for good |
 | `app_settings` | `key` | Application-wide JSON values, e.g. the administrator's password hash |
 
-Indexes: `plans(owner)`, `portfolios(owner)`, `accounts(portfolio_id)`,
-`holdings(portfolio_id)`, `holdings(account_id)`, `holdings(symbol)`, `prices(date)`, `projections(portfolio_id)`,
+Thirteen tables in all. Indexes: `plans(owner)`, `portfolios(owner)`, `accounts(owner)`,
+`portfolio_accounts(account_id)`, `portfolio_children(child_id)`,
+`holdings(account_id)`, `holdings(symbol)`, `prices(date)`, `projections(portfolio_id)`,
 `import_drafts(owner)`, unique `snapshots(owner, taken_on, kind, ref)`.
 
 ### 1.3 Relationships
 
 ```
 owner ─┬─< plans
-       ├─< portfolios ─┬─< accounts ─< holdings >── securities ─< prices
-       │               └─< projections
+       ├─< accounts ─< holdings >── securities ─< prices
+       │     ^
+       │     │ portfolio_accounts (many-to-many)
+       │     │
+       ├─< portfolios ─┬─< projections
+       │     ^         └─< portfolio_children >── portfolios (nested)
        ├─< import_drafts
        └─< snapshots
 fetch_runs, app_settings: global
 ```
 
-- `accounts.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**.
+- Accounts belong to the workspace (`owner`). Deleting a portfolio never deletes
+  an account; deleting an account takes it out of every portfolio.
+- `portfolio_accounts.portfolio_id` → `portfolios.id` and
+  `portfolio_accounts.account_id` → `accounts.id`, both **ON DELETE CASCADE**.
+- `portfolio_children.parent_id` and `.child_id` → `portfolios.id`, both **ON
+  DELETE CASCADE**. A portfolio's accounts are its own `portfolio_accounts` plus,
+  recursively, those of its children, each counted once.
 - `holdings.account_id` → `accounts.id` **ON DELETE CASCADE** (NOT NULL; only
   investment accounts hold positions).
-- `holdings.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**, kept alongside
-  `account_id`.
 - `holdings.symbol` → `securities.symbol` (no cascade: a held security cannot be
   deleted).
 - `prices.symbol` → `securities.symbol` **ON DELETE CASCADE**.
 - `projections.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**.
 - Cash inside an investment account is the reserved symbol `CASH`, priced at 1 in
-  the base currency. A cash account has no holdings: its `value` counts as cash in
+  the account's currency. Values are converted daily from each account's currency
+  into the portfolio's currency. A cash account has no holdings: its `value` counts as cash in
   the investable assets.
 - A debt's `value` is what was owed on `as_of`; it is paid down month by month from
   then, with `payment`, or the level payment from `rate` and `term_months` when there
@@ -103,7 +115,7 @@ years; money is in the plan's single, unnamed currency.
 | Field | Meaning |
 |---|---|
 | `label`, `horizon` | Name; number of annual periods after period 0 (up to 80) |
-| `portfolio_id` | The portfolio the plan is linked to (0 = none): its accounts and debts are brought in line with it every time the plan is read (`web/plan_link.py`) |
+| `portfolio_id` | The portfolio the plan is linked to (0 = none): the portfolio's accounts and debts are brought in line with it every time the plan is read (`web/plan_link.py`) |
 | `persons` | list of `Person` |
 | `income`, `expenses`, `loans` | lists of `IncomeRow`, `ExpenseRow`, `Loan` |
 | `wrappers`, `ledgers` | lists of `Wrapper` and `Ledger` (accounts) |

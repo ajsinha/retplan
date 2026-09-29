@@ -51,12 +51,12 @@
 <div class="card"><div class="card-header"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Where it goes</div>
   <div class="card-body">
   {% if acct %}
-    <p>Into <strong>{{ acct.name }}</strong> in {{ pf.name }}.</p>
+    <p>Into <strong>{{ acct.name }}</strong>.</p>
     <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="b-rep" name="replace" value="1">
       <label class="form-check-label" for="b-rep">Replace what the account holds now (otherwise these are added to it)</label></div>
   {% else %}
     <h3 class="h6">Accounts in the file</h3>
-    <p class="small-muted">Each becomes an account{% if pf %} in {{ pf.name }} - or joins the one of the same name already there{% endif %}. Check its type: it decides how the account is taxed in a retirement plan.</p>
+    <p class="small-muted">Each becomes one of your accounts - or joins your account of the same name. Check its type: it decides how the account is taxed in a retirement plan.</p>
     <input type="hidden" name="n_accounts" value="{{ accounts|length }}">
     <datalist id="acct-names">{% for n, t in accounts %}<option value="{{ n }}">{% endfor %}</datalist>
     <div class="row g-2 mb-3">
@@ -70,14 +70,15 @@
       {% endfor %}
     </div>
     <div class="choice-grid mb-3" role="radiogroup">
-      <label class="choice"><input type="radio" name="mode" value="new" {% if not pf %}checked{% endif %}><span class="t">A new portfolio</span><span class="d">Named below.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="new" {% if not pf %}checked{% endif %}><span class="t">A new portfolio of them</span><span class="d">Named below.</span></label>
       {% if portfolios %}
-      <label class="choice"><input type="radio" name="mode" value="merge" {% if pf %}checked{% endif %}><span class="t">An existing portfolio</span><span class="d">Its other accounts are untouched.</span></label>
+      <label class="choice"><input type="radio" name="mode" value="merge" {% if pf %}checked{% endif %}><span class="t">Add them to a portfolio</span><span class="d">Its other accounts stay.</span></label>
       {% endif %}
+      <label class="choice"><input type="radio" name="mode" value="none"><span class="t">Just the accounts</span><span class="d">Put them in portfolios later.</span></label>
     </div>
     <div class="row g-3">
       <div class="col-md-5"><label class="form-label" for="b-name">New portfolio name</label><input class="form-control" id="b-name" name="name" value="{{ default_name }}" maxlength="80"></div>
-      <div class="col-md-2"><label class="form-label" for="b-cur">Currency</label><select class="form-select" id="b-cur" name="currency">{% for cur in currencies %}<option {% if cur == default_currency %}selected{% endif %}>{{ cur }}</option>{% endfor %}{% if default_currency not in currencies %}<option selected>{{ default_currency }}</option>{% endif %}</select></div>
+      <div class="col-md-2"><label class="form-label" for="b-cur">Currency of the file</label><select class="form-select" id="b-cur" name="currency">{% for cur in currencies %}<option {% if cur == default_currency %}selected{% endif %}>{{ cur }}</option>{% endfor %}{% if default_currency not in currencies %}<option selected>{{ default_currency }}</option>{% endif %}</select></div>
       {% if portfolios %}<div class="col-md-5"><label class="form-label" for="b-pf">Existing portfolio</label>
         <select class="form-select" id="b-pf" name="portfolio">{% for p in portfolios %}<option value="{{ p.id }}" {% if pf and p.id == pf.id %}selected{% endif %}>{{ p.name }} ({{ p.n_accounts }} accounts)</option>{% endfor %}</select></div>{% endif %}
     </div>

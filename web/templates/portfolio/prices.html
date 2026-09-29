@@ -14,7 +14,7 @@
 <div class="card">
   <div class="card-header"><i class="bi bi-tags" aria-hidden="true"></i> Securities <span class="small-muted fw-normal">{{ secs|length }}</span></div>
   <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
-    <thead><tr><th>Symbol</th><th>Class</th><th class="num">Last close</th><th>Date</th><th class="num">Closes kept</th><th class="num">Long-run return</th><th class="num">Long-run vol</th><th class="num">Portfolios</th><th>Status</th></tr></thead>
+    <thead><tr><th>Symbol</th><th>Class</th><th class="num">Last close</th><th>Date</th><th class="num">Closes kept</th><th class="num">Long-run return</th><th class="num">Long-run vol</th><th class="num">Accounts</th><th>Status</th></tr></thead>
     <tbody>{% for s in secs if s.symbol != 'CASH' %}<tr>
       <td><a class="mono fw-bold" href="{{ url_for('security', symbol=s.symbol) }}">{{ s.symbol }}</a><span class="cell-sub text-truncate" style="max-width:18rem">{{ s.name }}</span></td>
       <td>{{ classes.get(s.asset_class, {}).get('label', '-') if not s.symbol.endswith('=X') else 'exchange rate' }}</td>
@@ -23,7 +23,7 @@
       <td class="num">{{ s.n_prices }}</td>
       <td class="num">{{ s.lt_return|pct if s.lt_return is not none else '' }}</td>
       <td class="num">{{ s.lt_vol|pct if s.lt_vol is not none else '' }}</td>
-      <td class="num">{{ s.n_portfolios }}</td>
+      <td class="num">{{ s.n_accounts }}</td>
       <td>{% if s.fetch_error %}{{ ui.pill('bad', 'error') }} <span class="small-muted">{{ s.fetch_error }}</span>{% elif s.last_price is none %}{{ ui.pill('warn', 'pending') }}{% else %}{{ ui.pill('ok', 'ok') }}{% endif %}</td></tr>
     {% else %}<tr><td colspan="9">{% call ui.empty('tags', 'Nothing tracked yet', 'Prices are collected for symbols you hold. Add holdings to a portfolio.') %}<a class="btn btn-primary" href="{{ url_for('portfolios') }}">Go to portfolios</a>{% endcall %}</td></tr>{% endfor %}</tbody>
   </table></div></div>

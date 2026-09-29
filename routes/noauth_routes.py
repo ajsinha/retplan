@@ -31,7 +31,8 @@ PAGES = [
     ("Balance sheet", "report", {"name": "balance"}, "journal-text", "net worth accounts"),
     ("Tax report", "report", {"name": "tax"}, "receipt", "tax by year"),
     ("Audit", "audit", {}, "clipboard-check", "checks reconciliation"),
-    ("Portfolios", "portfolios", {}, "briefcase", "holdings investments"),
+    ("Portfolios", "portfolios", {}, "briefcase", "holdings investments selections"),
+    ("Your accounts", "accounts", {}, "wallet2", "brokerage 401k ira roth savings mortgage home net worth"),
     ("New portfolio", "portfolio_new", {}, "plus-square", "create import paste"),
     ("Prices", "prices", {}, "cloud-download", "yahoo collector daily"),
     ("Securities", "securities", {}, "search", "look up symbol stock fund add security admin"),
@@ -76,7 +77,7 @@ class NoAuthRoutes:
     async def search(self, request: Request):
         q = (request.query_params.get("q") or "").strip()
         words = [w for w in q.lower().split() if w]
-        pages, topics, holdings, portfolios, scenarios = [], [], [], [], []
+        pages, topics, holdings, portfolios, scenarios, accounts = [], [], [], [], [], []
         if words:
             for label, route, params, icon, extra in PAGES:
                 hay = f"{label} {extra}".lower()
@@ -89,25 +90,30 @@ class NoAuthRoutes:
             for p in repo.list(sid):
                 if all(w in f"{p['name']} {p['description']}".lower() for w in words):
                     portfolios.append(p)
-                for h in repo.holdings(sid, p["id"]):
-                    sec = repo.security(h["symbol"]) or {}
-                    hay = f"{h['symbol']} {sec.get('name', '')} {h['account']}".lower()
-                    if all(w in hay for w in words):
-                        holdings.append(dict(h, portfolio=p["name"], pid=p["id"],
-                                             name=sec.get("name", "")))
+            for a in repo.accounts(sid):
+                if all(w in f"{a['name']} {a['institution']}".lower() for w in words):
+                    accounts.append(a)
+            for h in repo.all_holdings(sid):
+                sec = repo.security(h["symbol"]) or {}
+                hay = f"{h['symbol']} {sec.get('name', '')} {h['account']}".lower()
+                if all(w in hay for w in words):
+                    holdings.append(dict(h, name=sec.get("name", "")))
             for s in self.store.scenarios(sid):
                 if all(w in s["name"].lower() for w in words):
                     scenarios.append(s)
-        total = len(pages) + len(topics) + len(holdings) + len(portfolios) + len(scenarios)
+        total = (len(pages) + len(topics) + len(holdings) + len(portfolios) + len(scenarios)
+                 + len(accounts))
         return render(request, "search.html", q=q, pages=pages, topics=topics,
                       holdings=holdings, portfolios=portfolios, scenarios=scenarios,
+                      accounts=accounts,
                       total=total)
 
     async def system(self, request: Request):
         st = request.app.state
         db = st.db
         counts = {}
-        for table in ("plans", "portfolios", "accounts", "holdings", "securities", "prices",
+        for table in ("plans", "portfolios", "accounts", "portfolio_accounts", "holdings",
+                      "securities", "prices",
                       "fetch_runs", "projections"):
             counts[table] = db.scalar(f"SELECT COUNT(*) FROM {table}", default=0)
         import sqlalchemy

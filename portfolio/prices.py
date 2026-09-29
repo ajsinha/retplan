@@ -205,7 +205,10 @@ class PriceScheduler:
 
 
 def collect_in_background(collector: PriceCollector, symbols, reason="new-symbol"):
-    """Price newly added symbols now, without making the request wait."""
+    """Price newly added symbols now, without making the request wait. An empty list
+    means nothing to do (only None means every tracked symbol)."""
+    if symbols is not None and not list(symbols):
+        return None
     t = threading.Thread(target=lambda: _safe(collector, symbols, reason),
                          name=f"price-{reason}", daemon=True)
     t.start()

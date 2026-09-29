@@ -1,10 +1,10 @@
 """Net worth over time, portfolio by portfolio.
 
-    GET  /networth                    each portfolio's net worth today and its history
+    GET  /networth                    net worth today and over time: all accounts, each portfolio
 
-A portfolio holds every account - investments, cash, property and debts - so its
-valuation is a net worth; each is recorded every day prices are collected
-(portfolio/networth.py), and a portfolio's page can record one on demand.
+Every account the workspace has, counted once, and each portfolio: net worth is
+recorded every day prices are collected (portfolio/networth.py), and a
+portfolio's page can record one on demand.
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 """
@@ -31,25 +31,27 @@ class NetWorthRoutes:
         self.app.add_api_route("/networth", self.index, methods=["GET"], name="networth",
                                include_in_schema=False)
 
+    def _row(self, sid, name, v, hist, pid=None):
+        chart = ""
+        if len(hist) >= 2:
+            chart = charts.date_line(
+                [h["taken_on"] for h in hist],
+                [("Net worth", [h["net"] for h in hist]),
+                 ("Assets", [h["assets"] for h in hist]),
+                 ("Debts", [h["liabilities"] for h in hist])],
+                title=f"{name}: net worth over time",
+                desc="recorded every day prices are collected", zero_floor=True,
+                y_fmt=charts._fmt_compact)
+        first = hist[0] if hist else None
+        return dict(name=name, pid=pid, v=v, hist=hist, chart=chart,
+                    change=(v.net_worth - first["net"]) if first else None,
+                    since=first["taken_on"] if first else None)
+
     async def index(self, request: Request):
         sid = session_id(request)
         repo, nw = self.app.state.portfolios, self.app.state.networth
-        rows = []
-        for p in repo.list(sid):
-            v = repo.valuation(sid, p["id"])
-            hist = nw.history(sid, p["id"])
-            chart = ""
-            if len(hist) >= 2:
-                chart = charts.date_line(
-                    [h["taken_on"] for h in hist],
-                    [("Net worth", [h["net"] for h in hist]),
-                     ("Assets", [h["assets"] for h in hist]),
-                     ("Debts", [h["liabilities"] for h in hist])],
-                    title=f"{p['name']}: net worth over time",
-                    desc="recorded every day prices are collected", zero_floor=True,
-                    y_fmt=charts._fmt_compact)
-            first = hist[0] if hist else None
-            rows.append(dict(pf=p, v=v, hist=hist, chart=chart,
-                             change=(v.net_worth - first["net"]) if first else None,
-                             since=first["taken_on"] if first else None))
-        return render(request, "networth.html", rows=rows)
+        everything = self._row(sid, "Every account", repo.all_valuation(sid), nw.history(sid))
+        rows = [self._row(sid, p["name"], repo.valuation(sid, p["id"]), nw.history(sid, p["id"]),
+                          p["id"]) for p in repo.list(sid)]
+        return render(request, "networth.html", everything=everything, rows=rows,
+                      has_accounts=bool(everything["v"].accounts))

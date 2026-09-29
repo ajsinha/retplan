@@ -2,7 +2,7 @@
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
 <p>{{ goto('prices', 'Open the prices page') }}</p>
-<p>Every symbol held in any portfolio is priced once a day from Yahoo Finance. The
+<p>Every symbol held in any account is priced once a day from Yahoo Finance. The
 prices page shows what is tracked, how many daily closes are kept for each, the
 long-run statistics, and a log of every collection run.</p>
 
@@ -29,7 +29,7 @@ only as reliable as its source. It is a planning tool, not a trading feed.</p>
       a catch-up run starts about five seconds after RetPlan does.</li>
   <li><strong>When you add a symbol.</strong> A symbol added on its own is priced
       immediately; a pasted list is priced in the background.</li>
-  <li><strong>On request.</strong> <em>Refresh prices</em> on a portfolio (at once
+  <li><strong>On request.</strong> <em>Refresh prices</em> on a portfolio or an account's page (at once
       for up to eight symbols, in the background for more), or <em>Collect now</em> on
       the prices page for everything.</li>
   <li><strong>From cron</strong>, if RetPlan is not always running. See below.</li>
@@ -43,7 +43,9 @@ endpoint, so a large list takes a little while.</p>
 asks only for the smallest range that covers the gap since the last stored close
 &mdash; five days, one, three or six months, or a year &mdash; and overwrites the
 overlap, because adjusted closes change after every dividend. Exchange-rate pairs
-needed by any portfolio are collected in the same run, including a pair discovered
+needed by any account or portfolio &mdash; a holding's currency into its account's, and
+each account's into the currency of every portfolio it is in &mdash; are collected
+automatically in the same run, including a pair discovered
 during the run itself when a new symbol turns out to be quoted in a new
 currency.</p>
 
@@ -98,9 +100,9 @@ every symbol failed. Running it alongside the built-in schedule is harmless.</p>
 <ul>
   <li><strong>Schedule</strong>: the daily time and the next run, or <em>off</em>.</li>
   <li><strong>Symbols tracked</strong>: every held symbol plus the exchange-rate pairs
-      portfolios need.</li>
+      accounts and portfolios need.</li>
   <li><strong>Securities</strong>: the last close and its date, closes kept, the
-      long-run return and volatility, how many portfolios hold it, and a status:
+      long-run return and volatility, how many accounts hold it, and a status:
       <em>ok</em>, <em>pending</em> (never priced yet) or <em>error</em> with Yahoo's
       reason.</li>
   <li><strong>Collection runs</strong>: why each run happened (<code>schedule</code>,
@@ -110,7 +112,7 @@ every symbol failed. Running it alongside the built-in schedule is harmless.</p>
 </ul>
 <p>Click a symbol for its own page: a year of daily closes, the past year's total
 return, annualised volatility, worst fall, the long-run figures, its asset class
-(which you can change there), and which of your portfolios hold it.</p>
+(which you can change there), and which of your accounts hold it.</p>
 
 <h2 id="admin">Looking up and managing securities</h2>
 <p>{{ goto('securities', 'Securities') }} looks up any symbol or name on Yahoo -
@@ -166,7 +168,7 @@ Yahoo's conventions:</p>
     network or Yahoo was unavailable &mdash; try again later.</li>
 <li><strong>Fix the symbol.</strong> Delete the holding and add it again with the
     right symbol; the quantity and cost are yours to re-enter.</li>
-<li><strong>Refresh prices</strong> on the portfolio.</li>
+<li><strong>Refresh prices</strong> on the account or a portfolio that includes it.</li>
 <li><strong>If Yahoo simply does not carry it</strong> (some pension funds, unit
     trusts or private assets), hold it as <code>CASH</code> with its value and update
     the amount by hand. A home or other real estate belongs in a property account,

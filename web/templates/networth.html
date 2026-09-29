@@ -1,21 +1,11 @@
 {% extends "base.html" %}
 {% import "_macros/ui.html" as ui %}
 {% block title %}Net worth{% endblock %}
-{% block content %}
-{% call ui.page_head('Net worth', 'Everything you own less everything you owe, portfolio by portfolio - recorded every day prices are collected, and kept for good.', eyebrow='Portfolio', help=url_for('help_tools') ~ '#networth') %}
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolios') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Portfolios</a>
-{% endcall %}
-{% if not rows %}
-<div class="card"><div class="card-body">
-  {% call ui.empty('bank', 'Nothing to show yet', 'Create a portfolio and add your accounts - investments, cash, your home, the mortgage. Its net worth is recorded from then on.') %}
-    <a class="btn btn-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create a portfolio</a>
-  {% endcall %}
-</div></div>
-{% endif %}
-{% for r in rows %}
+{% macro block(r) %}
 <div class="card">
-  <div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> <a href="{{ url_for('portfolio_view', pid=r.pf.id) }}">{{ r.pf.name }}</a>
-    <span class="ms-auto small-muted fw-normal">{{ r.hist|length }} day{{ '' if r.hist|length == 1 else 's' }} recorded</span></div>
+  <div class="card-header"><i class="bi bi-{{ 'bank' if r.pid is none else 'briefcase' }}" aria-hidden="true"></i>
+    {% if r.pid is none %}<a href="{{ url_for('accounts') }}">{{ r.name }}</a>{% else %}<a href="{{ url_for('portfolio_view', pid=r.pid) }}">{{ r.name }}</a>{% endif %}
+    <span class="ms-auto small-muted fw-normal">{{ r.v.currency }} · {{ r.hist|length }} day{{ '' if r.hist|length == 1 else 's' }} recorded</span></div>
   <div class="card-body">
     <div class="stat-grid mb-3">
       {{ ui.kpi('Net worth', r.v.net_worth|money, ('since ' ~ r.since ~ ': ' ~ r.change|smoney) if r.change is not none else 'first record after the next price run', 'bank', ('good' if r.change >= 0 else 'bad') if r.change else '') }}
@@ -29,11 +19,28 @@
         <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Assets</th><th class="num">Debts</th><th class="num">Net worth</th></tr></thead>
           <tbody>{% for h in r.hist|reverse %}{% if loop.index0 % 7 == 0 %}<tr><td>{{ h.taken_on }}</td><td class="num">{{ h.assets|money }}</td><td class="num">{{ h.liabilities|money }}</td><td class="num">{{ h.net|money }}</td></tr>{% endif %}{% endfor %}</tbody></table>
       {% endcall %}
-    {% else %}
-      <form class="small-muted mb-0" method="post" action="{{ url_for('portfolio_record', pid=r.pf.id) }}">The chart appears once two days are recorded.
+    {% elif r.pid is not none %}
+      <form class="small-muted mb-0" method="post" action="{{ url_for('portfolio_record', pid=r.pid) }}">The chart appears once two days are recorded.
         <button class="btn btn-link btn-sm p-0 align-baseline" type="submit">Record today's now</button></form>
+    {% else %}
+      <p class="small-muted mb-0">The chart appears once two days are recorded - one each day prices are collected.</p>
     {% endif %}
   </div>
 </div>
-{% endfor %}
+{% endmacro %}
+{% block content %}
+{% call ui.page_head('Net worth', 'Everything you own less everything you owe - for all your accounts, each counted once, and for each portfolio. Recorded every day prices are collected, and kept for good.', eyebrow='Portfolio', help=url_for('help_tools') ~ '#networth') %}
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('accounts') }}"><i class="bi bi-wallet2" aria-hidden="true"></i> Accounts</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolios') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Portfolios</a>
+{% endcall %}
+{% if not has_accounts %}
+<div class="card"><div class="card-body">
+  {% call ui.empty('bank', 'Nothing to show yet', 'Add your accounts - investments, cash, your home, the mortgage. Net worth is recorded from then on.') %}
+    <a class="btn btn-primary" href="{{ url_for('accounts') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add accounts</a>
+  {% endcall %}
+</div></div>
+{% else %}
+{{ block(everything) }}
+{% for r in rows %}{{ block(r) }}{% endfor %}
+{% endif %}
 {% endblock %}

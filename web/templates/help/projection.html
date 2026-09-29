@@ -3,7 +3,8 @@
 {% block help %}
 <p>{{ goto('portfolios', 'Open portfolios') }}, pick one, then <em>Project</em>.</p>
 <p>A projection runs your current investable assets &mdash; the holdings of every
-investment account in the portfolio, plus its cash accounts as cash &mdash; forward
+investment account the portfolio includes (directly or through its parts, each account
+once), plus its cash accounts as cash &mdash; forward
 thousands of times, each time with
 a different random sequence of returns, and reports the spread of where they end up.
 It is separate from the retirement plan's simulation: it works holding by holding,

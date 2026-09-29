@@ -1,7 +1,7 @@
 """The portfolio builder: upload a spreadsheet of positions, review, confirm.
 
-    GET  /portfolios/build[?pid=&aid=]  the upload form: into one account (aid), into
-                                        a portfolio's accounts (pid), or a new portfolio
+    GET  /portfolios/build[?aid=|?pid=] the upload form: into one account (aid), or a
+                                        file of several accounts (optionally into pid)
     POST /portfolios/build              analyse the file (portfolio/builder.py),
                                         keep the result as a draft, go to review
     GET  /portfolios/build/{did}        review every proposed holding
@@ -71,10 +71,10 @@ class BuilderRoutes:
         """(portfolio, account) the upload is aimed at; either may be None."""
         pf = acct = None
         try:
-            if pid:
+            if aid:
+                acct = self.repo.account(sid, int(aid))
+            elif pid:
                 pf = self.repo.get(sid, int(pid))
-                if aid:
-                    acct = self.repo.account(sid, int(pid), int(aid))
         except (NotFound, ValueError):
             return None, None
         return pf, acct
@@ -169,37 +169,43 @@ class BuilderRoutes:
         pf, acct = self._target(sid, d.get("target_pid"), d.get("target_aid"))
         try:
             if acct:                                   # everything into one account
-                pid, aid = pf["id"], acct["id"]
+                aid = acct["id"]
                 if form.get("replace"):
-                    for h in self.repo.holdings(sid, pid, aid):
-                        self.repo.delete_holding(sid, pid, h["id"])
+                    for h in self.repo.holdings(sid, aid):
+                        self.repo.delete_holding(sid, h["id"])
                 for r in rows:
-                    self.repo.add_holding(sid, pid, aid, r["symbol"], r["quantity"],
-                                          r["cost"], r["asset_class"])
-                where = dict(endpoint="account_view", pid=pid, aid=aid)
+                    self.repo.add_holding(sid, aid, r["symbol"], r["quantity"], r["cost"],
+                                          r["asset_class"])
+                where = dict(endpoint="account_view", aid=aid)
             else:                                      # one account per name in the file
-                if (form.get("mode") or "new") == "new":
-                    pid = self.repo.create(sid, form.get("name") or "Imported portfolio",
-                                           form.get("currency") or "USD",
-                                           f"Built from {d['filename']}")
-                else:
-                    pid = int(form.get("portfolio") or 0)
-                    self.repo.get(sid, pid)
                 chosen = {}
                 for i in range(int(form.get("n_accounts") or 0)):
                     name = (form.get(f"acct-{i}-name") or "").strip()
                     typ = form.get(f"acct-{i}-type") or ""
                     if name:
                         chosen[name.lower()] = typ if typ in at.BY_KEY else None
+                currency = form.get("currency") or "USD"
                 ids = {}
                 for r in rows:
                     name = r["account"] or DEFAULT_ACCOUNT
                     if name.lower() not in ids:
                         ids[name.lower()] = self.repo.find_or_create_account(
-                            sid, pid, name, chosen.get(name.lower()))
-                    self.repo.add_holding(sid, pid, ids[name.lower()], r["symbol"],
-                                          r["quantity"], r["cost"], r["asset_class"])
-                where = dict(endpoint="portfolio_view", pid=pid)
+                            sid, name, chosen.get(name.lower()), currency)
+                    self.repo.add_holding(sid, ids[name.lower()], r["symbol"], r["quantity"],
+                                          r["cost"], r["asset_class"])
+                mode = form.get("mode") or "new"
+                if mode == "new":
+                    pid = self.repo.create(sid, form.get("name") or "Imported portfolio",
+                                           currency, f"Built from {d['filename']}",
+                                           accounts=list(ids.values()))
+                    where = dict(endpoint="portfolio_view", pid=pid)
+                elif mode == "merge":
+                    pid = int(form.get("portfolio") or 0)
+                    for aid in ids.values():
+                        self.repo.add_to_portfolio(sid, pid, aid)
+                    where = dict(endpoint="portfolio_view", pid=pid)
+                else:
+                    where = dict(endpoint="accounts")
         except (NotFound, ValueError) as exc:
             flash(request, f"Could not import: {exc}", "error")
             return redirect_to(request, "builder_review", did=did)

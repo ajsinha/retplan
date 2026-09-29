@@ -1,0 +1,19 @@
+{% extends "plan/_bare.html" if partial else "portfolio/_dialog_page.html" %}
+{#- What a portfolio is made of: some of your accounts, and other portfolios. -#}
+{% block dialog %}
+{% from "portfolio/_pickers.html" import pickers with context %}
+<form method="post" action="{{ url_for('portfolio_members_save', pid=pf.id) }}" class="dialog-form">
+  <div class="modal-header">
+    <div><div class="eyebrow">{{ pf.name }}</div><h2 class="modal-title h5" id="rp-dialog-title">What is it made of?</h2></div>
+    {% if partial %}<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>{% endif %}
+  </div>
+  <div class="modal-body">
+    <p class="small-muted">Tick the accounts it includes. The accounts stay yours - taking one out of a portfolio never deletes it.</p>
+    {{ pickers(groups, parts, direct, children) }}
+  </div>
+  <div class="modal-footer">
+    <a class="btn btn-outline-secondary me-auto" href="{{ url_for('account_dialog', pid=pf.id) }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> A new account</a>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> Save</button>
+  </div>
+</form>
+{% endblock %}

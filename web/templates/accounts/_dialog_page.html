@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ heading or 'Add an account' }}{% endblock %}
+{% block content %}
+{# The account dialog as a page of its own, for a browser without script. #}
+<div class="dialog-page mx-auto">
+  {% if back_pid %}<a class="small" href="{{ url_for('portfolio_view', pid=back_pid) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ back_name }}</a>
+  {% else %}<a class="small" href="{{ url_for('accounts') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to your accounts</a>{% endif %}
+  <div class="card mt-2"><div class="modal-content border-0">{% block dialog %}{% endblock %}</div></div>
+</div>
+{% endblock %}

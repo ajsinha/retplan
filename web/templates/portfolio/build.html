@@ -3,10 +3,10 @@
 {% block title %}Build a portfolio{% endblock %}
 {% block content %}
 {% if acct %}{% set title = 'Upload positions into ' ~ acct.name %}{% set lead = 'Upload the positions export for this account from your broker - or any spreadsheet listing what it holds.' %}
-{% elif pf %}{% set title = 'Import a file into ' ~ pf.name %}{% set lead = 'A file listing several accounts - an account column, or one sheet per account. Each account in it is added to ' ~ pf.name ~ ', or matched to one already there by name.' %}
-{% else %}{% set title = 'Start a portfolio from a file' %}{% set lead = 'A file listing several accounts - an account column, or one sheet per account - becomes a portfolio with one account per name. For a single account, create the portfolio and upload into the account instead.' %}{% endif %}
-{% call ui.page_head(title, lead ~ ' RetPlan finds the table, works out what each column means, identifies every security on Yahoo Finance, and shows you everything before anything is saved.', eyebrow=(pf.name if pf else 'Portfolio'), help=url_for('help_portfolios') ~ '#builder') %}
-  {% if acct %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('account_view', pid=pf.id, aid=acct.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ acct.name }}</a>
+{% elif pf %}{% set title = 'Import a file into ' ~ pf.name %}{% set lead = 'A file listing several accounts - an account column, or one sheet per account. Each account in it is made (or matched to one of yours by name) and included in ' ~ pf.name ~ '.' %}
+{% else %}{% set title = 'Import a file of several accounts' %}{% set lead = 'A broker export listing several accounts - an account column, or one sheet per account. Each becomes one of your accounts (or joins one of the same name), and can make up a new portfolio. For a single account, upload from the account\'s own page.' %}{% endif %}
+{% call ui.page_head(title, lead ~ ' RetPlan finds the table, works out what each column means, identifies every security on Yahoo Finance, and shows you everything before anything is saved.', eyebrow=(acct.name if acct else (pf.name if pf else 'Import')), help=url_for('help_portfolios') ~ '#builder') %}
+  {% if acct %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('account_view', aid=acct.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ acct.name }}</a>
   {% elif pf %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portfolio_view', pid=pf.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ pf.name }}</a>{% endif %}
 {% endcall %}
 <div class="row g-3">

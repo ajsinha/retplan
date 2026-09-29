@@ -80,7 +80,10 @@ investable assets - investment accounts plus cash accounts), `cost`, `day_change
 `unpriced`, `net_worth`, `property`, `debts`, `accounts` (id, name, type, kind, owner,
 institution, value, as_of, rate, months_left) and `holdings` (symbol, name, quantity,
 price, currency, fx, value, weight, account - the account's name - account_id, asset
-class, cost basis).
+class, cost basis). `accounts` are every account the portfolio includes, directly or
+through a portfolio it is made of, each once; values are in the portfolio's currency.
+Accounts belong to the workspace, not to a portfolio, so the same account can appear in
+the answer for several portfolios.
 
 ### `GET /api/tickers?q=`
 

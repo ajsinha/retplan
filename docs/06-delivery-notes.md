@@ -10,8 +10,8 @@ does not do* and on the about page.
 |---|---|
 | `retplan/` | The planning engine: plan model, random numbers, markets, tax, projection, metrics, solvers, sample household |
 | `portfolio/` | Database layer, repository, account types, Yahoo client, price collector and scheduler, FX, asset classes, checks and rebalancing, paste importer, portfolio builder, net worth records, projection, stress replays |
-| `web/`, `routes/` | The FastAPI application: 13 route classes, Jinja templates, server-rendered SVG charts, the MAYA design in four themes, 28 help topics |
-| `schema/` | `sqlite.sql` and `postgres.sql`, eleven tables each |
+| `web/`, `routes/` | The FastAPI application: 16 route classes, Jinja templates, server-rendered SVG charts, the MAYA design in four themes, 28 help topics |
+| `schema/` | `sqlite.sql` and `postgres.sql`, thirteen tables each |
 | `config/retplan.toml` | All settings, each overridable by a `RETPLAN_*` variable |
 | `tools/` | `fetch_prices.py` (one collection run, for cron), `copy_db.py` (move data between databases) |
 | `tests/` | `run_tests.py` (engine) and `test_portfolio.py` (database, portfolios, builder, administration, web) |
@@ -33,11 +33,13 @@ make test                               # both test suites, offline
   market model really produces; run the solvers (maximum spend, earliest
   retirement, extra saving), the spending sweep and the tornado; read cash-flow,
   balance-sheet and tax reports and the audit; export and import plans as JSON.
-- **Portfolios**: keep every account you own and owe - investments, cash, property
-  and debts - in one or more portfolios; fill investment accounts by ticker search,
-  paste, or by uploading a broker's positions file to the portfolio builder (one
-  account, or a file listing several); price them daily from Yahoo in any base
-  currency; see net worth, investable assets, allocation by class, tax treatment,
+- **Accounts and portfolios**: keep every account you own and owe - investments,
+  cash, property and debts - on the Accounts page, each in its own currency, and
+  gather them into any number of portfolios (an account can be in several; a
+  portfolio can be made of other portfolios); fill investment accounts by ticker
+  search, paste, or by uploading a broker's positions file to the portfolio builder
+  (one account, or a file listing several); price them daily from Yahoo and convert
+  them into each portfolio's currency; see net worth, investable assets, allocation by class, tax treatment,
   account and owner, a year of value, net worth over time, and the checks; set a
   target mix and get rebalancing trades; link a plan to a portfolio so its accounts
   and loans follow it.
@@ -49,38 +51,69 @@ make test                               # both test suites, offline
 
 ## Changes
 
-### 2026-09-29 - Portfolios as collections of accounts
+### 2026-09-29 - Accounts, and portfolios as selections of them
 
-- A portfolio is now a collection of **accounts**, each of a type
-  (`portfolio/account_types.py`) in one of four kinds: investments (brokerage,
-  401(k), Roth 401(k), IRA, Roth IRA, HSA, 529, pension pot, tax-free savings),
-  cash, property and debts. Every account has a name, an owner (you, partner or
-  joint), an optional institution, and a type that sets its tax treatment. Accounts
-  are added and updated through a step-by-step dialog; hand-kept values show their
+- **Accounts** are the building blocks and belong to the workspace, not to a
+  portfolio. Each has a type (`portfolio/account_types.py`) in one of four kinds:
+  investments (brokerage, 401(k), Roth 401(k), IRA, Roth IRA, HSA, 529, pension
+  pot, tax-free savings), cash, property and debts; a name, an owner (you, partner
+  or joint), an optional institution, its own **currency** (by default the one most
+  accounts use), and a type that sets its tax treatment. The **Accounts** page
+  (`/accounts`, Portfolio → Accounts) lists every account by kind with net worth
+  over all of them, each counted once, a net-worth chart, and the portfolios each
+  is in. Accounts are added and updated through a step-by-step dialog, whose last
+  optional step chooses the portfolios it is part of; hand-kept values show their
   age and are flagged after 90 days; debts pay themselves down month by month.
-- Each investment account has its own page with its holdings (add one, paste, or
-  upload positions into it; move a holding to another account). The free-text
-  holding account is gone. The builder uploads into one account, or reads a
-  multi-account file and confirms a guessed type for each account found.
+- Every account has its own page (`/accounts/{id}`): holdings for investment
+  accounts (add one, paste, or upload positions into it; move a holding to another
+  investment account), value or debt details otherwise, and "In portfolios" to
+  choose which portfolios it is in. Duplicating an account copies its holdings (the
+  copy is in no portfolio); deleting it removes it from every portfolio. The
+  free-text holding account is gone.
+- A **portfolio** is a selection: any accounts (one account can be in any number
+  of portfolios) and/or other portfolios, whose accounts it includes recursively,
+  now and later, each counted once. A portfolio cannot contain itself, directly or
+  through another. The portfolio page has "Choose accounts", "New account", cards
+  marked "through <part>", "Take out of <portfolio>" (the account stays) and a
+  "Made of … / Part of …" line. Deleting a portfolio never deletes accounts;
+  duplicating one shares its accounts rather than copying them.
+- **Live link**: portfolios hold references, so a change to an account is seen at
+  once by every portfolio including it and by every plan linked to such a
+  portfolio.
+- The builder uploads from an account page into that account, or reads a file of
+  several accounts (from the nav, the Accounts page or a portfolio's menu),
+  confirming a guessed type for each account found, joining existing accounts of
+  the same name, and putting them into a new portfolio, an existing one, or no
+  portfolio. Search (`Ctrl-K`) finds accounts.
 - The portfolio page shows net worth, investable assets (investments plus cash
   accounts), property, debts and the past year; accounts grouped by kind;
   allocation by class, tax treatment, account and owner; net worth over time.
   Projections, stress tests, checks and the target mix work on investable assets.
-- Net worth is recorded for every portfolio after each price collection, or on
-  demand from the portfolio's menu, with a breakdown by kind. Manual snapshots and
-  "to plan" from a snapshot are removed.
+- Net worth is recorded after each price collection for every account together
+  (each once) and for every portfolio, or on demand from a portfolio's menu (which
+  records both), with a breakdown by kind. `/networth` shows "Every account" first,
+  then each portfolio. Manual snapshots and "to plan" from a snapshot are removed.
 - A plan can be **linked** to a portfolio (`plan.portfolio_id`,
   `web/plan_link.py`): every time the plan is read, its accounts and loans are
-  brought in line with the portfolio's, keeping what the plan adds. "Use in your
+  brought in line with the portfolio's accounts (those leaving or joining the
+  portfolio leave or join the plan), keeping what the plan adds; simulation results
+  are dropped when the portfolio's accounts change. "Use in your
   retirement plan" is replaced by linking, unlinking and "Start a plan from it"; the
   quick start can take its accounts from a portfolio and builds a linked plan.
-- Database: new `accounts` table; `holdings.account_id` (NOT NULL, cascading)
-  replaces the free-text `account` column; `snapshots` rows are written only as kind
-  `portfolio`, with a JSON breakdown. Plan JSON gains `portfolio_id`; ledgers and
+- Database: new `accounts` table (owned by the workspace, with a `currency`, no
+  `portfolio_id`); new `portfolio_accounts` (many-to-many) and `portfolio_children`
+  (nested portfolios) tables; `holdings.account_id` (NOT NULL, cascading) replaces
+  the free-text `account` column and `holdings.portfolio_id`; `snapshots` rows are
+  kind `all` (every account) or `portfolio`, with a JSON breakdown. Thirteen tables
+  in all. Plan JSON gains `portfolio_id`; ledgers and
   loans gain `account_id`. `/api/portfolios/{id}` adds `net_worth`, `property`,
-  `debts` and `accounts`.
-- **No migration.** A database from before this change must be rebuilt, or have the
-  `accounts` table added and `holdings` recreated by hand.
+  `debts` and `accounts` (holdings carry `account` and `account_id`).
+- New routes: `/accounts`, `/accounts/dialog`, `/accounts/save`, `/accounts/{aid}`
+  and its `delete`, `duplicate`, `portfolios`, `refresh`, `holdings`, `import` and
+  `holdings/save`; `/holdings/{hid}/delete`; `/portfolios/{pid}/members`,
+  `/portfolios/{pid}/accounts/{aid}/remove`, `/portfolios/{pid}/parts/{cid}/remove`,
+  `/portfolios/{pid}/record`; `/portfolios/build?aid=` or `?pid=`.
+- **No migration.** A database from before this change must be rebuilt.
 
 ## Verification performed
 
@@ -173,8 +206,8 @@ Timings on the development machine (sample household, 61 years, 6 accounts):
   altering or rebuilding the database.
 - One administrator account. `local_is_admin` must stay off behind a reverse proxy,
   where every request looks local.
-- Simulation results are kept in memory and lost on restart; plans and portfolios
-  are not.
+- Simulation results are kept in memory and lost on restart; plans, accounts and
+  portfolios are not.
 
 ### Where the answer will be least reliable
 

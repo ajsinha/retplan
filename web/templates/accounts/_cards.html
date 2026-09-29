@@ -1,0 +1,63 @@
+{# Account cards grouped by kind: on the Accounts page (pf none) and a portfolio's
+   page (pf set: accounts can be taken out of it, and those it has only through
+   one of its parts say so). #}
+{% macro account_groups(v, kinds, pf=none, direct=none, via=none, memberships=none) %}
+{% for key, label, icon, blurb in kinds %}
+{% set group = v.of_kind(key) %}
+<div class="acct-group">
+  <div class="acct-group-head">
+    <h3 class="h6 mb-0"><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</h3>
+    {% if group %}<span class="num fw-semibold">{{ '−' if key == 'debt' }}{{ v.kind_total(key)|money }}</span>{% endif %}
+    <a class="small ms-2" href="{{ url_for('account_dialog', kind=key, pid=pf.id) if pf else url_for('account_dialog', kind=key) }}" data-dialog>+ add</a>
+  </div>
+  {% if group %}
+  <ul class="item-list">
+    {% for a in group %}
+    <li class="item-card">
+      <span class="ico"><i class="bi bi-{{ a.icon }}" aria-hidden="true"></i></span>
+      <div class="body">
+        <a class="title stretched-link" href="{{ url_for('account_view', aid=a.id) }}">{{ a.name }}</a>
+        <div class="detail">{{ a.label }} · {{ a.owner_label }}{% if a.institution %} · {{ a.institution }}{% endif %}</div>
+        <div class="chips">
+          {% if a.kind == 'investments' %}
+            <span class="chip">{{ a.n_holdings }} holding{{ '' if a.n_holdings == 1 else 's' }}</span>
+            {% if a.tax != 'none' %}<span class="chip">{{ {'taxable': 'taxable', 'deferred': 'tax-deferred', 'free': 'tax-free'}[a.tax] }}</span>{% endif %}
+            {% if a.gain is not none %}<span class="chip {{ 'up' if a.gain >= 0 else 'down' }}">{{ a.gain|smoney }} on cost</span>{% endif %}
+            {% if a.unpriced %}<span class="chip chip-paused">{{ a.unpriced }} unpriced</span>{% endif %}
+            {% if not a.n_holdings %}<span class="chip chip-paused">add holdings</span>{% endif %}
+          {% elif a.kind == 'debt' %}
+            {% if a.rate is not none %}<span class="chip">{{ (a.rate * 100)|round(2) }}%</span>{% endif %}
+            {% if a.payment %}<span class="chip">{{ a.payment|money }} a month</span>{% endif %}
+            {% if a.months_left %}<span class="chip">{{ (a.months_left / 12)|round(1) }} years left</span>{% endif %}
+          {% endif %}
+          {% if a.age_days is not none %}<span class="chip {{ 'chip-paused' if a.age_days > 90 }}">{{ 'updated today' if a.age_days == 0 else 'updated ' ~ a.age_days ~ ' days ago' }}</span>{% endif %}
+          {% if a.fx_missing %}<span class="chip chip-paused">no {{ a.currency }} rate yet</span>{% elif a.currency != v.currency %}<span class="chip">{{ a.currency }}</span>{% endif %}
+          {% if pf and via and a.id not in direct %}<span class="chip"><i class="bi bi-diagram-2" aria-hidden="true"></i> through {{ via.get(a.id, 'a part') }}</span>{% endif %}
+          {% if memberships is not none %}
+            {% for m in memberships.get(a.id, []) %}<span class="chip"><i class="bi bi-briefcase" aria-hidden="true"></i> {{ m.name }}</span>{% else %}<span class="chip chip-paused">in no portfolio</span>{% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="amount num {{ 'down' if a.kind == 'debt' }}">{{ '−' if a.kind == 'debt' }}{{ a.value|money }}</div>
+      <div class="dropdown actions">
+        <button class="btn btn-sm btn-link" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More for {{ a.name }}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {% if a.kind == 'investments' %}<li><a class="dropdown-item" href="{{ url_for('account_view', aid=a.id) }}"><i class="bi bi-list-ul" aria-hidden="true"></i> Holdings</a></li>{% endif %}
+          <li><a class="dropdown-item" href="{{ url_for('account_dialog', aid=a.id, pid=pf.id) if pf else url_for('account_dialog', aid=a.id) }}" data-dialog><i class="bi bi-pencil" aria-hidden="true"></i> {{ 'Edit' if a.kind == 'investments' else 'Update value' }}</a></li>
+          <li><hr class="dropdown-divider"></li>
+          {% if pf and a.id in direct %}
+          <li><form method="post" action="{{ url_for('portfolio_remove_account', pid=pf.id, aid=a.id) }}">
+            <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Take out of {{ pf.name }}</button></form></li>
+          {% endif %}
+          <li><form method="post" action="{{ url_for('account_delete', aid=a.id) }}" data-confirm="Delete '{{ a.name }}'{{ ' and its ' ~ a.n_holdings ~ ' holdings' if a.n_holdings }}? It leaves every portfolio that has it.">
+            {% if pf %}<input type="hidden" name="back_pid" value="{{ pf.id }}">{% endif %}
+            <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Delete account</button></form></li>
+        </ul>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endfor %}
+{% endmacro %}

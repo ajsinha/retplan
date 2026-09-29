@@ -1,0 +1,28 @@
+{# Pick accounts (grouped by kind) and portfolios to include - for a new portfolio
+   and for choosing what an existing one is made of. #}
+{% macro pickers(groups, parts, chosen_accounts=(), chosen_parts=()) %}
+{% set any_accounts = groups|map(attribute=3)|map('length')|sum %}
+{% if any_accounts %}
+  {% for key, label, icon, accts in groups if accts %}
+  <div class="eyebrow {{ 'mt-3' if not loop.first }} mb-2"><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</div>
+  <div class="pick-list">
+    {% for a in accts %}
+    <label class="pick"><input class="form-check-input mt-1" type="checkbox" name="accounts" value="{{ a.id }}" {% if a.id in chosen_accounts %}checked{% endif %}>
+      <span><span class="t">{{ a.name }}</span><span class="d">{{ a.institution or '' }}{{ ' · ' if a.institution }}{{ a.n_holdings ~ ' holdings' if key == 'investments' else a.currency ~ ' ' ~ '{:,.0f}'.format(a.value) }}</span></span></label>
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="small-muted mb-0">You have no accounts yet - add them on the <a href="{{ url_for('accounts') }}">Accounts</a> page, or create the portfolio and add new accounts from it.</p>
+{% endif %}
+{% if parts %}
+  <div class="eyebrow mt-4 mb-1"><i class="bi bi-diagram-2" aria-hidden="true"></i> Portfolios to include</div>
+  <p class="small-muted mb-2">Every account of each, now and later. An account reached more than once counts once.</p>
+  <div class="pick-list">
+    {% for p in parts %}
+    <label class="pick"><input class="form-check-input mt-1" type="checkbox" name="parts" value="{{ p.id }}" {% if p.id in chosen_parts %}checked{% endif %}>
+      <span><span class="t">{{ p.name }}</span><span class="d">{{ p.n_accounts }} account{{ '' if p.n_accounts == 1 else 's' }}</span></span></label>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endmacro %}

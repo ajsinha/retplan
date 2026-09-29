@@ -165,19 +165,26 @@ edited under {{ goto('plan_section', 'Plan → Health and care', 'care') }}.</p>
 <h2 id="networth">Net worth history</h2>
 <p>{{ goto('networth', 'Open net worth history') }} A plan looks forward; this looks back.</p>
 {% call steps() %}
-  <li><strong>Portfolios record themselves.</strong> After every price collection each
-      portfolio's assets, debts and a breakdown by kind - investments, cash, property, debt -
-      are recorded, one row a day. The rows are kept for good, so the history grows beyond
-      the year of daily prices RetPlan keeps.</li>
+  <li><strong>Net worth records itself.</strong> After every price collection, two kinds
+      of row are recorded, one a day: <em>every account</em> together, each counted once
+      however many portfolios it is in, and each portfolio on its own. Each row holds the
+      assets, the debts and a breakdown by kind - investments, cash, property, debt. The
+      rows are kept for good, so the history grows beyond the year of daily prices RetPlan
+      keeps.</li>
   <li><strong>Record on demand.</strong> <em>Record today's net worth</em> on a portfolio's
-      <em>&hellip;</em> menu does it straight away - after updating a balance, say.</li>
-  <li><strong>Watch it over time.</strong> The page shows, for each portfolio, today's net
-      worth split into investments, cash, property and debts, and the history as a chart.</li>
+      <em>&hellip;</em> menu does it straight away, for that portfolio and for every account
+      together - after updating a balance, say.</li>
+  <li><strong>Watch it over time.</strong> The page shows <em>Every account</em> first, then
+      each portfolio: today's net worth split into investments, cash, property and debts,
+      and the history as a chart. The {{ goto('accounts', 'Accounts') }} page draws the
+      every-account chart too.</li>
 {% endcall %}
-{% call note('tip', 'Keep everything in one portfolio') %}
-<p>There are no hand-typed snapshots: a portfolio holding every account - investments, bank
-balances, your home, the mortgage and other debts - is the record. To bring a plan up to date
-with it, <a href="{{ url_for('help_portfolios') }}#plan">link the plan to the portfolio</a>;
-its accounts and loans then follow the portfolio every time it runs.</p>
+{% call note('tip', 'Keep every account in RetPlan') %}
+<p>There are no hand-typed snapshots: your accounts - investments, bank balances, your
+home, the mortgage and other debts - are the record, and <em>Every account</em> is your
+whole net worth whether or not the accounts are in a portfolio. To bring a plan up to date
+with them, gather them in a portfolio and
+<a href="{{ url_for('help_portfolios') }}#plan">link the plan to it</a>; its accounts and
+loans then follow the portfolio's accounts every time it runs.</p>
 {% endcall %}
 {% endblock %}

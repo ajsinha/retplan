@@ -3,7 +3,7 @@
 {% set v = row.get(q.name) %}
 {% set id = 'q-' ~ q.name %}
 <div class="question">
-  {% if q.widget in ('basis', 'essential', 'yesno', 'mix', 'choice', 'radio') %}
+  {% if q.widget in ('basis', 'essential', 'yesno', 'mix', 'choice', 'radio', 'checks') %}
     <div class="q-label" id="{{ id }}-l">{{ q.question }}</div>
   {% else %}
     <label class="q-label" for="{{ id }}">{{ q.question }}</label>
@@ -74,6 +74,15 @@
       <input type="radio" class="btn-check" name="{{ q.name }}" id="{{ id }}-{{ loop.index }}" value="{{ val }}"
              {% if (v|string) == (val|string) %}checked{% endif %}>
       <label class="btn btn-outline-primary" for="{{ id }}-{{ loop.index }}">{{ label }}</label>
+      {% endfor %}
+    </div>
+  {% elif q.widget == 'checks' %}
+    <input type="hidden" name="{{ q.name }}_asked" value="1">
+    <div class="choice-row" role="group" aria-labelledby="{{ id }}-l">
+      {% for val, label in q.options %}
+      <input type="checkbox" class="btn-check" name="{{ q.name }}" id="{{ id }}-{{ loop.index }}" value="{{ val }}"
+             {% if val in (v or []) %}checked{% endif %}>
+      <label class="btn btn-outline-primary" for="{{ id }}-{{ loop.index }}"><i class="bi bi-briefcase" aria-hidden="true"></i> {{ label }}</label>
       {% endfor %}
     </div>
   {% elif q.widget == 'mix' %}

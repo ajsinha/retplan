@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% from "accounts/_cards.html" import account_groups with context %}
+{% block title %}Accounts{% endblock %}
+{% block content %}
+{% call ui.page_head('Your accounts', 'Every account you have - investments priced every day, cash, property and debts. A portfolio is any selection of them; an account can be in as many portfolios as you like, and a change here is seen by all of them.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-primary" href="{{ url_for('account_dialog') }}" data-dialog><i class="bi bi-plus-lg" aria-hidden="true"></i> Add account</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_new') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> New portfolio</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Import a file of several accounts</a>
+{% endcall %}
+
+{% if v.accounts %}
+<div class="stat-grid">
+  {{ ui.kpi('Net worth', v.net_worth|money, 'every account, each counted once · ' ~ v.currency, 'bank', 'bad' if v.net_worth < 0 else '') }}
+  {{ ui.kpi('Investable', v.total|money, 'investments and cash', 'graph-up-arrow') }}
+  {{ ui.kpi('Property', v.property_total|money, '', 'house') }}
+  {{ ui.kpi('Debts', v.debts|money, 'paid down month by month' if v.debts else 'none', 'credit-card') }}
+</div>
+<div class="card" id="accounts">
+  <div class="card-header"><i class="bi bi-wallet2" aria-hidden="true"></i> Accounts <span class="small-muted fw-normal">{{ v.accounts|length }}</span></div>
+  <div class="card-body">{{ account_groups(v, kinds, memberships=memberships) }}</div>
+</div>
+{% if chart %}
+{% call ui.chart_card('Net worth over time', 'bank', chart, 'every account, recorded daily') %}
+  <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Assets</th><th class="num">Debts</th><th class="num">Net worth</th></tr></thead>
+    <tbody>{% for h in hist|reverse %}{% if loop.index0 % 7 == 0 %}<tr><td>{{ h.taken_on }}</td><td class="num">{{ h.assets|money }}</td><td class="num">{{ h.liabilities|money }}</td><td class="num">{{ h.net|money }}</td></tr>{% endif %}{% endfor %}</tbody></table>
+{% endcall %}
+{% endif %}
+{% else %}
+<div class="card"><div class="card-body">
+  <div class="item-empty">
+    <p class="mb-2"><strong>No accounts yet.</strong> Add each one you have - a few questions each. Investment accounts then take your broker's CSV or Excel file.</p>
+    <div class="kind-chips">
+      {% for key, label, icon, blurb in kinds %}
+      <a class="kind-chip" href="{{ url_for('account_dialog', kind=key) }}" data-dialog><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</a>
+      {% endfor %}
+      <a class="kind-chip" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> A file of several accounts</a>
+    </div>
+  </div>
+</div></div>
+{% endif %}
+{% endblock %}

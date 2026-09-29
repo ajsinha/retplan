@@ -32,7 +32,7 @@
     ('Outcome', [
       (url_for('dashboard'), 'speedometer2', 'Dashboard', 'Verdict, success odds, charts', '/dashboard'),
       (url_for('compare'), 'columns-gap', 'Compare scenarios', 'Side by side: odds, wealth, tax, spending', '/compare'),
-      (url_for('networth'), 'bank2', 'Net worth history', 'Snapshots over time; portfolio values kept daily', '/networth')]),
+      (url_for('networth'), 'bank2', 'Net worth history', 'Every account and each portfolio, recorded daily', '/networth')]),
     ('Year by year', [
       (url_for('report', name='cashflow'), 'table', 'Cash flow', 'Income, spending, tax and withdrawals', '/reports/cashflow'),
       (url_for('report', name='balance'), 'journal-text', 'Balance sheet', 'Accounts, debt and net worth', '/reports/balance'),
@@ -41,9 +41,9 @@
       (url_for('plan_report'), 'printer', 'Plan report', 'Everything on one page, to print or save as PDF', '/report/plan')])]),
   ('Portfolio', 'briefcase', [
     ('Your holdings', [
-      (url_for('portfolios'), 'briefcase', 'Portfolios', 'Holdings, value, allocation and risk checks', '/portfolios'),
-      (url_for('builder'), 'file-earmark-spreadsheet', 'Build from a spreadsheet', 'Upload your positions; RetPlan works out the rest', '/portfolios/build'),
-      (url_for('portfolio_new'), 'plus-square', 'New portfolio', 'Type holdings or paste them from a spreadsheet', '/portfolios/new')]),
+      (url_for('accounts'), 'wallet2', 'Accounts', 'Investments, cash, property and debts - and net worth', '/accounts'),
+      (url_for('portfolios'), 'briefcase', 'Portfolios', 'Any selection of accounts, or of portfolios', '/portfolios'),
+      (url_for('builder'), 'file-earmark-spreadsheet', 'Import a file', 'A broker export listing several accounts', '/portfolios/build')]),
     ('Look ahead', [
       (pf_first, 'graph-up', 'Projection', 'Monte Carlo over 10+ years, yearly or quarterly', None),
       (pf_first, 'lightning', 'Stress tests', '2008, dot-com, 2022 and more, replayed on your mix', None)]),

@@ -1,40 +1,33 @@
 {% extends "help/_layout.html" %}
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
-<p>{{ goto('portfolios', 'Open portfolios') }} {{ goto('portfolio_new', 'Start a new portfolio') }}</p>
-<p>A portfolio is a collection of <strong>accounts</strong> &mdash; everything you
-own and owe, in one place. Investment accounts hold real securities, priced every day
-from Yahoo Finance; cash accounts, property and debts are balances you keep up to date.
-Together they give your net worth, and the investable part of it is what the
-projection and stress tests work on.</p>
-<p>You can keep as many portfolios as you like, and they are all equal. Most people
-keep one for the whole household; others are useful for what-ifs &mdash; a model
-portfolio, or a parent's money you look after. A retirement plan can be
-<a href="#plan">linked to a portfolio</a>, so its accounts and debts always come from
-it.</p>
-
-<h2>Creating a portfolio</h2>
-{% call steps() %}
-<li><strong>Name it and choose its currency.</strong> The currency is the one you
-    think in. Every value, gain and projection is shown in it; holdings quoted in
-    other currencies are converted daily (see below), and cash, property and debts are
-    entered in it. You can change it later from the portfolio's <em>&hellip;</em>
-    menu.</li>
-<li><strong>Create and add accounts.</strong> The portfolio page opens, ready for its
-    first account.</li>
+<p>{{ goto('accounts', 'Open accounts') }} {{ goto('portfolios', 'Open portfolios') }} {{ goto('portfolio_new', 'Start a new portfolio') }}</p>
+<p>Everything you own and owe is kept as <strong>accounts</strong>, and your accounts
+belong to you, not to any portfolio. Investment accounts hold real securities, priced
+every day from Yahoo Finance; cash accounts, property and debts are balances you keep up
+to date. The {{ goto('accounts', 'Accounts') }} page (<em>Portfolio &rarr; Accounts</em>
+in the menu) lists them all, and their total is your net worth.</p>
+<p>A <strong>portfolio</strong> is a selection: any of your accounts, and any of your
+other portfolios. One account can be in as many portfolios as you like &mdash; the
+household, <em>her retirement</em>, <em>the kids' college</em> &mdash; and a portfolio
+made of other portfolios includes all their accounts. The investable part of a portfolio
+is what the projection, stress tests, checks and target mix work on. A retirement plan
+can be <a href="#plan">linked to a portfolio</a>, so its accounts and debts always come
+from it.</p>
+{% call note('why', 'One account, seen everywhere') %}
+<p>A portfolio holds references to accounts, not copies. Change an account &mdash; a
+holding, a balance, a debt &mdash; and every portfolio that includes it, directly or
+through another portfolio, sees the change at once, as does every plan linked to such a
+portfolio. Prices move them all together too.</p>
 {% endcall %}
-<p>Have a file from your broker listing several accounts? Start from it instead:
-{{ goto('builder', 'From a multi-account file') }} (see
-<a href="#builder">below</a>). A portfolio can be duplicated (to try a different mix
-without touching the original) or deleted; deleting removes its accounts, holdings and
-saved projections, but the shared price history stays.</p>
 
 <h2 id="accounts">Accounts</h2>
 <p>Every account has a <strong>name</strong>, an <strong>owner</strong> (You, Partner or
-Joint), where it is held (an institution or lender, optional) and a
-<strong>type</strong>. The type says what kind of account it is and how it is taxed
-&mdash; taxable, tax-deferred, tax-free or not invested &mdash; which is what the
-tax-treatment view and a linked retirement plan need.</p>
+Joint), where it is held (an institution or lender, optional), a
+<strong>currency</strong> and a <strong>type</strong>. The type says what kind of
+account it is and how it is taxed &mdash; taxable, tax-deferred, tax-free or not
+invested &mdash; which is what the tax-treatment view and a linked retirement plan's tax
+rules need.</p>
 <div class="help-table-wrap"><table class="table table-sm">
   <thead><tr><th>Kind</th><th>Types</th><th>What it holds</th></tr></thead>
   <tbody>
@@ -50,20 +43,31 @@ tax-treatment view and a linked retirement plan need.</p>
   </tbody>
 </table></div>
 
+<h3>The Accounts page</h3>
+<p>{{ goto('accounts', 'Accounts') }} lists every account as a card, grouped by kind
+&mdash; Investments, Cash, Property, Debts &mdash; with each group's total. At the top
+are <strong>Net worth</strong> over all your accounts (each counted once, however many
+portfolios it is in), <strong>Investable</strong>, <strong>Property</strong> and
+<strong>Debts</strong>; below, <em>Net worth over time</em> for every account together,
+recorded daily. Each card says which portfolios the account is in, or <em>in no
+portfolio</em>.</p>
+
 <h3>Adding an account</h3>
 {% call steps() %}
-<li><strong>Add account</strong> on the portfolio page opens a dialog.</li>
+<li><strong>Add account</strong> on the Accounts page opens a dialog.</li>
 <li><strong>Pick the type</strong> from the tiles, grouped by kind.</li>
-<li><strong>Answer a few questions</strong>, a step at a time: its name, the owner and
-    where it is held; for cash and property, its value; for a debt, what is owed, the
-    rate, the years left and, optionally, the monthly payment.</li>
+<li><strong>Answer a few questions</strong>, a step at a time: its name, the owner, where
+    it is held and its currency; for cash and property, its value; for a debt, what is
+    owed, the rate, the years left and, optionally, the monthly payment.</li>
+<li><strong>Which portfolios is it part of?</strong> The last step, optional: tick the
+    portfolios it belongs in. You can change this at any time from the account's
+    page.</li>
 <li>A new <strong>investment</strong> account goes straight to its own page, where you
     add its holdings.</li>
 {% endcall %}
-<p>To update a cash, property or debt account, open its card: the same dialog asks for
-the new value. Each card shows when it was last updated (<em>updated 12 days
-ago</em>), and a value more than 90 days old is flagged, as a nudge to look at it
-again.</p>
+<p><em>New account</em> on a portfolio's page does the same and includes the new account
+in that portfolio. To update a cash, property or debt account, open its card: the same
+dialog asks for the new value.</p>
 {% call note('why', 'Debts pay themselves down') %}
 <p>A debt is paid down month by month from the date its balance was set, so it stays
 roughly right between updates. If you give no monthly payment, RetPlan uses the level
@@ -71,24 +75,36 @@ payment worked out from the rate and the years left. Update the balance from a
 statement now and then and the clock starts again.</p>
 {% endcall %}
 
-<h2 id="account-page">An investment account's page</h2>
-<p>Each investment account has its own page, reached from its card. It shows the
-account's holdings and offers three ways to add to them:</p>
+<h2 id="account-page">An account's page</h2>
+<p>Every account has its own page, reached from its card. What it shows depends on the
+kind:</p>
 <ul>
-  <li><strong>Add one</strong>: a single holding, with symbol search (below).</li>
-  <li><strong>Paste</strong>: rows copied from a spreadsheet, or a CSV
-      (<a href="#paste">below</a>).</li>
-  <li><strong>Upload positions</strong>: your broker's file, read by the
-      <a href="#builder">spreadsheet builder</a> aimed at this account.</li>
+  <li><strong>Investments</strong>: the account's holdings, and three ways to add to
+      them &mdash; <strong>Add one</strong> (a single holding, with symbol search, below),
+      <strong>Paste</strong> (rows copied from a spreadsheet, or a CSV;
+      <a href="#paste">below</a>) and <strong>Upload positions</strong> (your broker's
+      file, read by the <a href="#builder">spreadsheet builder</a> aimed at this
+      account).</li>
+  <li><strong>Cash and property</strong>: the value and when it was last updated
+      (<em>updated 12 days ago</em>). A value more than 90 days old is flagged, as a
+      nudge to look at it again.</li>
+  <li><strong>Debts</strong>: what is owed today (paid down from the date it was set), the
+      rate, the monthly payment and the time left to pay it off.</li>
 </ul>
+<p>Every account's page has an <strong>In portfolios</strong> card: chips for the
+portfolios that include it &mdash; marked <em>through another</em> when it comes in by
+way of a portfolio made of other portfolios &mdash; and checkboxes to choose the
+portfolios it is directly in. The <em>&hellip;</em> menu can duplicate an investment
+account with its holdings (the copy is in no portfolio, ready for a what-if) and delete
+the account, which takes it out of every portfolio.</p>
 
 <h3>Adding one holding</h3>
 {{ field_table([
   ("Symbol or name", "The Yahoo Finance symbol.",
    "Start typing a symbol or a company name and pick from the list; it searches Yahoo as you type. CASH (or $) is a cash balance inside the account."),
-  ("Quantity", "Shares or units held.", "For CASH, the amount of money, in the portfolio’s currency."),
+  ("Quantity", "Shares or units held.", "For CASH, the amount of money, in the account’s currency."),
   ("Cost", "What you paid, optional.",
-   "Choose total (everything paid for the position) or per share (multiplied by the quantity for you). Stored as a total, in the portfolio’s currency. Leave blank if unknown."),
+   "Choose total (everything paid for the position) or per share (multiplied by the quantity for you). Stored as a total and not converted, so give it in the currency your portfolios report in. Leave blank if unknown."),
   ("Asset class", "What kind of asset it is.", "Leave on Detect automatically unless you know better; see below."),
 ]) }}
 <p>When you add a symbol RetPlan has never priced, it fetches it immediately, so the
@@ -105,8 +121,8 @@ in the bank is better as a cash account of its own.</p>
 
 <h3>Editing holdings</h3>
 <p>The holdings table is one form. Change quantities, costs or classes in place, move a
-holding to another investment account of the same portfolio, mark rows for deletion
-with the bin, and press <em>Save changes</em>. Cost here is always the total. A symbol
+holding to another of your investment accounts, mark rows for deletion with the
+bin, and press <em>Save changes</em>. Cost here is always the total. A symbol
 held in two accounts is two rows, one in each; the projection treats it as one
 asset.</p>
 
@@ -119,9 +135,10 @@ in two ways:</p>
       account's page: every line goes into that account. You can choose to replace what
       it holds now; otherwise the lines are added to it.</li>
   <li><strong>A file listing several accounts</strong> - with an account column, or one
-      sheet per account. Start it from the Portfolios page
-      ({{ goto('builder', 'From a multi-account file') }}) or from a portfolio's
-      <em>&hellip;</em> menu (<em>Import a multi-account file</em>).</li>
+      sheet per account. Start it from the menu, the Accounts page or a portfolio's
+      <em>&hellip;</em> menu: {{ goto('builder', 'Import a file of several accounts') }}.
+      One account is made for each account name found, or the lines join your existing
+      account of the same name.</li>
 </ul>
 {% call steps() %}
   <li><strong>RetPlan finds the table.</strong> The header row is found wherever it
@@ -155,9 +172,10 @@ in two ways:</p>
       <em>Individual</em> and so on. Check each type: it decides how the account is
       taxed in a retirement plan. Positions with no account go to one called
       <em>Brokerage</em>.</li>
-  <li><strong>You choose where it goes</strong>: a new portfolio, or an existing one.
-      Each account in the file becomes an account, or joins an existing account of the
-      same name; the portfolio's other accounts are untouched. Prices arrive in the
+  <li><strong>You choose where it goes</strong>: a new portfolio of these accounts,
+      added to an existing portfolio, or just the accounts, in no portfolio. Each
+      account in the file becomes one of your accounts, or joins your existing account
+      of the same name; your other accounts are untouched. Prices arrive in the
       background a few seconds later.</li>
 {% endcall %}
 {% call note('tip', 'A security Yahoo does not know') %}
@@ -211,6 +229,43 @@ export that needs its securities identified, use <em>Upload positions</em>
 instead.</p>
 {% endcall %}
 
+<h2 id="portfolios">Portfolios</h2>
+<p>A portfolio is a selection of your accounts, and of your other portfolios, with a
+name and a <strong>reporting currency</strong> &mdash; the one you think in. Every value,
+gain and projection in it is shown in that currency; each account's values are
+converted into it daily (see <a href="#currencies">Currencies</a>). You can keep as many
+portfolios as you like, and they are all equal.</p>
+{% call steps() %}
+<li><strong>Name it and choose its currency</strong> on
+    {{ goto('portfolio_new', 'New portfolio') }}, with notes if you like. The currency
+    can be changed later from the portfolio's <em>&hellip;</em> menu.</li>
+<li><strong>Tick what it is made of</strong>: accounts, listed by kind, and any other
+    portfolios to include.</li>
+<li><strong>Change it at any time</strong> with <em>Choose accounts</em> on the
+    portfolio's page (the same checkboxes), or from an account's own page. <em>New
+    account</em> on the portfolio's page creates an account and includes it.</li>
+{% endcall %}
+<h3>Portfolios made of portfolios</h3>
+<p>A portfolio that includes another includes all of its accounts, and those of any
+portfolio inside that one, now and later: add an account to <em>Her retirement</em> and
+<em>Household</em>, which is made of <em>Her retirement</em> and <em>His
+retirement</em>, has it too. An account reached more than once &mdash; ticked directly
+and also inside a part &mdash; counts once. A portfolio cannot contain itself, directly
+or through another; RetPlan refuses the change.</p>
+<p>On the portfolio's page, an account that comes from a part is marked <em>through
+&lt;part&gt;</em>, and a line reads <em>Made of &hellip;</em> with a chip for each part
+(remove one with its &times;) and <em>Part of &hellip;</em> for the portfolios that
+include this one.</p>
+{% call note('trap', 'Taking out is not deleting') %}
+<p>An account card's menu on a portfolio's page offers <em>Take out of
+&lt;portfolio&gt;</em>, which leaves the account and its holdings as they are, in your
+other portfolios and on the Accounts page, and <em>Delete account</em>, which removes it
+everywhere. Deleting a portfolio never deletes accounts. Duplicating a portfolio makes a
+new portfolio of the same selection: the accounts are shared, not copied. To try a
+different mix without touching an account, duplicate the account from its own
+page.</p>
+{% endcall %}
+
 <h2 id="page">The portfolio page</h2>
 {{ field_table([
   ("Net worth", "Everything owned less everything owed.", "Investments, cash and property, less debts."),
@@ -219,8 +274,9 @@ instead.</p>
   ("Debts", "What is owed today on the debt accounts.", "Paid down month by month between updates."),
   ("Past year", "How the investable assets would have moved over the stored year.", "A back-cast of today's holdings; see the value chart below."),
 ]) }}
-<p>Below the figures, the accounts are listed as cards grouped by kind, with each
-group's total. Then come <em>A year of value</em> (investable assets), the allocation of
+<p>The figures count each account in the portfolio once, including those that come
+through its parts. Below them, the accounts are listed as cards grouped by kind, with
+each group's total. Then come <em>A year of value</em> (investable assets), the allocation of
 investable assets &mdash; with tabs <strong>by class</strong>, <strong>by tax
 treatment</strong> (taxable, tax-deferred, tax-free), <strong>by account</strong> and
 <strong>by owner</strong> &mdash; and <em>Net worth over time</em>, drawn from the daily
@@ -228,8 +284,9 @@ records (see {{ goto('networth', 'Net worth') }}). Further down are the portfoli
 the target mix, the retirement plans that use the portfolio, recent projections, and
 <em>Every holding</em>, a collapsible list of every holding across the accounts.</p>
 <p>The <em>&hellip;</em> menu holds rename and currency, <em>Record today's net
-worth</em>, duplicate, <em>Import a multi-account file</em>, the JSON download and
-delete.</p>
+worth</em> (for this portfolio and for every account together), duplicate, <em>Add a
+new account to it</em>, <em>Import a file of several accounts</em>, the JSON download
+and delete.</p>
 
 <h2>Asset classes</h2>
 <p>Every holding belongs to one class. The class supplies the long-run return and
@@ -279,9 +336,12 @@ which every holding set to <em>Auto</em> then follows. A global "World" fund tha
 holds 40% outside the US is still classified as one class &mdash; pick the one that
 describes most of it.</p>
 
-<h2>Currencies</h2>
-<p>Yahoo quotes each symbol in its listing currency. When that differs from the
-portfolio's, RetPlan also collects the exchange rate (Yahoo's
+<h2 id="currencies">Currencies</h2>
+<p>Every account has its own currency &mdash; by default, the one most of your accounts
+use &mdash; and a cash, property or debt account's value is entered in it. Yahoo quotes
+each symbol in its listing currency. When a holding's or an account's currency differs
+from the currency of a portfolio it is in, RetPlan also collects the exchange rate
+automatically (Yahoo's
 <code>&lt;FROM&gt;&lt;TO&gt;=X</code> pair, such as <code>GBPUSD=X</code>) and
 converts every price with it:</p>
 <ul>
@@ -292,7 +352,10 @@ converts every price with it:</p>
       done for South African cents, Israeli agorot and Kuwaiti fils.</li>
   <li>Until the rate has been fetched, the holding is shown unconverted and flagged
       <em>no rate</em>. <em>Refresh prices</em> fixes it.</li>
-  <li>Cost basis is not converted: enter it in the portfolio's currency.</li>
+  <li>A <code>CASH</code> holding is in its account's currency, converted like the
+      account.</li>
+  <li>Cost basis is not converted: enter it in the currency your portfolios report
+      in.</li>
 </ul>
 
 <h2 id="checks">The portfolio checks</h2>
@@ -348,7 +411,8 @@ need.</p>
 <h2 id="plan">Using a portfolio in your retirement plan</h2>
 <p>A retirement plan can be <strong>linked</strong> to a portfolio. The link is live:
 every time the plan is read &mdash; the dashboard, the editor, a simulation &mdash; its
-accounts and loans are brought in line with the portfolio. A portfolio knows what you
+accounts and loans are brought in line with the portfolio's accounts &mdash; including
+those that come through its parts. A portfolio knows what you
 own and owe today; the plan adds what a portfolio cannot know: ages, income, spending,
 what you will save and in which order you will spend.</p>
 {{ field_table([
@@ -360,7 +424,7 @@ what you will save and in which order you will spend.</p>
    "401(k) and IRA: taxed on the way out, with required withdrawals from 73 or 75. Roth: tax-free. HSA: tax-free, assuming it pays for health spending. Brokerage: gains taxed. Cash accounts: cash. Property: illiquid, never sold to fund spending."),
   ("Debts", "Each becomes a loan.", "What is owed today, the rate and the years left."),
   ("Changes in the portfolio", "Followed by the plan.",
-   "Accounts removed from the portfolio leave the plan; new ones join it."),
+   "Accounts taken out of the portfolio leave the plan; accounts it gains join it. A change to an account (holdings, prices, values, debts) reaches the plan at once, and saved simulation results are dropped when the portfolio's accounts change."),
 ]) }}
 <p>What the plan adds to a linked account is kept: contributions (a fixed amount or a %
 of pay), the employer match, the draw and pay-in order, a glide path, rebalancing, and
@@ -398,7 +462,7 @@ currency.</p>
 <p>A linked account's card carries a <em>from portfolio</em> chip. Its dialog asks only
 what the plan adds &mdash; what you save into it, the draw and pay-in order,
 rebalancing &mdash; and says that the balance, owner and investments come from the
-portfolio. A linked account cannot be removed from the plan: remove it in the
+portfolio. A linked account cannot be removed from the plan: take it out of the
 portfolio, or pause it in the plan.</p>
 {% endcall %}
 
