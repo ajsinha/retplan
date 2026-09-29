@@ -13,8 +13,8 @@ import logging
 
 from fastapi import FastAPI, Request
 
-from retplan.plan import (CATEGORIES, ExpenseRow, IncomeRow, Ledger, Loan, Person,
-                          Wrapper)
+from retplan.plan import (CATEGORIES, Conversion, ExpenseRow, IncomeRow, Ledger, Loan,
+                          Person, Wrapper)
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.help_catalog import CONTEXT_HELP
 from web.store import session_id
@@ -113,6 +113,19 @@ LEDGER_FIELDS = [
     F("rebalance", "Rebalance", "select", options=[(r, r) for r in REBAL], adv=True),
 ]
 
+CONVERSION_FIELDS = [
+    F("label", "Label", "text", width="wide"),
+    F("from_ledger", "From account", "ledger",
+      help="usually a pension or other account taxed on the way out"),
+    F("to_ledger", "To account", "ledger", help="usually a tax-free account"),
+    F("mode", "How much", "select",
+      options=[("amount", "a fixed amount"), ("fill_to", "fill taxable income to")],
+      help="a fixed amount a year, or just enough to bring taxable income up to the figure"),
+    F("amount", "Amount / target", "money"),
+    F("start_age", "From age", "number"),
+    F("end_age", "Until age", "number", help="the conversion stops before this age"),
+]
+
 SECTIONS = [
     ("household", "Household", "bi-people", "Who the plan covers and how long it runs."),
     ("income", "Income", "bi-arrow-down-circle", "Every stream of money coming in."),
@@ -123,6 +136,8 @@ SECTIONS = [
     ("markets", "Markets", "bi-graph-up-arrow", "Returns, regimes, crashes, inflation, fees."),
     ("tax", "Tax", "bi-percent", "A table of bands. No jurisdiction is assumed."),
     ("policy", "Policy", "bi-sliders", "How much you take out, and what counts as success."),
+    ("conversions", "Conversions", "bi-arrow-left-right",
+     "Move money between accounts each year, paying the tax now to pay less later."),
 ]
 
 
@@ -145,6 +160,7 @@ def completeness(plan) -> dict:
         "markets": n(len(plan.market.assets), "asset class"),
         "tax": n(len(plan.tax.ordinary.lowers), "band"),
         "policy": plan.policy.method.replace("_", " "),
+        "conversions": n(len(plan.conversions), "conversion") if plan.conversions else "none",
     }
 
 
@@ -196,7 +212,7 @@ def parse_rows(form, prefix: str, fields: list) -> list:
                 row[f["name"]] = int(_num(form, key))
             elif kind == "pct":
                 row[f["name"]] = _pct(form, key)
-            elif kind == "wrapper":
+            elif kind in ("wrapper", "ledger"):
                 row[f["name"]] = int(_num(form, key))
             elif kind == "select":
                 val = form.get(key, "")
@@ -241,13 +257,14 @@ class PlanRoutes:
             section = "household"
         fields_for = {"income": INCOME_FIELDS, "expenses": EXPENSE_FIELDS,
                       "debt": LOAN_FIELDS, "wrappers": WRAPPER_FIELDS,
-                      "accounts": LEDGER_FIELDS}
+                      "accounts": LEDGER_FIELDS, "conversions": CONVERSION_FIELDS}
         ctx = dict(plan=plan, section=section, sections=SECTIONS,
                    context_help=CONTEXT_HELP, completeness=completeness(plan),
                    has_advanced=any(f.get("adv") for f in fields_for.get(section, [])),
                    income_fields=INCOME_FIELDS, expense_fields=EXPENSE_FIELDS,
                    loan_fields=LOAN_FIELDS, wrapper_fields=WRAPPER_FIELDS,
-                   ledger_fields=LEDGER_FIELDS, policies=POLICIES,
+                   ledger_fields=LEDGER_FIELDS, conversion_fields=CONVERSION_FIELDS,
+                   policies=POLICIES,
                    policy_options=POLICY_OPTIONS,
                    categories=CATEGORIES)
         return render(request, f"plan/{section}.html", **ctx)
@@ -272,6 +289,11 @@ class PlanRoutes:
                 w = [1.0] + [0.0] * (len(plan.market.assets) - 1)
                 plan.ledgers.append(Ledger(f"Account {n}", 0, 0, 0.0, 0.0, w, [],
                                            200, 200, n, n))
+            elif section == "conversions":
+                n_l = len(plan.ledgers)
+                plan.conversions.append(Conversion("New conversion", 0, min(1, n_l - 1), "amount",
+                                                   0.0, plan.persons[0].retire_age,
+                                                   plan.persons[0].retire_age + 5))
             elif section == "household" and len(plan.persons) < 4:
                 plan.persons.append(Person(f"Person {len(plan.persons) + 1}", 40, 65, 95))
             self.store.put(sid, plan)
@@ -364,6 +386,11 @@ class PlanRoutes:
             kept.append(lg)
         plan.ledgers = kept or plan.ledgers
         plan.policy.sweep_ledger = max(0, int(_num(form, "sweep_ledger", 0)))
+
+    def _save_conversions(self, plan, form):
+        rows = parse_rows(form, "conversions", CONVERSION_FIELDS)
+        plan.conversions = [Conversion(**r) for r in rows
+                            if r.get("from_ledger") != r.get("to_ledger")]
 
     def _save_markets(self, plan, form):
         for j, a in enumerate(plan.market.assets):

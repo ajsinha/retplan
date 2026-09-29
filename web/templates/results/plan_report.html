@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Plan report · {{ plan.label }}{% endblock %}
+{% block content %}
+{% set blocking = checks|selectattr('status', 'equalto', 'FAIL')|list %}
+{% call ui.page_head(plan.label, 'Plan report, ' ~ today ~ '. Figures in today’s money unless marked. Educational model, not financial advice.', eyebrow='RetPlan · plan report') %}
+  <button class="btn btn-sm btn-primary no-print" type="button" data-print><i class="bi bi-printer" aria-hidden="true"></i> Print or save as PDF</button>
+{% endcall %}
+<div class="stat-grid">
+  {% if sim %}{{ ui.kpi('Chance of success', sim.kpis.success_probability|pct(0), '± ' ~ (1.96 * sim.kpis.success_se * 100)|round(1) ~ ' pts · ' ~ '{:,}'.format(sim.trials) ~ ' futures', 'speedometer2', 'good' if sim.kpis.success_probability >= plan.policy.confidence else 'warn') }}
+  {{ ui.kpi('Median final wealth', sim.kpis.terminal_real_p50|compact, 'bad luck (P5): ' ~ sim.kpis.terminal_real_p5|compact, 'trophy') }}{% endif %}
+  {{ ui.kpi('At fixed returns', view.funded_verdict, ('runs out at ' ~ view.depleted_age|round(0)|int) if view.depleted_age else 'lasts the whole plan', 'bank', 'good' if view.funded_verdict == 'Fully funded' else 'bad') }}
+  {{ ui.kpi('Funded ratio', '%.2f'|format(view.funded), 'assets + income ÷ spending', 'scale') }}
+  {{ ui.kpi('Audit', 'passes' if not blocking else blocking|length ~ ' failing', checks|length ~ ' checks', 'clipboard-check', 'good' if not blocking else 'bad') }}
+</div>
+{% if not sim %}<p class="small-muted">No simulation has been run for this plan yet - run one on the dashboard to add the odds to this report.</p>{% endif %}
+
+<div class="card"><div class="card-header"><i class="bi bi-calendar-range" aria-hidden="true"></i> The plan over time</div><div class="card-body">{{ timeline|safe }}</div></div>
+
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-people" aria-hidden="true"></i> Household</div><div class="card-body">
+    <table class="table table-sm"><thead><tr><th>Person</th><th class="num">Age</th><th class="num">Retires</th><th class="num">Plan to</th></tr></thead>
+      <tbody>{% for p in plan.persons %}<tr><td>{{ p.label }}</td><td class="num">{{ p.age|round(0)|int }}</td><td class="num">{{ p.retire_age|round(0)|int }}</td><td class="num">{{ p.death_age|round(0)|int }}</td></tr>{% endfor %}</tbody></table>
+    {{ ui.kv([('Withdrawal policy', plan.policy.method|replace('_', ' ')), ('Success means', 'never running short' ~ (' and leaving ' ~ plan.policy.legacy_target|money if plan.policy.legacy_target else '')), ('Confidence target', plan.policy.confidence|pct(0)), ('Inflation', plan.market.inflation.mean|pct), ('Fixed returns use', plan.market.fixed_basis ~ ' growth'), ('Fees', (plan.platform_fee + plan.adviser_fee)|pct(2) ~ ' a year')]) }}
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-wallet2" aria-hidden="true"></i> Accounts today</div><div class="card-body">
+    <table class="table table-sm"><thead><tr><th>Account</th><th>Wrapper</th><th class="num">Balance</th><th class="num">Saving / yr</th></tr></thead>
+      <tbody>{% for l in plan.ledgers if l.enabled %}<tr><td>{{ l.label }}</td><td>{{ plan.wrappers[l.wrapper].label }}</td><td class="num">{{ l.opening|money }}</td><td class="num">{{ (l.contribution|money) if l.contribution else ((l.contribution_pct_income|pct ~ ' of pay') if l.contribution_pct_income else '') }}</td></tr>{% endfor %}
+      <tr class="total"><td>Total</td><td></td><td class="num">{{ plan.ledgers|selectattr('enabled')|sum(attribute='opening')|money }}</td><td></td></tr></tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-arrow-down-circle" aria-hidden="true"></i> Income</div><div class="card-body">
+    <table class="table table-sm"><thead><tr><th>Stream</th><th class="num">A year</th><th class="num">Ages</th></tr></thead>
+      <tbody>{% for r in plan.income if r.enabled %}<tr><td>{{ r.label }}</td><td class="num">{{ r.amount|money }}</td><td class="num">{{ r.start_age|round(0)|int }}{% if r.end_age < 110 %}-{{ r.end_age|round(0)|int }}{% else %}+{% endif %}</td></tr>{% else %}<tr><td colspan="3" class="small-muted">None.</td></tr>{% endfor %}</tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-arrow-up-circle" aria-hidden="true"></i> Spending</div><div class="card-body">
+    <table class="table table-sm"><thead><tr><th>Item</th><th class="num">A year</th><th>Kind</th><th class="num">Ages</th></tr></thead>
+      <tbody>{% for e in plan.expenses if e.enabled %}<tr><td>{{ e.label }}</td><td class="num">{{ e.amount|money }}{% if e.recur_years > 1 %} <span class="small-muted">every {{ e.recur_years }} yrs</span>{% endif %}</td><td>{{ 'essential' if e.essential else 'discretionary' }}</td><td class="num">{{ e.start_age|round(0)|int }}{% if e.end_age < 110 %}-{{ e.end_age|round(0)|int }}{% else %}+{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="small-muted">None.</td></tr>{% endfor %}</tbody></table>
+  </div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">{{ ui.chart_card('Net worth at fixed returns', 'graph-up', view.chart_networth, "today's money") }}</div>
+  {% if sim %}<div class="col-lg-6">{{ ui.chart_card('Range of outcomes', 'graph-up-arrow', sim.chart_fan, "today's money") }}</div>{% endif %}
+</div>
+
+<div class="card"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Every fifth year, at fixed returns</div>
+  <div class="card-body p-0"><table class="table table-sm mb-0"><thead><tr><th>Year</th><th class="num">Age</th>{% for l, _ in view.flow_series %}<th class="num">{{ l }}</th>{% endfor %}<th class="num">Net worth</th></tr></thead>
+    <tbody>{% for i in range(0, view.years|length, 5) %}<tr><td>{{ view.years[i] }}</td><td class="num">{{ view.ages[i]|round(0)|int }}</td>{% for _, vals in view.flow_series %}<td class="num">{{ vals[i]|money }}</td>{% endfor %}<td class="num">{{ view.net_worth[i]|money }}</td></tr>{% endfor %}</tbody></table></div></div>
+
+<div class="card"><div class="card-header"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Audit</div><div class="card-body">
+  <ul class="checks">{% for c in checks %}<li class="{{ 'ok' if c.status == 'PASS' else ('bad' if c.status == 'FAIL' else 'warn') }}"><i class="bi bi-{{ 'check-circle-fill' if c.status == 'PASS' else ('x-octagon-fill' if c.status == 'FAIL' else 'exclamation-triangle-fill') }}" aria-hidden="true"></i><span><span class="t">{{ c.label }}</span>{% if c.detail %}<span class="d">{{ c.detail }}</span>{% endif %}</span></li>{% endfor %}</ul>
+</div></div>
+<p class="small-muted">RetPlan {{ app_version }} · {{ copyright }} · A projection under the assumptions above, not a prediction and not financial advice.</p>
+{% endblock %}

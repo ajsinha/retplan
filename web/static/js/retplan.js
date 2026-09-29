@@ -130,6 +130,9 @@
   });
 
   // ---------- forms ----------
+  document.querySelectorAll('[data-print]').forEach(function (b) {
+    b.addEventListener('click', function () { window.print(); });
+  });
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {
       if (!window.confirm(f.getAttribute('data-confirm'))) { ev.preventDefault(); }
@@ -355,6 +358,130 @@
     input.addEventListener('blur', function () { setTimeout(function () { menu.hidden = true; }, 120); });
   }
   bindRow(document);
+
+  // ---------- what-if sliders ----------
+  (function () {
+    var form = document.querySelector('form[data-whatif]');
+    if (!form) { return; }
+    var url = form.getAttribute('data-whatif'), saveUrl = form.getAttribute('data-whatif-save');
+    var out = function (k) { return form.querySelector('[data-out="' + k + '"]'); };
+    var panel = form.querySelector('.whatif-out');
+    var keep = form.querySelector('[data-whatif-keep]');
+    var timer = null, seq = 0, base = null;
+    function label(input) {
+      var o = form.querySelector('output[data-for="' + input.name + '"]');
+      if (!o) { return; }
+      var v = parseFloat(input.value), f = o.getAttribute('data-fmt');
+      if (!v) { o.textContent = 'no change'; return; }
+      var sign = v > 0 ? '+' : '−', a = Math.abs(v);
+      if (f === 'years') { o.textContent = a + (a === 1 ? ' year ' : ' years ') + (v > 0 ? 'later' : 'earlier'); }
+      else if (f === 'pct') { o.textContent = sign + Math.round(a * 100) + '%'; }
+      else if (f === 'pctpts') { o.textContent = sign + Math.round(a * 100) + ' pts in shares'; }
+      else if (f === 'feepts') { o.textContent = sign + (a * 100).toFixed(2) + ' pts a year'; }
+      else if (f === 'money') { o.textContent = '+' + money(v) + ' a year'; }
+    }
+    function values() {
+      var d = {};
+      form.querySelectorAll('input[type=range]').forEach(function (i) { d[i.name] = parseFloat(i.value) || 0; });
+      return d;
+    }
+    function show(d) {
+      var a = d.adjusted, b = d.base; base = b;
+      out('success').textContent = pct(a.success, 0);
+      var dl = (a.success - b.success) * 100, noise = 2 * 1.96 * b.se * 100;
+      var del = out('delta');
+      if (Math.abs(dl) < 0.05) { del.textContent = ''; }
+      else {
+        del.textContent = (dl > 0 ? '+' : '−') + Math.abs(dl).toFixed(1) + ' pts' + (Math.abs(dl) < noise ? ' (within noise)' : '');
+        del.className = 'delta tabular ' + (dl > 0 ? 'up' : 'down');
+      }
+      out('bar').style.width = (a.success * 100).toFixed(1) + '%';
+      out('p50').textContent = money(a.p50);
+      out('p5').textContent = money(a.p5);
+      out('dep').textContent = a.depletion_age ? 'age ' + Math.round(a.depletion_age) : 'never, in the median failure';
+      out('tax').textContent = money(a.tax);
+      out('describe').textContent = d.describe === 'no change' ? 'Your plan as it is. Move a slider.' : 'If you ' + d.describe + '.';
+      keep.disabled = d.describe === 'no change';
+    }
+    function go() {
+      var mine = ++seq;
+      panel.classList.add('busy');
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values()) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (mine !== seq) { return; } panel.classList.remove('busy'); if (d.ok) { show(d); } })
+        .catch(function () { panel.classList.remove('busy'); });
+    }
+    form.addEventListener('submit', function (ev) { ev.preventDefault(); });
+    form.querySelectorAll('input[type=range]').forEach(function (i) {
+      label(i);
+      i.addEventListener('input', function () { label(i); clearTimeout(timer); timer = setTimeout(go, 280); });
+    });
+    form.querySelector('[data-whatif-reset]').addEventListener('click', function () {
+      form.querySelectorAll('input[type=range]').forEach(function (i) { i.value = 0; label(i); });
+      go();
+    });
+    keep.addEventListener('click', function () {
+      keep.disabled = true;
+      fetch(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values()) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.ok) { window.location.reload(); } else { keep.disabled = false; } });
+    });
+    window.RetPlanWhatIf = function (adj) {
+      form.querySelectorAll('input[type=range]').forEach(function (i) {
+        i.value = adj[i.name] || 0; label(i);
+      });
+      go();
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    go();
+  })();
+
+  // ---------- the levers ----------
+  (function () {
+    var box = document.querySelector('[data-levers]');
+    if (!box) { return; }
+    var btn = box.querySelector('[data-levers-run]'), list = box.querySelector('[data-levers-list]');
+    var note = box.querySelector('[data-levers-note]');
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Trying each change…';
+      fetch(box.getAttribute('data-levers'), { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Run again';
+          if (!d.ok) { note.hidden = false; note.textContent = d.error || 'failed'; return; }
+          var max = Math.max.apply(null, d.rows.map(function (r) { return Math.abs(r.delta); }).concat([0.01]));
+          list.innerHTML = '';
+          d.rows.forEach(function (r) {
+            var li = document.createElement('li'), noise = Math.abs(r.delta) < d.noise;
+            li.tabIndex = 0; li.setAttribute('role', 'button');
+            li.title = 'Load into the sliders';
+            if (noise) { li.className = 'noise'; }
+            var name = document.createElement('span'); name.textContent = r.label;
+            var bar = document.createElement('span'); bar.className = 'bar';
+            var fill = document.createElement('span'), w = Math.abs(r.delta) / max * 50;
+            fill.style.width = w + '%';
+            fill.style.left = r.delta >= 0 ? '50%' : (50 - w) + '%';
+            fill.style.background = r.delta >= 0 ? 'var(--rp-ok)' : 'var(--rp-bad)';
+            bar.appendChild(fill);
+            var v = document.createElement('span'); v.className = 'v ' + (r.delta > 0 ? 'up' : (r.delta < 0 ? 'down' : ''));
+            v.textContent = (r.delta >= 0 ? '+' : '−') + Math.abs(r.delta * 100).toFixed(1);
+            li.appendChild(name); li.appendChild(bar); li.appendChild(v);
+            var pick = function () { if (window.RetPlanWhatIf) { window.RetPlanWhatIf(r.adjust); } };
+            li.addEventListener('click', pick);
+            li.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+            list.appendChild(li);
+          });
+          list.hidden = false;
+          note.hidden = false;
+          note.textContent = 'Points of success probability against today\'s ' + pct(d.base.success, 0) +
+            ', ' + d.trials.toLocaleString() + ' futures each on one seed. Faded rows (under ' +
+            (d.noise * 100).toFixed(1) + ' pts) are within the noise. Click a row to load it into the sliders.';
+        })
+        .catch(function (e) { btn.disabled = false; note.hidden = false; note.textContent = String(e); });
+    });
+  })();
 
   window.RetPlan = { money: money, pct: pct };
 }());

@@ -796,3 +796,53 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .kpi .val { font-size: 1.4rem; overflow: visible; text-overflow: clip; white-space: nowrap; }
 .table select.form-select { min-width: 9.5rem; }
 .lp2-centre .lp2-desc { margin-left: auto; margin-right: auto; text-align: center; }
+
+/* ---- ported from MAYA theme.css 432-454: the SVG chain figure on the landing page ---- */
+.lp-figure { margin: 0; }
+.lp-figure svg { width: 100%; height: auto; max-height: 520px; }
+.lp-wire { color: var(--rp-slate); opacity: .75; }
+.lp-node rect { fill: var(--rp-surface); stroke: var(--rp-indigo); stroke-width: 1.4; }
+.lp-label { fill: var(--rp-ink); font-size: 13px; }
+.lp-aside { fill: var(--rp-slate); font-size: 11px; font-style: italic; }
+.lp-figure figcaption { margin-top: .5rem; font-size: 11.5px; color: var(--rp-slate); text-align: center; }
+
+.lp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;
+  padding: 2rem 0; border-top: 1px solid var(--rp-border); }
+.lp-cards article { background: var(--rp-surface); border: 1px solid var(--rp-border);
+  border-radius: 8px; padding: 1.1rem 1.2rem; }
+.lp-cards h2 { color: var(--rp-heading); }
+.lp-cards p { margin-bottom: 0; font-size: 13.5px; line-height: 1.6; color: var(--rp-ink); opacity: .86; }
+
+.lp-close { text-align: center; padding: 1.5rem 0 .5rem; border-top: 1px solid var(--rp-border); }
+.lp-close-slogan { font-style: italic; font-size: 1.15rem; color: var(--rp-heading); margin-bottom: .35rem; }
+.lp-lit rect { stroke: var(--rp-crimson); }
+.lp-pulse circle { fill: var(--rp-crimson); }
+.lp-stamp text { fill: var(--rp-heading); font-size: 12px; font-style: italic; letter-spacing: .04em; }
+/* A reader who has asked their system for less motion gets the diagram standing still; it
+   makes the same argument, and the animation was never carrying anything the drawing does not. */
+@media (prefers-reduced-motion: reduce) { .lp-motion { display: none; } }
+
+.lp-stamp text.ok { fill: var(--rp-ok); }
+
+/* what-if sliders and the levers list */
+.whatif-row { margin-bottom: .7rem; }
+.whatif-row .form-label { margin-bottom: .1rem; }
+.whatif-row output { font-weight: 700; color: var(--rp-crimson); }
+.form-range::-webkit-slider-thumb { background: var(--rp-crimson); }
+.form-range::-moz-range-thumb { background: var(--rp-crimson); }
+.form-range::-webkit-slider-runnable-track { background: var(--rp-crimson-tint); }
+.form-range::-moz-range-track { background: var(--rp-crimson-tint); }
+.whatif-out { padding: 1rem; border-radius: 14px; background: color-mix(in srgb, var(--rp-crimson-tint) 55%, transparent); border: 1px solid var(--rp-border); }
+.whatif-out .lbl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--rp-slate); }
+.whatif-out .big { font-size: 2.6rem; font-weight: 800; line-height: 1; }
+.whatif-out .delta { font-weight: 700; padding-bottom: .3rem; }
+.whatif-out.busy { opacity: .6; }
+.levers { list-style: none; padding: 0; margin: 0; display: grid; gap: .35rem; }
+.levers li { display: grid; grid-template-columns: minmax(0, 1fr) 7rem 3.6rem; gap: .5rem; align-items: center;
+  padding: .35rem .5rem; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.levers li:hover, .levers li:focus-visible { background: var(--rp-crimson-tint); border-color: var(--rp-border); }
+.levers .bar { position: relative; height: 10px; background: var(--rp-crimson-tint); border-radius: 999px; }
+.levers .bar > span { position: absolute; top: 0; height: 100%; border-radius: 999px; }
+.levers .bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--rp-slate); }
+.levers .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.levers .noise { opacity: .55; }

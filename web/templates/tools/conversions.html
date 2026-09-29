@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Conversion explorer{% endblock %}
+{% block content %}
+{% call ui.page_head('Conversion explorer', 'Moving money from an account taxed on the way out into one that is never taxed again - a Roth conversion, in the US - costs tax now to save tax later. This compares no conversion with several amounts and with “filling” your lower tax bands, over the years you choose, on your whole plan.', eyebrow='Planning tools · ' ~ plan.label, help=url_for('help_tools')) %}{% endcall %}
+<form class="card" method="post" action="{{ url_for('tool_conversions') }}" data-busy="Comparing strategies…">
+  <div class="card-body"><div class="row g-3 align-items-end">
+    <div class="col-md-3"><label class="form-label" for="v-src">From account</label>
+      <select class="form-select" id="v-src" name="src">{% for lg in plan.ledgers %}<option value="{{ loop.index0 }}" {% if loop.index0 == v.src %}selected{% endif %}>{{ lg.label }} · {{ plan.wrappers[lg.wrapper].label }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label" for="v-dst">To account</label>
+      <select class="form-select" id="v-dst" name="dst">{% for lg in plan.ledgers %}<option value="{{ loop.index0 }}" {% if loop.index0 == v.dst %}selected{% endif %}>{{ lg.label }} · {{ plan.wrappers[lg.wrapper].label }}</option>{% endfor %}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="v-s">From age</label><input class="form-control num" id="v-s" name="start" type="number" step="1" value="{{ '%g'|format(v.start) }}"></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="v-e">Until age</label><input class="form-control num" id="v-e" name="end" type="number" step="1" value="{{ '%g'|format(v.end) }}"></div>
+    <div class="col-md-2"><label class="form-label" for="v-h">Tax your heirs pay</label><div class="input-group"><input class="form-control num" id="v-h" name="heir" type="number" step="any" value="{{ '%g'|format(v.heir) }}"><span class="input-group-text">%</span></div></div>
+    <div class="col-md-6"><label class="form-label" for="v-a">Fixed amounts to try, a year</label><input class="form-control" id="v-a" name="amounts" value="{{ v.amounts }}"></div>
+    <div class="col-md-6"><label class="form-label" for="v-f">Taxable income levels to fill to</label><input class="form-control" id="v-f" name="fill" value="{{ v.fill }}">
+      <div class="form-hint mt-1">Your tax bands start at {{ plan.tax.ordinary.lowers|map('money')|join(', ') }}.</div></div>
+  </div>
+  <p class="form-hint mt-2 mb-3">Money left in an account that taxes withdrawals still owes tax when your heirs draw it, so the comparison is on <strong>after-tax</strong> final wealth: those balances are reduced by the rate above on their taxable share.</p>
+  <button class="btn btn-primary" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Compare strategies</button></div>
+</form>
+{% if result %}{% set best = result.best %}
+<div class="stat-grid">
+  {{ ui.kpi('Best strategy', best.label, best.delta_after_tax|smoney ~ " after tax vs none, today's money", 'trophy', 'good' if best.delta_after_tax > 0 else '') }}
+  {{ ui.kpi('Lifetime tax', best.tax|money, best.delta_tax|smoney ~ ' vs none (median)', 'receipt') }}
+  {{ ui.kpi('Chance of success', best.success|pct, (best.delta_success * 100)|round(1) ~ ' pts vs none', 'speedometer2') }}
+</div>
+<div class="card"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Every strategy, age {{ result.start_age|round(0)|int }} to {{ result.end_age|round(0)|int }}
+  <span class="ms-auto small-muted fw-normal">{{ result.trials }} trials each, one seed · today's money · medians</span></div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Strategy</th><th class="num">Converted</th><th class="num">Lifetime tax</th><th class="num">vs none</th><th class="num">Success</th><th class="num">Final wealth</th><th class="num band-col">After tax</th><th class="num">vs none</th><th></th></tr></thead>
+    <tbody>{% for r in result.rows %}<tr {% if r.label == best.label %}class="fw-semibold"{% endif %}>
+      <td>{{ r.label }}{% if r.label == best.label %} {{ ui.pill('ok', 'best') }}{% endif %}</td>
+      <td class="num">{{ r.converted|money }}</td><td class="num">{{ r.tax|money }}</td>
+      <td class="num {{ 'up' if r.delta_tax < 0 else ('down' if r.delta_tax > 0 else '') }}">{{ r.delta_tax|smoney if loop.index0 else '' }}</td>
+      <td class="num">{{ r.success|pct }}</td><td class="num">{{ r.p50|money }}</td>
+      <td class="num band-col">{{ r.after_tax_p50|money }}</td>
+      <td class="num {{ 'up' if r.delta_after_tax > 0 else ('down' if r.delta_after_tax < 0 else '') }}">{{ r.delta_after_tax|smoney if loop.index0 else '' }}</td>
+      <td class="text-end">{% if r.mode %}
+        <form class="d-inline" method="post" action="{{ url_for('tool_conversion_add') }}">
+          {% for k, val in [('label', r.label), ('src', v.src), ('dst', v.dst), ('mode', r.mode), ('value', r.value), ('start', v.start), ('end', v.end)] %}<input type="hidden" name="{{ k }}" value="{{ val }}">{% endfor %}
+          <button class="btn btn-sm btn-outline-primary" name="as_scenario" value="1" title="Save as a new scenario with this conversion">Try it</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+<p class="small-muted">Differences smaller than a few thousand, or a point of success, are within the noise. A conversion pays when your tax rate now is below the one you - or your heirs - would pay later; it also shrinks forced withdrawals later. “Try it” saves a copy of your plan with the conversion, so you can compare it side by side.</p>
+{% endif %}
+{% endblock %}

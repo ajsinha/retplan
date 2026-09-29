@@ -1,93 +1,205 @@
-# RetPlan — Platform, Portability and Macro Architecture
+# RetPlan — Platform and Architecture
 
-## 1. Tiers
+## 1. Stack
 
-| | **Tier A (reference)** | **Tier B (portable core)** |
-|---|---|---|
-| Engine | LibreOffice Calc 7.4+ | Excel 2016+ / other ODF apps |
-| File | `RetPlan.ods` | `RetPlan-portable.xlsx` |
-| Deterministic model | Formulas | Formulas (identical) |
-| Simulation | Python + numpy macro, 50k trials | Formula grid, ≤ 500 trials |
-| Solvers | Python bisection macro | Pre-computed grid + interpolation |
-| Controls | Form controls + buttons | Validation dropdowns + stepper cells |
-
-Tier A is authoritative. Tier B must match Tier A's deterministic numbers exactly
-(`1e-9` relative) and must display a banner naming the features it lacks.
-
-## 2. Why Python and not Basic
-
-LibreOffice's script provider for Python runs on the system CPython that ships
-`python3-uno`; on this machine that interpreter has `numpy` available. A vectorised numpy
-Monte Carlo is two to three orders of magnitude faster than the equivalent Basic loop, and
-the same module is unit-testable outside LibreOffice with ordinary `pytest`. Basic is used
-only where an event binding demands it, and any such shim must be a one-line delegation to
-Python.
-
-- **CR-1 (M).** All non-trivial in-document logic MUST be Python. Basic shims MUST contain
-  no business logic.
-- **CR-2 (M).** The Python macro package MUST import cleanly and pass its tests *outside*
-  LibreOffice, with UNO access confined to a thin adapter layer.
-- **CR-3 (M).** Macros MUST degrade safely: if numpy is unavailable, the engine MUST fall
-  back to a pure-Python loop and say so, not crash.
-
-## 3. Formula constructs — allowed and banned
-
-**Banned everywhere (both tiers):**
-
-| Construct | Reason |
+| Layer | Choice |
 |---|---|
-| `RAND()`, `RANDBETWEEN()` | Not reproducible, volatile, differs across engines |
-| `OFFSET()`, `INDIRECT()` in the calculation core | Volatile; full-column recalculation cost |
-| `NOW()`, `TODAY()` in the core | Makes the model non-deterministic across days |
-| Dynamic arrays / implicit spilling | Not available in older LO and Excel 2016 |
-| `LAMBDA`, `LET` | Version-dependent availability |
-| `XLOOKUP`, `FILTER`, `SORT`, `TEXTSPLIT` | Version-dependent availability |
-| Structured table references (`Table1[Col]`) | Not supported in LibreOffice formulas |
-| Excel What-If Data Tables (`TABLE()`) | No LibreOffice equivalent on round-trip |
-| Slicers, timelines | Not supported in LibreOffice |
-| Sparkline objects | Round-trip is lossy; use `REPT()` bars instead |
-| Circular references + iterative calculation | Setting does not survive round-trip; non-deterministic |
-| External links, DDE, web queries | Offline requirement |
-| Merged cells in data regions | Breaks sorting, ranges and screen readers |
+| Language | Python 3 (`tomllib`, so 3.11 or later) |
+| Numerics | NumPy — the only dependency of the engine in `retplan/` |
+| Web | FastAPI on uvicorn, Starlette session middleware, Jinja2 templates |
+| Database | SQLAlchemy 2 Core over SQLite (default) or PostgreSQL 12+ (psycopg 3) |
+| Front end | Vendored Bootstrap 5, Bootstrap Icons and fonts; the MAYA design tokens; two small scripts of our own |
+| Charts | Server-rendered inline SVG (`web/charts.py`); no charting library |
+| Market data | Yahoo Finance chart and search endpoints through `urllib` (`portfolio/yahoo.py`) |
+| Upload parsing | `openpyxl` for .xlsx in the portfolio builder; `csv` for text |
 
-**Preferred constructs:** `INDEX`+`MATCH`, `SUMPRODUCT`, `SUMIFS`/`COUNTIFS`,
-`IFERROR`, `CHOOSE`, `MIN`/`MAX` clamping instead of nested `IF`, named ranges for every
-input block, and explicit helper columns instead of mega-formulas.
+`requirements.txt` lists runtime and test dependencies; `scripts/setup.sh` creates
+`.venv` and installs them.
 
-- **CR-4 (M).** Every intermediate quantity that a reviewer would need to check MUST have
-  its own cell. No formula may exceed 256 characters.
-- **CR-5 (M).** Named ranges MUST be used for every input the engine reads; the engine MUST
-  NOT contain raw cross-sheet cell addresses outside of its own contiguous blocks.
-- **CR-6 (M).** Sheet names MUST be ≤ 31 characters and MUST avoid `[ ] * ? / \ :`.
-- **CR-7 (M).** Formulas MUST be written in locale-independent English function names with
-  `;`-safe generation (the builder emits via the UNO API, which stores them canonically).
-- **CR-8 (M).** Number formats MUST avoid locale-specific currency codes; the currency
-  symbol MUST come from an input cell and be applied as a format string at build time.
-- **CR-9 (S).** Conditional formatting MUST use formula conditions and fixed RGB colours,
-  not theme colours.
-- **CR-10 (M).** Charts MUST use only line, bar/column, stacked area, scatter and pie types,
-  which round-trip reliably.
+## 2. Layout
 
-## 4. Macro security and installation
+```
+retplan/        the planning engine: plan, rng, markets, tax, engine, metrics, solvers, samples
+portfolio/      db, repository, yahoo, prices, fx, assets, checks, importer, builder,
+                projection, stress
+web/            app singleton, config, templating helpers, charts, view models,
+                wizard, plan store, admin, help catalogue
+web/templates/  base, _nav (mega menu), shared UI components; one folder per area
+web/static/     css/tokens.css, css/theme.css, js/, img/, vendor/
+routes/         one handler class per area
+schema/         sqlite.sql and postgres.sql — the only definition of the database
+config/         retplan.toml
+tools/          fetch_prices.py, copy_db.py
+tests/          run_tests.py, test_portfolio.py
+run_retplan_web.py   launcher (port 5007 by default)
+```
 
-- **CR-11 (M).** The document MUST work with macro security at High and macros blocked:
-  everything except simulation, solving and buttons still functions.
-- **CR-12 (M).** Macros MUST be installed as a *user-level* Python script
-  (`~/.config/libreoffice/4/user/Scripts/python/retplan_macros.py`) by an installer script,
-  rather than embedded in the document, so the user can read and audit the source and so the
-  document itself carries no executable payload.
-- **CR-13 (M).** Buttons MUST bind to
-  `vnd.sun.star.script:retplan_macros.py$<fn>?language=Python&location=user`.
-- **CR-14 (M).** Macros MUST NOT read or write any file outside the open document, MUST NOT
-  open network connections, and MUST NOT execute shell commands.
-- **CR-15 (M).** Every macro entry point MUST be wrapped in an error handler that reports
-  failure into a status cell and leaves the document consistent.
+The dependency direction is one-way: `routes/` → `web/` → `portfolio/` and
+`retplan/`. `retplan/` imports nothing from the rest; `portfolio/` imports only
+`retplan.rng.cholesky_psd`.
 
-## 5. Build reproducibility
+## 3. The application object
 
-- **CR-16 (M).** The `.ods` MUST be generated by `build/build_ods.py` through the UNO API
-  against a headless LibreOffice; no manual editing of the delivered file.
-- **CR-17 (M).** The build MUST be verifiable: a post-build script reopens the file
-  headless, forces a full recalculation, and asserts the golden KPI values.
-- **CR-18 (S).** The build MUST fail if any banned construct appears in any generated
-  formula (static check over the formula strings before writing).
+`web/retplan_webapp.py` defines `RetPlanWebApp`, a thread-safe singleton
+(`get_instance`) that:
+
+1. loads configuration (`web/config.load_config`);
+2. opens the database (`portfolio.db.Database`), which builds or checks the schema;
+3. constructs the services — `PlanStore`, `PortfolioRepo`, `PriceCollector`,
+   `PriceScheduler`;
+4. creates the FastAPI app with a lifespan that starts the scheduler and, on
+   shutdown, stops it and disposes the engine;
+5. installs `SessionMiddleware` (cookie `retplan_session`, SameSite=Lax, one year),
+   mounts `/static`, and puts every service on `app.state`;
+6. constructs every class in `routes.ALL_ROUTES` with `(app, store)`;
+7. installs the 404 and catch-all error handlers.
+
+`create_app()` is the factory for `uvicorn --reload`. OpenAPI docs are at
+`/api/docs`.
+
+## 4. Route classes
+
+Each module in `routes/` defines one class. Its constructor stores the app and the
+plan store and calls `_register_routes`, which uses `app.add_api_route` with a
+route name; templates refer to routes by that name through `url_for`. Anything
+else a handler needs is read from `request.app.state`.
+
+| Class | Area |
+|---|---|
+| `NoAuthRoutes` | landing, about, method, search, system, `/healthz` |
+| `WizardRoutes` | `/start` |
+| `ScenarioRoutes` | `/scenarios`, `/compare`, `/api/compare/run` |
+| `PlanRoutes` | `/plan/{section}` |
+| `DashboardRoutes` | `/dashboard`, `/audit` |
+| `SimulationRoutes` | `/api/simulate`, `/api/analysis`, `/api/results`, `/api/clear` |
+| `ReportRoutes` | `/reports/{name}` |
+| `ExportRoutes` | plan JSON export and import, reset, clear |
+| `BuilderRoutes` | `/portfolios/build` |
+| `PortfolioRoutes` | `/portfolios/*`, `/prices`, `/api/tickers`, `/api/portfolios/{pid}` |
+| `SecurityRoutes` | `/securities/*` |
+| `AdminRoutes` | `/admin/login`, `/admin/logout`, `/admin/password` |
+| `HelpRoutes` | `/help`, one route per help topic |
+
+Long computations (Monte Carlo, solvers, scenario comparison) are JSON endpoints
+the page calls and then swaps the results in, rather than long form posts.
+
+## 5. Templates and front end
+
+- `web/fastapi_compat.py` holds the Jinja2 environment, a context processor with
+  the application-wide properties, a Flask-style `url_for`, `render`, `redirect_to`
+  and a flash-message queue on the session. Static URLs carry a cache-busting
+  version from the newest mtime of our own CSS and JS.
+- `base.html` loads the vendored Bootstrap CSS and icons, `tokens.css`, `theme.css`,
+  `js/theme-init.js` in the head (so a stored theme applies before first paint) and
+  `js/retplan.js` plus the Bootstrap bundle at the end of the body.
+- **No CDN.** Every library is under `web/static/vendor/`; the application works
+  offline apart from price collection and symbol lookup.
+- **No inline JavaScript.** Behaviour is attached from `retplan.js` by data
+  attributes; templates contain no `<script>` bodies and no `on*=` handlers.
+- Shared Jinja components (page heads, KPI tiles, pills, key/value lists, empty
+  states) live in one include file under `web/templates/`.
+
+## 6. Design system (MAYA)
+
+- `web/static/css/tokens.css` is the only place colours are defined. Four themes —
+  Crimson (stored as `light`), Dark, Blue and Green — each redefine the same
+  `--rp-*` roles (accent, ink, surface, canvas, border, ok/warn/bad, navigation
+  gradient). With no stored choice, the operating system's light/dark preference
+  decides.
+- `--viz-*` is the chart palette: eight categorical slots validated for colour-vision
+  separation against the light and dark surfaces, and a six-step sequential ramp for
+  bands.
+- `theme.css` builds the components — mega-menu navigation, gradient heroes, cards,
+  tables — from the tokens only.
+- The chosen theme is kept in `localStorage` (`retplan.theme`).
+
+## 7. Charts
+
+`web/charts.py` renders every chart as an SVG string: line, stacked area, fan,
+spaghetti, histogram, tornado, projection fan, range bars, binned histogram, date
+line and quarter path. Each carries a title and description for assistive
+technology, a hover layer, and a table view. Colours are CSS variables, so a chart
+follows the theme — including a saved projection re-rendered later.
+
+## 8. Database
+
+- `portfolio/db.Database` wraps one SQLAlchemy engine. The backend is chosen by
+  `[database] url` (or `RETPLAN_DATABASE_URL`):
+  `sqlite:///{data_dir}/retplan.db` by default, or
+  `postgresql+psycopg://user:pass@host:5432/db`.
+- **Two schema files, no migrations.** `schema/sqlite.sql` and
+  `schema/postgres.sql` declare the same tables, columns and indexes. At start-up an
+  empty database is built from the file for its dialect; a populated one is checked
+  for every declared table and column, and a gap stops start-up with a message
+  naming it. Schema changes are made by editing both files and altering or
+  rebuilding the database by hand.
+- Queries are SQLAlchemy Core `text()` with named parameters, in the SQL subset
+  both engines accept (`ON CONFLICT … DO UPDATE`, `RETURNING`), so the repository
+  never branches on dialect.
+- SQLite connections enable foreign keys, WAL journalling and `synchronous=NORMAL`,
+  so the background collector never blocks a page read. PostgreSQL uses a pool of
+  5 (+10 overflow) with pre-ping.
+- `tools/copy_db.py` copies every table from one URL to another.
+
+See [03-data-model.md](03-data-model.md) for the tables.
+
+## 9. Background price scheduler
+
+`portfolio.prices.PriceScheduler` runs `PriceCollector.collect` on a daemon thread
+named `price-scheduler`:
+
+- daily at `prices.run_at` (local time, default 18:30);
+- once at start-up if the last successful run is older than 20 hours;
+- never if `prices.enabled` is false (the test suites construct the app with the
+  scheduler off).
+
+The collector holds a lock so only one run proceeds at a time, pauses 0.4 s between
+symbols, records each run in `fetch_runs`, prunes closes older than
+`prices.retention_days`, and refreshes long-run statistics every 30 days. A new
+symbol added to a portfolio is collected at once on a short-lived background
+thread. `tools/fetch_prices.py` runs the same collector from cron.
+
+## 10. Yahoo client
+
+`portfolio/yahoo.py` talks to two unofficial endpoints with the standard library:
+
+- `query1.finance.yahoo.com/v8/finance/chart/<symbol>` — daily or monthly bars,
+  adjusted closes, currency and instrument type;
+- `query2.finance.yahoo.com/v1/finance/search` — symbol search for autocomplete,
+  the builder and lookups.
+
+It sends a bare `Mozilla/5.0` user agent (a full browser string is answered with
+429), uses a 20 s timeout, parses defensively, and raises `YahooError` per symbol.
+FX rates are ordinary symbols of the form `<FROM><TO>=X`.
+
+## 11. Configuration
+
+`config/retplan.toml` (or the file named by `RETPLAN_CONFIG`), overridden by
+environment variables:
+
+| Key | Environment | Default |
+|---|---|---|
+| `app.data_dir` | `RETPLAN_DATA` | `data` (relative to the project root) |
+| `database.url` | `RETPLAN_DATABASE_URL` | `sqlite:///{data_dir}/retplan.db` |
+| `database.echo` | — | `false` |
+| `prices.enabled` | `RETPLAN_PRICES_ENABLED` | `true` |
+| `prices.run_at` | `RETPLAN_PRICES_RUN_AT` | `18:30` |
+| `prices.retention_days` | `RETPLAN_PRICES_RETENTION_DAYS` | `365` |
+| `admin.username` | `RETPLAN_ADMIN_USERNAME` | `admin` |
+| `admin.password` | `RETPLAN_ADMIN_PASSWORD` | the shipped default (change it) |
+| `admin.local_is_admin` | `RETPLAN_ADMIN_LOCAL` | `false` |
+| — | `RETPLAN_SECRET` | generated once into `data_dir/.session-secret` |
+
+The launcher takes `--host`, `--port` (5007), `--reload`, `--log-level` and
+`--data-dir`.
+
+## 12. Security posture
+
+- No user accounts for planning; a workspace is an opaque id in a signed cookie,
+  and the cookie never carries financial data.
+- The administrator is one account. A password changed in the app is stored as a
+  salted PBKDF2-SHA256 hash in `app_settings` and takes precedence over the file.
+  With `local_is_admin`, loopback requests are administrators without signing in —
+  unsafe behind a reverse proxy, where every request looks local.
+- Uploads are capped at 10 MB and parsed in memory; nothing is written to disk.
+- `next=` redirects accept only same-site relative paths.

@@ -736,6 +736,65 @@ def test_admin_gate():
         check("the new password signs in", wa.portfolios.security("XYZ") is None)
         wa.db.dispose()
 
+def test_tools():
+    from fastapi.testclient import TestClient
+    from web import levers
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    from retplan.samples import sample_plan
+    p = sample_plan()
+    q = levers.apply(p, levers.Adjust(retire=2))
+    check("retiring later moves the salaries that stopped at retirement",
+          all(r.end_age == 67 for r in q.income if r.category == "employment"))
+    q = levers.apply(p, levers.Adjust(claim=2))
+    sp = [r for r in q.income if r.category == "state_pension"]
+    check("claiming two years later raises the pension by 16%",
+          all(close(r.amount, 11500 * 1.16) and r.start_age == 69 for r in sp))
+    q = levers.apply(p, levers.Adjust(equity=0.1))
+    check("more in shares keeps every allocation at 100%",
+          all(close(sum(l.weights), 1.0) for l in q.ledgers))
+    check("adjustments never touch the original plan", p.persons[0].retire_age == 65)
+    with tempfile.TemporaryDirectory() as d:
+        wa = RetPlanWebApp(config=Config(data_dir=d, database_url=f"sqlite:///{d}/t.db",
+                                         prices_enabled=False), start_scheduler=False)
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        c.get("/dashboard")
+        r = c.post("/api/whatif", json={"spend": -0.1}).json()
+        check("the what-if endpoint answers with base and adjusted odds",
+              r["ok"] and r["adjusted"]["success"] >= r["base"]["success"] - 0.02
+              and "spend 10% less" in r["describe"])
+        r2 = c.post("/api/whatif", json={}).json()
+        check("no adjustment gives the base answer", r2["adjusted"] == r2["base"])
+        before = len(wa.store.scenarios(next(iter({x["owner"] for x in wa.db.query("SELECT owner FROM plans")}))))
+        c.post("/api/whatif/save", json={"retire": 1})
+        sid = next(iter({x["owner"] for x in wa.db.query("SELECT owner FROM plans")}))
+        check("saving a what-if creates and opens a scenario",
+              len(wa.store.scenarios(sid)) == before + 1 and "retire 1 year later" in wa.store.get(sid).label)
+        L = c.post("/api/levers").json()
+        check("the levers are ranked best first",
+              L["ok"] and L["rows"] and all(a["delta"] >= b["delta"] for a, b in zip(L["rows"], L["rows"][1:])))
+        pages = [c.get(u).status_code for u in ("/tools/claiming", "/tools/conversions",
+                                                "/plan/conversions", "/help/tools")]
+        check("the tool pages render", pages == [200] * 4, pages)
+        idx = [i for i, r in enumerate(wa.store.get(sid).income) if r.category == "state_pension"][0]
+        r = c.post("/tools/claiming", data={"row": idx, "from_age": 66, "to_age": 68,
+                                            "early": 6.67, "late": 8})
+        check("the claiming explorer compares each age", r.status_code == 200 and "Every age" in r.text)
+        r = c.post("/tools/conversions", data={"src": 1, "dst": 3, "start": 65, "end": 70,
+                                               "amounts": "10000", "fill": "", "heir": 25})
+        check("the conversion explorer compares strategies",
+              r.status_code == 200 and "Convert 10,000 a year" in r.text)
+        c.post("/tools/conversions/add", data={"label": "Convert 10,000 a year", "src": 1, "dst": 3,
+                                               "mode": "amount", "value": 10000, "start": 65, "end": 70})
+        convs = wa.store.get(sid).conversions
+        check("a chosen conversion is added to the plan",
+              len(convs) == 1 and convs[0].amount == 10000 and convs[0].to_ledger == 3)
+        check("the plan with a conversion still reconciles",
+              "Balance roll-forward ties every year" in c.get("/audit").text
+              and c.get("/dashboard").status_code == 200)
+        wa.db.dispose()
+
+
 def main():
     global DB_URL
     if "--database" in sys.argv:
@@ -748,7 +807,7 @@ def main():
     test_projection_closed_forms(); test_projection_statistics()
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
-    test_admin_gate(); test_web()
+    test_admin_gate(); test_tools(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

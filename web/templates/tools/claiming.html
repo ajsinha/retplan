@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}When to claim your pension{% endblock %}
+{% block content %}
+{% call ui.page_head('When to claim your public pension', 'Social Security, the State Pension, CPP, a national pension: most can start earlier for less or later for more. This tries every claiming age against your whole plan - not just the pension on its own - and shows what each does to the odds and to what you leave.', eyebrow='Planning tools · ' ~ plan.label, help=url_for('help_tools')) %}{% endcall %}
+{% if not pensions %}
+<div class="card"><div class="card-body">{% call ui.empty('bank', 'Your plan has no public pension', 'Add an income row with the category “state pension” - its start age and amount are taken as the usual claiming age and amount.') %}<a class="btn btn-primary" href="{{ url_for('plan_section', section='income') }}">Open income</a>{% endcall %}</div></div>
+{% else %}
+<form class="card" method="post" action="{{ url_for('tool_claiming') }}" data-busy="Trying every age…">
+  <div class="card-body"><div class="row g-3 align-items-end">
+    <div class="col-md-4"><label class="form-label" for="c-row">Pension</label>
+      <select class="form-select" id="c-row" name="row">{% for i, r in pensions %}<option value="{{ i }}" {% if i == row %}selected{% endif %}>{{ r.label }} - {{ r.amount|money }} a year from {{ r.start_age|round(0)|int }}</option>{% endfor %}</select></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="c-lo">From age</label><input class="form-control num" id="c-lo" name="from_age" type="number" step="1" value="{{ lo }}"></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="c-hi">To age</label><input class="form-control num" id="c-hi" name="to_age" type="number" step="1" value="{{ hi }}"></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="c-e">Less per year early</label><div class="input-group"><input class="form-control num" id="c-e" name="early" type="number" step="any" value="{{ '%g'|format(early * 100) }}"><span class="input-group-text">%</span></div></div>
+    <div class="col-6 col-md-2"><label class="form-label" for="c-l">More per year late</label><div class="input-group"><input class="form-control num" id="c-l" name="late" type="number" step="any" value="{{ '%g'|format(late * 100) }}"><span class="input-group-text">%</span></div></div>
+  </div>
+  <p class="form-hint mt-2 mb-3">The row's current start age and amount are taken as the usual ones. The rates vary by country - US Social Security is roughly 6.7% less a year early and 8% more a year late; check yours.</p>
+  <button class="btn btn-primary" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Compare claiming ages</button></div>
+</form>
+{% if result %}{% set best = result.best %}
+<div class="stat-grid">
+  {{ ui.kpi('Best for your odds', 'age ' ~ best.age, best.amount|money ~ ' a year · ' ~ best.success|pct ~ ' success', 'trophy', 'good') }}
+  {{ ui.kpi('Usual age', result.usual|round(0)|int, result.amount|money ~ ' a year', 'calendar') }}
+  {% set r_last = result.rows|last %}{% if r_last.breakeven %}{{ ui.kpi('Break-even for waiting', 'age ' ~ r_last.breakeven|round(0)|int, 'claiming at ' ~ r_last.age ~ ' pays more in total if you live past it', 'hourglass-split') }}{% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-xl-6">{{ ui.chart_card('Chance of success by claiming age', 'graph-up', chart, result.trials ~ ' trials each, one seed · numbers beside') }}</div>
+  <div class="col-xl-6"><div class="card h-100"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Every age</div>
+    <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm mb-0">
+      <thead><tr><th>Claim at</th><th class="num">A year</th><th class="num">Success</th><th class="num">Median final wealth</th><th class="num">Bad-luck wealth</th><th class="num">Break-even</th></tr></thead>
+      <tbody>{% for x in result.rows %}<tr {% if x.age == best.age %}class="fw-semibold"{% endif %}>
+        <td>{{ x.age }}{% if x.age == result.usual|round(0)|int %} <span class="small-muted">usual</span>{% endif %}{% if x.age == best.age %} {{ ui.pill('ok', 'best') }}{% endif %}</td>
+        <td class="num">{{ x.amount|money }}</td><td class="num">{{ x.success|pct }}</td>
+        <td class="num">{{ x.p50|money }}</td><td class="num">{{ x.p5|money }}</td>
+        <td class="num">{{ ('age ' ~ x.breakeven|round(1)) if x.breakeven else '' }}</td></tr>{% endfor %}</tbody></table></div></div></div></div>
+</div>
+<p class="small-muted mt-2">Differences of a point or two are within the simulation's noise (±{{ (1.96 * best.se * 100)|round(1) }} points). Waiting usually wins when you expect to live long and have other money to live on meanwhile; claiming early can win when savings are thin or health is poor. A survivor's continuation, if any, follows the row's survivor share.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

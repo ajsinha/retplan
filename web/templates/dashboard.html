@@ -73,7 +73,71 @@
   {% endif %}
 </div>
 
-<div class="row g-3">
+{% set retiring = plan.persons|selectattr('retire_age', 'gt', plan.persons[0].age - 1)|list and plan.persons[0].retire_age > plan.persons[0].age %}
+{% set has_pension = plan.income|selectattr('category', 'equalto', 'state_pension')|list %}
+<div class="row g-3" id="whatif">
+  <div class="col-xl-7">
+    <form class="card h-100 whatif" data-whatif="{{ url_for('api_whatif') }}" data-whatif-save="{{ url_for('api_whatif_save') }}">
+      <div class="card-header"><i class="bi bi-sliders" aria-hidden="true"></i> What if…
+        <a class="help-link" href="{{ url_for('help_tools') }}" aria-label="About what-if">?</a>
+        <span class="ms-auto small-muted fw-normal">drag - each change runs {{ 800 }} futures on one seed</span></div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-md-7">
+            {% macro slider(name, label, lo, hi, step, fmt, show=True) %}{% if show %}
+            <div class="whatif-row">
+              <label class="form-label d-flex" for="wf-{{ name }}">{{ label }}<output class="ms-auto tabular" data-for="{{ name }}" data-fmt="{{ fmt }}">no change</output></label>
+              <input type="range" class="form-range" id="wf-{{ name }}" name="{{ name }}" min="{{ lo }}" max="{{ hi }}" step="{{ step }}" value="0">
+            </div>{% endif %}{% endmacro %}
+            {{ slider('retire', 'Retire', -5, 5, 1, 'years', retiring) }}
+            {{ slider('spend', 'Spending', -0.3, 0.3, 0.05, 'pct') }}
+            {{ slider('save', 'Save more each year until retiring', 0, 30000, 1000, 'money', retiring) }}
+            {{ slider('equity', 'Share of shares', -0.3, 0.3, 0.05, 'pctpts') }}
+            {{ slider('fee', 'Fees', -0.01, 0.01, 0.0005, 'feepts') }}
+            {{ slider('claim', 'Start public pension', -5, 5, 1, 'years', has_pension) }}
+          </div>
+          <div class="col-md-5">
+            <div class="whatif-out" aria-live="polite">
+              <div class="lbl">Chance of success</div>
+              <div class="d-flex align-items-end gap-2"><span class="big tabular" data-out="success">-</span><span class="delta tabular" data-out="delta"></span></div>
+              <div class="meter on-surface mt-2"><span data-out="bar" style="width:0"></span></div>
+              <dl class="kv mt-3 mb-2 small">
+                <dt>Median final wealth</dt><dd class="tabular" data-out="p50">-</dd>
+                <dt>Bad-luck final wealth</dt><dd class="tabular" data-out="p5">-</dd>
+                <dt>When it fails, runs out at</dt><dd class="tabular" data-out="dep">-</dd>
+                <dt>Lifetime tax (median)</dt><dd class="tabular" data-out="tax">-</dd>
+              </dl>
+              <p class="small-muted mb-2" data-out="describe">Move a slider.</p>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-whatif-reset>Reset</button>
+                <button class="btn btn-sm btn-primary" type="button" data-whatif-keep disabled><i class="bi bi-layers" aria-hidden="true"></i> Save as scenario</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="col-xl-5">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-lightning-charge" aria-hidden="true"></i> Your biggest levers
+      <span class="ms-auto small-muted fw-normal">each change tried alone</span></div>
+      <div class="card-body" data-levers="{{ url_for('api_levers') }}">
+        <p class="small-muted" data-levers-intro>Which single change would do the most for your odds? RetPlan tries each of them on your whole plan - about three seconds.</p>
+        <button class="btn btn-sm btn-primary" type="button" data-levers-run><i class="bi bi-search" aria-hidden="true"></i> Find my levers</button>
+        <ol class="levers mt-3" data-levers-list hidden></ol>
+        <p class="small-muted mb-0 mt-2" data-levers-note hidden></p>
+        <p class="small-muted mt-3 mb-0">More tools: <a href="{{ url_for('tool_claiming') }}">when to claim a pension</a> · <a href="{{ url_for('tool_conversions') }}">account conversions</a> · <a href="{{ url_for('compare') }}">compare scenarios</a></p>
+      </div></div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-calendar-range" aria-hidden="true"></i> Your plan over time
+    <span class="ms-auto small-muted fw-normal">hover a bar · <a href="{{ url_for('plan_section', section='income') }}">edit</a> · <a href="{{ url_for('plan_report') }}">printable report</a></span></div>
+  <div class="card-body">{{ timeline|safe }}</div>
+</div>
+
+<div class="row g-3 mt-0">
   {% if sim %}
   <div class="col-xl-6">
     {% call ui.chart_card('Range of outcomes', 'graph-up', sim.chart_fan, 'net worth, today\'s money', url_for('help_charts')) %}

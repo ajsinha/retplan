@@ -15,7 +15,8 @@ from fastapi import FastAPI, Request
 
 from web.fastapi_compat import flash_error_and_log, render
 from web.store import session_id
-from web.viewmodel import audit_checks, base_view
+from web import charts
+from web.viewmodel import audit_checks, base_view, plan_start
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ class DashboardRoutes:
             include_in_schema=False)
         add("/audit", self.audit, methods=["GET"], name="audit",
             include_in_schema=False)
+        add("/report/plan", self.plan_report, methods=["GET"], name="plan_report",
+            include_in_schema=False)
 
     async def dashboard(self, request: Request):
         sid = session_id(request)
@@ -46,7 +49,7 @@ class DashboardRoutes:
         sim = self.store.results(sid)
         checks = audit_checks(plan, view)
         return render(request, "dashboard.html", plan=plan, view=view, sim=sim,
-                      checks=checks,
+                      checks=checks, timeline=charts.life_timeline(plan, plan_start(plan)),
                       blocking=[c for c in checks if c["status"] == "FAIL"])
 
     async def audit(self, request: Request):
@@ -56,3 +59,14 @@ class DashboardRoutes:
         checks = audit_checks(plan, view)
         return render(request, "results/audit.html", plan=plan, view=view,
                       checks=checks)
+
+    async def plan_report(self, request: Request):
+        """Everything about the plan on one printable page."""
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        view = base_view(plan)
+        checks = audit_checks(plan, view)
+        from datetime import date
+        return render(request, "results/plan_report.html", plan=plan, view=view,
+                      sim=self.store.results(sid), checks=checks, today=date.today().isoformat(),
+                      timeline=charts.life_timeline(plan, plan_start(plan)))

@@ -18,7 +18,12 @@
       (url_for('plan_section', section='wrappers'), 'shield-lock', 'Tax wrappers', 'When money is taxed: in, during or out', '/plan/wrappers'),
       (url_for('plan_section', section='tax'), 'percent', 'Tax', 'A table of bands; no country assumed', '/plan/tax'),
       (url_for('plan_section', section='markets'), 'graph-up-arrow', 'Markets', 'Returns, regimes, crashes, inflation', '/plan/markets'),
-      (url_for('plan_section', section='policy'), 'sliders', 'Withdrawal policy', 'How much to take out; what counts as success', '/plan/policy')])]),
+      (url_for('plan_section', section='policy'), 'sliders', 'Withdrawal policy', 'How much to take out; what counts as success', '/plan/policy'),
+      (url_for('plan_section', section='conversions'), 'arrow-left-right', 'Conversions', 'Move money between accounts, pay tax now', '/plan/conversions')]),
+    ('Decide', [
+      (url_for('dashboard') ~ '#whatif', 'sliders2', 'What if…', 'Drag retirement age, spending, saving; see the odds move', None),
+      (url_for('tool_claiming'), 'calendar-check', 'When to claim a pension', 'Every claiming age tried on your whole plan', '/tools/claiming'),
+      (url_for('tool_conversions'), 'arrow-left-right', 'Conversion explorer', 'Roth-style conversions, compared after tax', '/tools/conversions')])]),
   ('Results', 'speedometer2', [
     ('Outcome', [
       (url_for('dashboard'), 'speedometer2', 'Dashboard', 'Verdict, success odds, charts', '/dashboard'),
@@ -27,7 +32,8 @@
       (url_for('report', name='cashflow'), 'table', 'Cash flow', 'Income, spending, tax and withdrawals', '/reports/cashflow'),
       (url_for('report', name='balance'), 'journal-text', 'Balance sheet', 'Accounts, debt and net worth', '/reports/balance'),
       (url_for('report', name='tax'), 'receipt', 'Tax', 'Taxable income and tax by year', '/reports/tax'),
-      (url_for('audit'), 'clipboard-check', 'Audit', 'Reconciliation and plan checks', '/audit')])]),
+      (url_for('audit'), 'clipboard-check', 'Audit', 'Reconciliation and plan checks', '/audit'),
+      (url_for('plan_report'), 'printer', 'Plan report', 'Everything on one page, to print or save as PDF', '/report/plan')])]),
   ('Portfolio', 'briefcase', [
     ('Your holdings', [
       (url_for('portfolios'), 'briefcase', 'Portfolios', 'Holdings, value, allocation and risk checks', '/portfolios'),

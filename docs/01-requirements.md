@@ -1,371 +1,232 @@
 # RetPlan — Requirements Specification
 
-Version 1.0 · normative. Keywords **MUST / SHOULD / MAY** per RFC 2119.
-Feature IDs referenced here are defined in [00-feature-list.md](00-feature-list.md).
+Normative, testable requirements for the web application as built. Keywords MUST,
+SHOULD and MAY follow RFC 2119. Priorities use MoSCoW (**M**ust / **S**hould /
+**C**ould). Feature IDs refer to [00-feature-list.md](00-feature-list.md).
 
 ---
 
 ## 1. Purpose and scope
 
-RetPlan is a spreadsheet-based retirement planning model. It projects a household's
-income, expenses, taxes, debts and investment accounts across a multi-decade horizon,
-under deterministic assumptions and under stochastic market simulation, and reports
-whether the plan is funded and how badly it fails when it fails.
+RetPlan is a self-hosted web application for retirement planning and portfolio
+analysis. It answers two kinds of question:
 
-**In scope:** household cash-flow projection, wrapper-aware account mechanics, a
-user-defined tax engine, withdrawal policy engine, market simulation with regimes and
-crashes, sensitivity and scenario analysis, interactive dashboards and charts.
+- **Plan questions** — will this household's savings, income and spending last,
+  with what probability, and what would change the answer? Answered by the engine
+  in `retplan/`.
+- **Portfolio questions** — what do I hold, what is it worth, how concentrated is
+  it, and what might it do over the next decades or in a crisis? Answered by
+  `portfolio/`.
 
-**Out of scope:** live market data, portfolio holdings reconciliation, brokerage
-integration, jurisdiction-specific tax advice, and any form of financial advice. The
-workbook ships with an explicit educational-use disclaimer (F-GOV-4).
+The model is jurisdiction-agnostic: no country, currency, tax code or account type
+is built in. Everything that varies by country is data the user edits.
 
-## 2. Platform decision (supersedes the original dual-engine goal)
+Out of scope: user accounts, multi-tenant hosting, transaction ledgers, tax inside
+portfolio projections, and financial advice.
 
-| Tier | Target | Contents |
-|---|---|---|
-| **Tier A — Full** | LibreOffice Calc 7.4+ (tested on 24.x/25.x), `.ods` | Everything, including the Basic simulation engine, interactive controls, solver macros and script-refreshed charts |
-| **Tier B — Portable core** | Excel 2016+ / any ODF-capable engine, `.xlsx` | Formula-only model: full deterministic projection, tax engine, withdrawal policies, capped formula-based Monte Carlo, all charts. No macros, no solvers, reduced trial counts |
+## 2. Users and workspaces
 
-- **PR-1 (M).** Tier A MUST be the reference implementation. Where the two tiers can
-  disagree, Tier A is correct and Tier B MUST report its limitation on screen.
-- **PR-2 (M).** The Tier B workbook MUST produce numerically identical deterministic
-  results to Tier A (tolerance `1e-9` relative) for every golden scenario.
-- **PR-3 (M).** No feature of the *deterministic* model may depend on macros. Opening the
-  file with macros disabled MUST yield a complete, correct projection.
-- **PR-4 (M).** Macros MUST be limited to: simulation, solving, control wiring, batch runs,
-  import helpers and export. They MUST NOT be the sole source of any displayed formula
-  result.
-- **PR-5 (M).** The file MUST be fully offline: no external links, no web/DDE queries, no
-  network calls from macros, no telemetry.
+- **FR-WS-1 (M).** Every browser MUST get its own workspace, keyed by an opaque id
+  in a signed session cookie. No sign-up is required to plan.
+- **FR-WS-2 (M).** A workspace MUST see only its own plans, portfolios, drafts and
+  projections; a request for another workspace's portfolio MUST return 404.
+- **FR-WS-3 (M).** A new workspace MUST start with the sample household as its
+  active plan.
+- **FR-WS-4 (M).** The session secret MUST persist across restarts (from
+  `RETPLAN_SECRET`, or generated once into the data directory with mode 0600), so a
+  restart does not orphan workspaces.
+- **FR-WS-5 (M).** Changing the shared securities list MUST require the
+  administrator (§11).
 
-Portability rules are normative in [02-platform.md](02-platform.md).
+## 3. Plan editing (F-PLAN, F-EDIT)
 
-## 3. Users and modes
+- **FR-ED-1 (M).** The editor MUST expose the ten sections of F-EDIT-1, each saving
+  independently.
+- **FR-ED-2 (M).** Rows MUST be addable and removable in income, spending, debt,
+  wrappers, accounts and conversions; people up to four. Tax bands (up to 12) MAY be added,
+  deleted and entered in any order; they are sorted on save and a 0% band from zero
+  is inserted when missing.
+- **FR-ED-3 (S).** Columns rarely changed SHOULD be hidden until the user asks for
+  advanced columns.
+- **FR-ED-4 (M).** Saving a plan MUST invalidate that plan's cached simulation
+  results.
+- **FR-ED-5 (M).** A plan MUST round-trip through JSON export and import without
+  loss; unknown keys in an imported file MUST be ignored rather than rejected.
+- **FR-ED-6 (M).** Reset MUST restore the sample household; clear MUST leave a
+  blank plan.
 
-- **U1 Self-directed planner** — needs guided entry, plain-language output, safe defaults.
-- **U2 Power user** — needs every assumption exposed, and the ability to override any driver.
-- **U3 Adviser/analyst** — needs scenario comparison, auditability, printable reports.
-- **U4 Educator** — needs the mechanism visible: every intermediate step on a sheet.
+## 4. Quick-start wizard (F-WIZ)
 
-- **FR-MODE-1 (M).** The workbook MUST offer Basic / Advanced / Expert input modes
-  (F-UX-6) that hide or reveal input rows via outline grouping and a mode selector, without
-  changing any computation.
-- **FR-MODE-2 (M).** Hidden advanced inputs MUST retain their values and continue to be used.
+- **FR-WZ-1 (M).** Six steps MUST build a complete plan from a handful of answers;
+  every unasked assumption MUST come from the sample household.
+- **FR-WZ-2 (M).** The draft MUST survive moving between steps and MAY be reset.
+- **FR-WZ-3 (M).** Finishing MUST either replace the active plan or add a new
+  scenario, as the user chooses.
 
-## 4. Timeline and conventions
+## 5. Scenarios (F-SCN)
 
-- **FR-TL-1 (M).** The model MUST support an annual or monthly period grid (F-HH-6),
-  selected once, with a horizon of up to 80 years (960 monthly periods).
-- **FR-TL-2 (M).** Period 0 is the plan start; it MUST accept an arbitrary start date.
-- **FR-TL-3 (M).** Cash-flow timing convention (begin / mid / end of period) MUST be a
-  single global input that consistently drives discounting, growth application and
-  withdrawal ordering.
-- **FR-TL-4 (M).** Within any period the calculation order MUST be fixed and documented
-  (see [03-data-model.md §6](03-data-model.md)): opening balance → income → mandatory
-  distributions → taxes on income → expenses and debt service → shortfall withdrawal
-  (grossed up) → contributions/surplus → fees → market return → rebalancing → closing balance.
-- **FR-TL-5 (M).** Every monetary output MUST be available in both nominal and real terms,
-  switched by one global toggle (F-HH-8); charts and KPIs MUST follow the toggle and label
-  themselves accordingly.
-- **FR-TL-6 (M).** Ages MUST be computed from birth dates and the period date, not entered
-  separately, except where the user enters an age-based rule.
+- **FR-SC-1 (M).** A workspace MUST hold one or more plans with exactly one active.
+  The editor, dashboard and reports MUST show the active plan.
+- **FR-SC-2 (M).** Deleting the last remaining plan MUST NOT leave the workspace
+  without an active plan.
+- **FR-SC-3 (M).** The comparison MUST simulate every scenario with the same trial
+  count and seed.
 
-## 5. Household (F-HH-*)
+## 6. Projection engine (F-SIM)
 
-- **FR-HH-1 (M).** 1–4 members, each with: name, birth date, retirement date or age,
-  mortality basis, and an "included in plan" flag.
-- **FR-HH-2 (M).** Phased retirement MUST be expressible as an FTE percentage path per
-  member, scaling employment income and contributions.
-- **FR-HH-3 (M).** Life expectancy MUST be selectable as (a) a fixed age, (b) a percentile
-  of a user-supplied mortality table (`q_x` by age), or (c) joint-last-survivor derived from
-  the same table. The plan horizon MUST default to the resulting age plus a user margin.
-- **FR-HH-4 (M).** On a death event the model MUST apply, per configuration: pension and
-  annuity continuation percentages, expense reduction percentage, change of tax filing
-  unit, transfer of account ownership, and any death-benefit inflow.
-- **FR-HH-5 (S).** Dependants MUST support start/end years and a cost stream, and MUST be
-  removable without breaking references.
+- **FR-EN-1 (M).** The engine MUST compute in real (today's money) terms and derive
+  nominal values from each trial's own realised price index.
+- **FR-EN-2 (M).** The fixed-return projection and the Monte Carlo MUST run the same
+  code (a single trial is `n = 1`).
+- **FR-EN-3 (M).** Net spending, debt service and tax on income MUST be met by
+  withdrawals grossed up exactly for tax and early-withdrawal penalty, in the
+  accounts' withdrawal priority, skipping illiquid and locked wrappers.
+- **FR-EN-4 (M).** Minimum distributions MUST be taken from the wrapper's MRD age by
+  the divisor table (step lookup by whole age), counted as income and, if unspent,
+  reinvested.
+- **FR-EN-5 (M).** Surplus income MUST fund contributions in contribution priority,
+  within wrapper caps and catch-up, only while the household is not fully retired;
+  any remainder MUST sweep into the policy's sweep account.
+- **FR-EN-6 (M).** Employer match MUST be new money on top of the surplus, paid on
+  the percentage-of-pay saving actually made, up to the match cap and inside the
+  wrapper cap.
+- **FR-EN-7 (M).** Unmet need MUST be recorded as shortfall; balances MUST never go
+  negative.
+- **FR-EN-8 (M).** Success MUST mean no period with shortfall and real terminal net
+  worth at or above the legacy target.
+- **FR-EN-9 (M).** Frozen tax bands MUST produce fiscal drag exactly (§10 of the
+  maths document), without rebuilding bands per trial.
+- **FR-EN-10 (M).** The fixed-return projection MUST use each asset's typical
+  (median) growth rate by default, with the arithmetic mean available as an option.
 
-## 6. Income (F-INC-*)
+## 7. Dashboard and solvers (F-SIM, F-SOL)
 
-- **FR-INC-1 (M).** Income MUST be entered as an unbounded table of streams; each row
-  carries owner, type, gross amount, frequency, growth basis (fixed % / CPI / wage index /
-  custom path ID), start age or date, end age or date, taxability category, and a
-  pensionable/contributory flag.
-- **FR-INC-2 (M).** At least 200 income rows MUST be supported without formula edits.
-- **FR-INC-3 (M).** State/social pension MUST support a claim-age election with an actuarial
-  adjustment factor table, an indexation rule, and an optional means-test taper
-  (`benefit = max(0, base − rate × max(0, other_income − threshold))`).
-- **FR-INC-4 (M).** Defined-benefit pensions MUST support accrual-based or fixed amounts,
-  a COLA rule of {none, fixed %, CPI, CPI capped at x%, CPI − y%}, survivor continuation %,
-  and an optional lump-sum commutation with a commutation factor, routing the lump sum to a
-  nominated account and applying the configured tax treatment.
-- **FR-INC-5 (S).** Annuity purchase MUST be modelled as: a withdrawal from a nominated
-  account at a nominated age, converted at a user-supplied annuity rate (or money's-worth
-  factor), producing an income stream with the chosen escalation, joint-life and guarantee
-  terms.
-- **FR-INC-6 (M).** One-off inflows MUST support a probability; in deterministic mode they
-  are applied at expected value or at full value per a user switch, and in stochastic mode
-  they are realised by a Bernoulli draw.
-- **FR-INC-7 (M).** Rental income MUST net vacancy, management, maintenance and periodic
-  capex, and MUST be linked to the corresponding property asset for sale events.
+- **FR-DB-1 (M).** The fixed-return KPIs and charts MUST be shown without running a
+  simulation.
+- **FR-DB-2 (M).** A Monte Carlo run MUST be started through the JSON API, clamped
+  to 100–50,000 trials, and its failure MUST return an error message, not a hung
+  request.
+- **FR-DB-3 (M).** Success probability MUST be shown with its standard error; a
+  bare percentage without an error bar is not acceptable.
+- **FR-DB-4 (M).** The dashboard MUST report the effective return and volatility
+  the market model actually produces after regimes and crashes, beside the inputs.
+- **FR-DB-5 (M).** Solvers MUST re-run the whole model rather than approximate it,
+  and MUST report when the target could not be bracketed.
+- **FR-DB-6 (M).** The earliest-retirement solver MUST move earnings that ended at
+  the old retirement age to the new one, in both directions, and MUST NOT extend
+  earnings that ended earlier.
 
-## 7. Expenses (F-EXP-*)
+## 8. Reports and audit (F-RPT)
 
-- **FR-EXP-1 (M).** The budget MUST be an unbounded category table with: label, amount,
-  frequency, essential/discretionary flag, inflation basis (CPI or CPI + delta or a custom
-  path), start age, end age, owner or household scope.
-- **FR-EXP-2 (M).** A spending-smile multiplier curve MUST be editable by age band and
-  applicable per category by a flag, defaulting to discretionary categories only.
-- **FR-EXP-3 (M).** The healthcare module MUST allow a different inflation rate and a
-  coverage-age step change.
-- **FR-EXP-4 (S).** The long-term-care module MUST support deterministic mode (cost applied
-  for a fixed period at a fixed age) and stochastic mode (entry hazard by age, duration
-  drawn from a distribution, cost inflated at care inflation, net of an insurance benefit).
-- **FR-EXP-5 (M).** One-off and recurring-cycle outflows (e.g. a car every 8 years) MUST be
-  expressible without hand-entering each occurrence.
-- **FR-EXP-6 (M).** The model MUST compute and display an essential-spending floor per year,
-  which dynamic withdrawal policies MUST NOT breach.
+- **FR-RP-1 (M).** Cash-flow, balance-sheet and tax reports MUST show every year of
+  the fixed-return projection.
+- **FR-RP-2 (M).** The audit MUST prove the balance roll-forward
+  `close = (open − withdrawals − MRD + contributions − fees) × (1 + r)` to `1e-6`
+  relative in every period.
+- **FR-RP-3 (M).** The audit MUST check the inputs the engine relies on (ages in
+  order, allocations sum to 100%, correlations in range and symmetric, regime rows
+  sum to 1, tax bands ascend, rates in [0, 1]) and flag implausible assumptions for
+  review.
 
-## 8. Accounts and wrappers (F-ACC-*)
+## 9. Portfolios and prices (F-PF, F-PX)
 
-- **FR-ACC-1 (M).** Accounts MUST be defined in a registry table; the number of accounts is
-  limited only by the reserved table size (≥ 40 accounts).
-- **FR-ACC-2 (M).** Each account MUST reference a **tax wrapper** defined in a user-editable
-  wrapper table with at least these attributes:
-  `contribution_deductible (bool/%)`, `growth_taxed_annually (bool)`,
-  `growth_tax_schedule`, `withdrawal_taxable_fraction (%)`,
-  `withdrawal_tax_schedule`, `contribution_cap_type {none, absolute, %income}`,
-  `contribution_cap_value`, `catch_up_age`, `catch_up_amount`,
-  `early_withdrawal_age`, `early_withdrawal_penalty_%`,
-  `mandatory_distribution_age`, `mandatory_distribution_table_id`,
-  `lock_until_age`, `tax_free_lump_sum_%`.
-- **FR-ACC-3 (M).** The wrapper abstraction MUST be sufficient to express EET, TEE, TTE and
-  ETT regimes without formula changes. Adding a new wrapper MUST require no formula edits.
-- **FR-ACC-4 (M).** Employer contributions MUST support tiered match formulas
-  (e.g. 100% of first 3%, 50% of next 2%), non-elective contributions, and a vesting
-  schedule; unvested balances MUST be excluded from the accessible-wealth KPI.
-- **FR-ACC-5 (M).** Taxable accounts MUST track cost basis on an average-cost method,
-  splitting withdrawals into return-of-capital and realised gain, with a loss
-  carry-forward pool.
-- **FR-ACC-6 (M).** Mandatory minimum distributions MUST be computed from a user-editable
-  divisor/percentage table by age and forced before any discretionary withdrawal.
-- **FR-ACC-7 (M).** Illiquid assets MUST be excluded from the withdrawal engine unless an
-  explicit sale event is scheduled, and MUST be flagged separately in net worth.
-- **FR-ACC-8 (S).** Wrapper conversions MUST compute the tax cost in the year of conversion
-  and MUST support an annual conversion limit and a "fill to top of bracket X" rule.
+- **FR-PF-1 (M).** Holdings MUST be valued at the latest close converted to the
+  portfolio's base currency; a holding without a price MUST count as zero and be
+  reported.
+- **FR-PF-2 (M).** A holding's own asset class MUST override the security's guessed
+  class; setting a class from a security page MUST change only this workspace's
+  holdings.
+- **FR-PF-3 (M).** Pasted and uploaded holdings MUST be previewed before anything is
+  saved.
+- **FR-PF-4 (M).** Rebalancing MUST produce per-class trades that sum to the new
+  money, and a new-money-only alternative that never sells.
+- **FR-PF-5 (M).** Copying a portfolio into the plan MUST set the chosen account's
+  balance, cost basis (holdings without a cost assumed bought at today's value) and
+  asset mix.
+- **FR-PX-1 (M).** The collector MUST price every held symbol and every FX pair a
+  portfolio needs, and MUST report a failure for one symbol without aborting the run.
+- **FR-PX-2 (M).** Closes older than `prices.retention_days` MUST be deleted after
+  every run. Monthly history MUST NOT be stored; only the three long-run numbers.
+- **FR-PX-3 (M).** The scheduler MUST run daily at `prices.run_at` and at start-up
+  when the last successful run is older than 20 hours; a failed run MUST NOT stop the
+  thread.
+- **FR-PX-4 (S).** Requests to Yahoo SHOULD be spaced (0.4 s between symbols).
 
-## 9. Allocation, costs and returns (F-ALLOC-*, F-RET-*)
+## 10. Portfolio builder (F-BLD)
 
-- **FR-AL-1 (M).** Up to 10 user-defined asset classes with expected return, volatility, and
-  a yield/growth split used for taxable drag.
-- **FR-AL-2 (M).** A correlation matrix MUST be editable, MUST be validated for symmetry and
-  unit diagonal, and MUST be repaired by shrinkage toward the identity when not positive
-  semi-definite, with the applied shrinkage reported.
-- **FR-AL-3 (M).** Allocation MUST be definable household-wide or per account, MUST sum to
-  100% (validated), and MUST support a glidepath of type {none, linear, step-table, rule}.
-- **FR-AL-4 (M).** Rebalancing MUST support {none, every period, calendar annual, bands}
-  and MUST apply realised-gain tax in taxable accounts when rebalancing.
-- **FR-AL-5 (M).** Total cost MUST be the sum of fund TER, platform fee, adviser fee
-  (tiered on assets) and an explicit trading cost on turnover, applied to the correct base.
-- **FR-RET-1 (M).** Return modes MUST include: fixed, custom path, historical backtest,
-  Monte Carlo, and stress path — selected by one control.
-- **FR-RET-2 (M).** Monte Carlo MUST be reproducible: the same seed and inputs MUST yield
-  identical results across runs, machines and (for the shared algorithm) both tiers.
-- **FR-RET-3 (M).** Return distribution MUST be selectable: normal, lognormal, or Student-t
-  with user degrees of freedom, variance-matched to the input volatility.
-- **FR-RET-4 (M).** The **regime engine** MUST support K ≥ 3 user-defined regimes
-  (default bear / normal / bull) with per-regime per-asset mean and volatility, a K×K
-  Markov transition matrix (rows validated to sum to 1), a correlation-tightening weight
-  per regime, and a starting-state rule of {stationary, specified, random}.
-- **FR-RET-5 (M).** The **crash process** MUST be independent of, and additive to, the
-  regime engine, parameterised by: annual crash probability, depth distribution
-  (triangular min/mode/max or lognormal), duration in periods, a per-asset-class crash beta
-  (allowing bonds to gain), and a recovery fraction applied over a recovery window.
-- **FR-RET-6 (M).** Deterministic stress paths MUST be user-definable as a pasted return
-  series and MUST be applicable starting at any chosen year (F-RET-8, F-RET-9).
-- **FR-RET-7 (S).** Historical backtest MUST roll the plan across every feasible start year
-  of a pasted series and report the full distribution of outcomes.
-- **FR-RET-8 (S).** Bootstrap engines (IID and block/stationary) MUST be available over the
-  pasted historical series.
-- **FR-RET-9 (M).** Every stochastic mode MUST also drive inflation stochastically when the
-  user enables it, preserving the correlation between inflation and asset returns via a
-  user-set coefficient.
+- **FR-BL-1 (M).** The builder MUST accept .xlsx/.xlsm and delimited text up to
+  10 MB and MUST reject legacy .xls with an instruction to re-save.
+- **FR-BL-2 (M).** Every proposed holding MUST carry a confidence and the way it was
+  identified; doubtful matches and value mismatches MUST be flagged.
+- **FR-BL-3 (M).** Nothing MUST reach a portfolio until the review is confirmed.
+- **FR-BL-4 (M).** At most 2,000 positions are read from one file.
 
-## 10. Tax engine (F-TAX-*)
+## 11. Securities and administration (F-SEC)
 
-- **FR-TAX-1 (M).** All rates, thresholds, allowances and caps MUST be data. No tax
-  constant may appear in a formula.
-- **FR-TAX-2 (M).** The engine MUST support N independent schedules, each a bracket table of
-  (lower bound, rate), applied to a defined base, with an optional allowance, an optional
-  allowance taper, and an optional cap.
-- **FR-TAX-3 (M).** Income MUST be classified by category and stacked in a user-defined
-  order before brackets are applied, so that the marginal rate on the last unit is correct.
-- **FR-TAX-4 (M).** The filing unit MUST support individual, joint (combined bands), and
-  income-splitting with a divisor.
-- **FR-TAX-5 (M).** Tax bands MUST be optionally indexed to inflation; when not indexed,
-  fiscal drag MUST emerge naturally.
-- **FR-TAX-6 (M).** The **gross-up** of a net spending shortfall into a gross withdrawal MUST
-  be solved by exact piecewise-linear inversion of the stacked bracket function.
-  Circular references MUST NOT be used and iterative calculation MUST NOT be required.
-- **FR-TAX-7 (M).** Each year MUST report: taxable income by category, tax by schedule,
-  total tax, effective rate, marginal rate, and the tax paid on withdrawals specifically.
-- **FR-TAX-8 (S).** Capital gains MUST support an annual exemption, a holding-period
-  discount factor, and loss carry-forward across periods.
-- **FR-TAX-9 (C).** Estate tax on terminal wealth MUST be computed from its own schedule.
+- **FR-SE-1 (M).** Any user MAY look up any symbol; nothing is stored by a lookup.
+- **FR-SE-2 (M).** Adding, amending or deleting a security, and typing in or deleting
+  prices, MUST require an administrator.
+- **FR-SE-3 (M).** A security held in any portfolio MUST NOT be deletable.
+- **FR-SE-4 (M).** A manually priced security MUST never be fetched from Yahoo.
+- **FR-SE-5 (M).** Administrator passwords changed in the app MUST be stored only as
+  a salted PBKDF2-SHA256 hash; while the shipped default password is in force, every
+  administrator page MUST say so.
 
-## 11. Withdrawal policy (F-WD-*)
+## 12. Portfolio projection and stress (F-PRJ, F-STR)
 
-- **FR-WD-1 (M).** Policies MUST include at minimum: fixed real, fixed nominal, constant
-  percentage, guardrails, amortisation/VPW, table-driven, and floor-and-upside; selected by
-  one control, with all parameters exposed.
-- **FR-WD-2 (M).** Guardrail parameters (upper guard, lower guard, cut %, raise %,
-  inflation-skip rule, terminal-years exclusion) MUST all be editable.
-- **FR-WD-3 (M).** Withdrawal sourcing MUST follow a user-ordered account priority list, and
-  MUST respect: mandatory distributions first, lock-in ages, early-withdrawal penalties,
-  liquidity flags, and an optional cash-buffer-first rule.
-- **FR-WD-4 (M).** When no source can meet the need, the model MUST record an explicit
-  shortfall (amount, year, cumulative), MUST NOT permit negative balances, and MUST NOT
-  silently borrow.
-- **FR-WD-5 (M).** Surplus income MUST be routed by a user-ordered contribution priority
-  respecting wrapper caps, with the remainder to a nominated taxable account.
-- **FR-WD-6 (M).** A legacy target MUST be supported; success is then defined as terminal
-  real wealth ≥ target.
+- **FR-PJ-1 (M).** Settings MUST be clamped: 1–60 years, 200–50,000 trials, inflation
+  −5% to 25%, fee 0–5%, withdrawal rate 0–50%.
+- **FR-PJ-2 (M).** Expected return MUST NOT be taken from one year of sample mean.
+- **FR-PJ-3 (M).** The same settings and seed MUST reproduce the same result.
+- **FR-PJ-4 (M).** A portfolio with no priced holdings MUST be refused with a reason.
+- **FR-PJ-5 (M).** A bootstrap with too few common trading days MUST fall back to the
+  lognormal model and say so.
+- **FR-PJ-6 (M).** Saved runs MUST re-render from stored numbers alone; the last 10
+  per portfolio are kept.
+- **FR-ST-1 (M).** A replay MUST follow each holding's class proxy, scaling the excess
+  return over cash by the class beta.
 
-## 12. Data entry worksheet (F-UX-*) — elaborated
+## 13. Web rules
 
-- **FR-UX-1 (M).** Inputs MUST live on dedicated input sheets, organised into labelled
-  sections with a fixed row anatomy:
-  `[Input ID] [Label] [Value] [Unit] [Allowed range] [Default] [Applies to] [Help] [Status]`.
-- **FR-UX-2 (M).** The `Status` cell MUST show OK / MISSING / OUT OF RANGE / IMPLAUSIBLE /
-  OVERRIDDEN, driven by validation formulas, and MUST be colour- *and* text-coded.
-- **FR-UX-3 (M).** Every input cell MUST carry data validation (type + range or list) and an
-  input help message. List sources MUST be named ranges, never literal lists.
-- **FR-UX-4 (M).** A `Start Here` sheet MUST provide: a 10-step guided path, hyperlinks to
-  each section, the completeness checklist, the sample-data toggle and the run controls.
-- **FR-UX-5 (M).** The completeness checklist MUST enumerate every unmet requirement by name
-  with a hyperlink to the offending cell, and MUST show a percentage complete.
-- **FR-UX-6 (M).** Input cells MUST reject formulas: a check MUST flag any input cell whose
-  content is a formula, since that breaks scenario switching.
-- **FR-UX-7 (M).** Plausibility warnings MUST fire for at least: real return > 8%, inflation
-  > 10% or < −2%, savings rate > 80%, withdrawal rate > 8%, retirement age < 40 or > 80,
-  horizon age > 110, allocation not summing to 100%, expenses > income during accumulation
-  with no drawdown source, and any correlation outside [−1, 1].
-- **FR-UX-8 (M).** Undo-safety: no input action may require deleting rows of a table;
-  tables MUST have reserved blank rows pre-formatted and pre-validated.
-- **FR-UX-9 (S).** Paste-import sheets MUST accept raw CSV paste and normalise it via
-  formulas, with a mapping row and a validation report, without macros.
-- **FR-UX-10 (M).** A printed input summary (assumptions appendix) MUST be generated from
-  the active scenario automatically.
+- **WR-1 (M).** No CDN. Bootstrap, Bootstrap Icons, fonts and every other front-end
+  library MUST be vendored under `web/static/vendor/`.
+- **WR-2 (M).** No inline JavaScript: every script is a file under `web/static/js/`
+  or `web/static/vendor/`, and templates carry no `on*=` handlers.
+- **WR-3 (M).** Colours MUST be defined only in `web/static/css/tokens.css`; each
+  theme redefines the same `--rp-*` and `--viz-*` roles.
+- **WR-4 (M).** Charts MUST be server-rendered SVG with a table view, so no value is
+  reachable only by hovering.
+- **WR-5 (M).** Templates MUST name routes through `url_for`, never hard-coded paths.
+- **WR-6 (M).** Every route MUST belong to a handler class in `routes/`, registered by
+  the application singleton; shared services live on `app.state`, not module globals.
+- **WR-7 (M).** Redirect targets taken from a request (`next=`) MUST be same-site
+  relative paths.
+- **WR-8 (M).** An unhandled error MUST render an honest error page (or JSON for API
+  callers) and log the full trace.
 
-## 13. Interactivity (F-INT-*, F-SIM-7)
+## 14. Non-functional requirements
 
-- **FR-INT-1 (M).** A single `Scenario` control cell MUST switch every input the model uses,
-  via `INDEX` lookups against scenario columns. Switching MUST require no macro.
-- **FR-INT-2 (M).** Tier A MUST provide form controls (sliders/spinners, list boxes, command
-  buttons) on the dashboard and control sheet, bound to the same input cells the keyboard
-  user edits. Controls MUST be optional sugar, never the only route.
-- **FR-INT-3 (M).** Chart selectors (member, account, scenario, percentile set, horizon
-  window) MUST drive charts through dynamic named ranges built with `INDEX`/`OFFSET`.
-- **FR-INT-4 (M).** When simulation results are stale relative to current inputs, a
-  prominent banner MUST say so; staleness MUST be detected by comparing a stored hash of the
-  inputs and seed to the live one.
-- **FR-INT-5 (M).** Long runs MUST show progress and MUST be cancellable; the document MUST
-  be left in a consistent state on cancel.
-- **FR-INT-6 (S).** A snapshot action MUST freeze current KPIs into a comparison column.
-
-## 14. Simulation engine (F-SIM-*)
-
-- **FR-SIM-1 (M).** Tier A MUST implement simulation in LibreOffice Basic using in-memory
-  arrays, with automatic recalculation disabled and a single bulk write-back of results.
-- **FR-SIM-2 (M).** Trial count MUST be user-settable from 100 to 50,000; the default MUST
-  be ≤ 2,000 so a first run is fast.
-- **FR-SIM-3 (M).** The PRNG MUST be a documented, deterministic, seeded generator
-  implemented identically in Basic and in formulas
-  (see [04-math-and-simulation.md §2](04-math-and-simulation.md)). `RAND()` MUST NOT be used
-  anywhere in the model.
-- **FR-SIM-4 (M).** Simulation output MUST include, per trial: terminal real wealth,
-  depletion period (or none), minimum funded ratio, worst drawdown, total real spending
-  delivered, and total shortfall; plus per-period percentile paths for charting.
-- **FR-SIM-5 (M).** Percentiles MUST be computed per period across trials for at least
-  P5, P10, P25, P50, P75, P90, P95.
-- **FR-SIM-6 (M).** The formula-only fallback (Tier B) MUST implement the same mathematics
-  with a capped trial count and MUST state the cap on screen.
-- **FR-SIM-7 (M).** Solvers (max sustainable spend, earliest retirement age, required
-  contribution) MUST use bisection to a stated tolerance, MUST report the iteration count,
-  and MUST fail gracefully with a message when the objective is not bracketed.
-- **FR-SIM-8 (S).** Antithetic variates MUST be available as a toggle and MUST halve the
-  effective number of independent draws, documented on screen.
-
-## 15. Charting (F-CHT-*)
-
-- **FR-CHT-1 (M).** Every chart MUST be reproducible from a visible data block on a
-  `ChartData` sheet; no chart may reference a hidden ad-hoc computation.
-- **FR-CHT-2 (M).** The fan chart MUST be constructed as a stacked-area band set
-  (base = P5, then differences P10−P5, P25−P10, …) with transparent base series, so it
-  renders identically in both engines.
-- **FR-CHT-3 (M).** Charts MUST use a colour-blind-safe palette, MUST label axes with units
-  and the real/nominal basis, and MUST NOT rely on colour alone to distinguish the median.
-- **FR-CHT-4 (M).** Chart series MUST resize automatically with the plan horizon.
-- **FR-CHT-5 (S).** Heatmaps MUST be rendered with conditional formatting on a numeric grid,
-  with numbers visible, not as an image.
-- **FR-CHT-6 (M).** A chart index sheet MUST list every chart, what it shows and how to read
-  it.
-
-## 16. Reporting, audit and integrity (F-OUT-*, F-GOV-*)
-
-- **FR-OUT-1 (M).** The dashboard MUST show, at minimum: funded status verdict, success
-  probability, median and P10 terminal real wealth, earliest depletion age at P10,
-  maximum sustainable real spend, current and required savings rate, and the three largest
-  sensitivities.
-- **FR-OUT-2 (M).** A reconciliation sheet MUST assert, for every period and every account:
-  `closing = opening + contributions + return − fees − withdrawals − taxes_paid_from_account`
-  to within `1e-6`, and MUST show a single global PASS/FAIL.
-- **FR-OUT-3 (M).** A self-test sheet MUST run at least 25 invariant checks (identities,
-  validation states, matrix validity, probability sums, monotonicity of cumulative series)
-  and report PASS/FAIL with the failing check named.
-- **FR-OUT-4 (M).** The assumptions appendix MUST be generated, not hand-maintained.
-- **FR-GOV-1 (M).** The workbook MUST carry a version, a build date, a changelog sheet, and
-  a documented limitations list.
-- **FR-GOV-2 (M).** Calculation sheets MUST be protected by default (no password), with the
-  unlock procedure documented on the `Read Me` sheet.
-- **FR-GOV-3 (S).** The workbook MUST be produced by a reproducible build script from
-  source, so that a rebuild from the same source yields the same file content.
-
-## 17. Non-functional requirements
-
-- **NFR-1 (M) Performance — deterministic.** A full deterministic recalculation over an
-  80-year annual horizon MUST complete in ≤ 2 s on a mid-range 2020s desktop.
-- **NFR-2 (M) Performance — simulation.** Tier A MUST complete 2,000 trials × 60 years ×
-  5 asset classes in ≤ 20 s, and 10,000 trials in ≤ 120 s, with progress shown.
-- **NFR-3 (M) Performance — file.** Delivered file size MUST be ≤ 15 MB; open time ≤ 5 s.
-- **NFR-4 (M) Determinism.** Two runs with identical inputs and seed MUST agree to `1e-12`
-  relative on every reported KPI.
-- **NFR-5 (M) Numerical hygiene.** No circular references. No volatile functions
-  (`OFFSET`, `INDIRECT`, `NOW`, `TODAY`, `RAND`, `RANDBETWEEN`) in the calculation core;
-  `TODAY()` MAY appear once, on an input sheet, as a default suggestion only.
-- **NFR-6 (M) Robustness.** No formula may display an error value to the user. All
-  divisions, lookups and logs MUST be guarded, and a deliberate error MUST surface as a
-  labelled message, not `#VALUE!`.
-- **NFR-7 (M) Scale.** ≥ 200 income rows, ≥ 200 expense rows, ≥ 40 accounts, ≥ 20 loans,
-  ≥ 10 asset classes, ≥ 12 scenarios, ≥ 960 periods.
-- **NFR-8 (M) Accessibility.** Minimum 11pt body text, contrast ratio ≥ 4.5:1, no meaning
-  conveyed by colour alone, every input cell reachable by keyboard in a logical order.
-- **NFR-9 (M) Localisation.** Currency symbol, thousands scaling, and date format MUST be
-  user-configurable presentation settings that never affect computation. Formulas MUST be
-  stored in locale-independent form.
-- **NFR-10 (M) Privacy.** No personal identifier is required beyond a display name; the file
-  MUST work fully with anonymous labels.
-- **NFR-11 (M) Recoverability.** A corrupted or cleared input MUST be restorable from the
-  defaults column; a `Restore defaults` path MUST exist for every input section.
-- **NFR-12 (S) Maintainability.** Every calculation sheet MUST follow one column grammar
-  (period index across columns or down rows, consistently), documented in the data model.
-- **NFR-13 (M) Security.** Macros MUST perform no file, shell or network access beyond
-  writing into the open document, and the Basic source MUST be readable by the user.
-
-## 18. Acceptance
-
-The release is acceptable when: every **M** requirement is demonstrated; the self-test and
-reconciliation sheets report PASS on all golden scenarios; the Tier A/Tier B equivalence
-harness reports zero deviations beyond tolerance; and the test plan in
-[05-test-plan.md](05-test-plan.md) passes in full.
+- **NFR-1 (M) Performance — simulation.** 2,000 trials of the sample household MUST
+  render the dashboard payload in under 2 s on a desktop machine; 10,000 engine trials
+  in under 5 s.
+- **NFR-2 (S) Performance — analysis.** A full analysis at 2,000 trials SHOULD finish
+  in under 30 s.
+- **NFR-3 (M) Determinism.** The same inputs and seed MUST give identical results
+  across runs and processes.
+- **NFR-4 (M) Numerical hygiene.** No iterative tax solving; divisions guarded;
+  balances clamped at zero.
+- **NFR-5 (M) Portability of data.** SQLite and PostgreSQL MUST be interchangeable by
+  configuration alone; queries MUST use only SQL both accept.
+- **NFR-6 (M) Schema integrity.** A database missing a declared table or column MUST
+  be refused at start-up with a message naming it; the schema is never altered
+  silently.
+- **NFR-7 (M) Privacy.** No personal identifier is required. The only outbound
+  traffic MUST be price and symbol requests to Yahoo Finance.
+- **NFR-8 (M) Offline operation.** Everything except price collection and symbol
+  lookup MUST work without a network.
+- **NFR-9 (M) Accessibility.** No information by colour alone; the chart palette is
+  validated for colour-vision separation on light and dark surfaces.
+- **NFR-10 (M) Testability.** Both test suites MUST run offline, without a server
+  and without Yahoo (see [05-test-plan.md](05-test-plan.md)).
+- **NFR-11 (M) Honesty.** Known limits MUST be stated in the application (help topic
+  *What this model does not do* and the about page).

@@ -1,103 +1,147 @@
-# RetPlan — Delivery Notes (v1.0.0)
+# RetPlan — Release Notes (web application, v1.0.0)
 
-What was actually built, measured rather than asserted, and where the
-implementation departs from the specification. The specs describe the target;
-this file is the honest reconciliation against it.
+What the application contains, what was measured, and where it stops. The limits
+below are the same ones the application states in the help topic *What this model
+does not do* and on the about page.
 
 ## What ships
 
 | Item | Detail |
 |---|---|
-| `RetPlan.ods` | 24 worksheets, ~510 named ranges, 10 charts, 6 macro buttons |
-| `retplan/` | The engine: RNG, tax, markets, projection, metrics, solvers, sheet reader |
-| `build/` | The generator that produces the workbook through the UNO API |
-| `macros/` | The in-document Python macros |
-| `tools/` | Installer, external simulation runner, cross-check, inspectors |
-| `tests/` | 91 assertions, all passing, ~3 s |
+| `retplan/` | The planning engine: plan model, random numbers, markets, tax, projection, metrics, solvers, sample household |
+| `portfolio/` | Database layer, repository, Yahoo client, price collector and scheduler, FX, asset classes, checks and rebalancing, paste importer, portfolio builder, projection, stress replays |
+| `web/`, `routes/` | The FastAPI application: 13 route classes, Jinja templates, server-rendered SVG charts, the MAYA design in four themes, 28 help topics |
+| `schema/` | `sqlite.sql` and `postgres.sql`, nine tables each |
+| `config/retplan.toml` | All settings, each overridable by a `RETPLAN_*` variable |
+| `tools/` | `fetch_prices.py` (one collection run, for cron), `copy_db.py` (move data between databases) |
+| `tests/` | `run_tests.py` (engine) and `test_portfolio.py` (database, portfolios, builder, administration, web) |
 
-## Verification actually performed
+## Getting started
 
-| Check | Result |
+```bash
+./scripts/setup.sh                      # .venv and dependencies
+.venv/bin/python run_retplan_web.py     # http://127.0.0.1:5007
+make test                               # both test suites, offline
+```
+
+## What a user can do
+
+- **Plan**: build a plan in six wizard steps or in the ten-section editor; keep
+  several scenarios and compare them on one seed; see the fixed-return projection
+  immediately; run 500–25,000 Monte Carlo trials for success odds with an error
+  bar, terminal-wealth and depletion distributions, and the effective returns the
+  market model really produces; run the solvers (maximum spend, earliest
+  retirement, extra saving), the spending sweep and the tornado; read cash-flow,
+  balance-sheet and tax reports and the audit; export and import plans as JSON.
+- **Portfolios**: enter holdings by ticker search, paste, or by uploading a broker's
+  positions file to the portfolio builder; price them daily from Yahoo in any base
+  currency; see allocation, a year of value, and the checks; set a target mix and
+  get rebalancing trades; copy a portfolio into a plan account.
+- **Project and stress**: Monte Carlo a portfolio over 1–60 years with three return
+  models, cash flows, a fee and a goal; replay five historical crises on the
+  current mix or open every trial with one; save, reopen and download runs.
+- **Securities**: look up any symbol; as administrator, maintain the shared list,
+  including manually priced holdings.
+
+## Verification performed
+
+| Check | Result (at the time of writing) |
 |---|---|
-| **TR-4 cross-implementation equality** | Worst relative difference **7.3e-12** across income, spending, tax, withdrawals, contributions, fees, balances, shortfall and net worth, over 61 years, on the full sample household |
-| **TR-6 reconciliation** | `max abs` error **0.0** on every period; the Audit sheet reports PASS |
-| **TR-10 error-free display** | Whole-workbook scan: **0** error cells |
-| **TR-5 determinism** | Identical results from the same seed; trial 0 unchanged by trial count |
-| **TR-7 statistics** | Regime occupancy, crash frequency and depth, calibration, volatility, correlation and the lognormal closed form all within tolerance |
-| **NFR-2 performance** | 10,000 trials × 61 years × 6 accounts in **4.1 s**; full analysis with solvers in **15 s** |
-| **Gross-up exactness** | Net delivered equals the need to ~1e-15 relative, including penalties and partial taxable fractions |
+| Engine suite (`tests/run_tests.py`) | 110 checks passing in about 3 s |
+| Portfolio and web suite (`tests/test_portfolio.py`, SQLite) | 158 checks passing in about 3 s |
+| Golden scenarios G1–G9 | Exact to 1e-9 relative (G2 lands on zero within 1e-6) |
+| Reconciliation | Balance roll-forward ties to 1e-6 relative every period, including employer money and conversions |
+| Gross-up | Net delivered equals the need for every taxable fraction, with and without penalty |
+| Market statistics | Regime occupancy, crash frequency and depth, calibration, volatility, correlation and the lognormal closed form within tolerance at 40,000 trials (200,000 with `--slow`) |
+| Projection | Closed forms for cash, contributions, withdrawals, fees; the three return models agree on the median within 5% |
+| Schema parity | Both schema files declare identical tables, columns and indexes |
 
-## Deliberate departures from the spec
+Timings on the development machine (sample household, 61 years, 6 accounts):
 
-1. **Tier B (`.xlsx`) is not built.** The workbook targets LibreOffice, as agreed
-   mid-build. The formula core avoids banned constructs, so a portable export
-   remains feasible, but it is not produced or tested and is therefore not claimed.
-2. **Annual periods only.** `FR-TL-1`'s monthly option is not implemented.
-3. **Household-level tax.** Income is taxed as one unit. Jurisdictions that tax
-   individuals separately are overstated for couples with uneven incomes.
-4. **Allowances and tapers are entered as bands**, not as separate mechanisms.
-   This is what makes the schedule exactly invertible; it is a modelling gain, but
-   it means the `allowance`/`taper` fields on `Schedule` are unused by the
-   shipped data.
-5. **Capital gains** are taxed as `gain fraction × inclusion rate` under the
-   ordinary bands. There is no separate gains schedule or annual gains exemption.
-6. **The sheet assumes annual rebalancing**; the `none` option is honoured by the
-   Python engine but not by the formula engine.
-7. **Built sizes are smaller than the spec's reserved sizes**: 100 income rows,
-   100 expense rows, 10 loans, 6 accounts, 6 wrappers, 6 asset classes, 60-year
-   horizon. All are build parameters in `build/spec.py`; raising them and
-   rebuilding is the only change needed.
-8. **Scenarios store scalar assumptions only**, not the tables.
-9. **Long-term care, annuity purchase, equity release, wrapper conversions and
-   bracket-filling optimisation** are specified but not implemented. LTC can be
-   modelled today as an expense row with a probability, which is how the sample
-   data does it.
+| Operation | Time |
+|---|---|
+| 10,000 engine trials | 1.4 s |
+| Dashboard payload at 2,000 trials | 0.5 s |
+| Full analysis (solvers, sweep, tornado) at 2,000 trials | 8.5 s |
+| Portfolio projection, 2 assets, 30 years, 5,000 trials | 0.1 s |
 
-## The buttons: requirements and verification
+## Known limits
 
-The buttons are now **verified end-to-end** through LibreOffice's own Python
-script provider (`tools/run_macro.py RetPlan.ods run_quick` resolves the same
-`vnd.sun.star.script:` URL a button fires and completes a 500-trial run).
+### Time and structure
 
-Two things must be true for them to work:
+- **Annual periods** in the plan; timing within a year is not modelled. Portfolio
+  projections are the exception: they run quarterly. The plan's `timing` field is
+  stored but not used.
+- **No random lifespan.** The plan is funded for the full horizon; planning age
+  decides only when a person's income falls to its survivor share.
+- **Everyone retires together** in the earliest-retirement solver, which never
+  extends a salary row beyond the age entered.
 
-1. `libreoffice-script-provider-python` is installed.
-2. The document is allowed to run macros. Because the workbook binds button
-   events to scripts, LibreOffice's macro security applies even though the
-   scripts live in the user profile rather than inside the file. At the default
-   **High** level with no trusted location, macros are disabled on open and the
-   buttons silently do nothing. `make setup` (or `tools/trust_folder.py`) adds the
-   checkout to LibreOffice's trusted file locations through its own configuration
-   API. Trust is matched by URL prefix, so one entry covers every subfolder, and
-   the macro security *level* is left alone — only a location is added. The tool
-   resolves the repo root at run time, so it stays correct wherever the project is
-   cloned, and `--remove` reverses it.
+### Tax
 
-   Two operational notes: LibreOffice must be closed when the tool runs, because a
-   running instance owns the profile and rewrites it on exit; and `SecureURL` is a
-   `[]string` property that configmgr rejects unless it is passed as an explicitly
-   typed `uno.Any`.
+- **Household-level tax.** A couple's income is taxed as one unit, which overstates
+  tax where individuals are taxed separately and incomes are uneven.
+- **Allowances and tapers are bands** (plus one tapered allowance). That keeps the
+  schedule exactly invertible; a credit or means-tested benefit must be approximated
+  as a band.
+- **Capital gains** are the gain share of a withdrawal times an inclusion rate,
+  under the ordinary bands. The `capital` schedule is stored but unused; there is no
+  annual gains exemption.
+- **The allowance is fixed by income before withdrawals** each year; a withdrawal
+  cannot taper its own allowance. The error is second order.
+- Wrapper fields `contribution_deductible`, `growth_taxed_annually`,
+  `growth_taxable_fraction` and `tax_free_lump_sum` are stored but not used by the
+  engine.
 
-`tools/simulate.py` remains the no-configuration path: identical code, identical
-results, needs only `python3-uno`.
+### Markets
 
-### Two macro defects found by that verification
+- **The assumptions drive everything.** Returns, volatility, correlations, regimes
+  and crash parameters are the user's.
+- **The fixed-return view ignores diversification.** Each asset grows at its own
+  typical (median) rate, which errs slightly cautious; the *average* basis errs
+  optimistic.
+- **Income yield is informational**; dividend and interest drag in taxable accounts
+  is not charged separately.
 
-Both were masked while the script provider was absent, and both would have made
-the buttons appear "disabled" even once macros were allowed:
+### Not built
 
-- **`__file__` is not defined** in a provider-loaded module. The module set its
-  import path from `__file__`, so it raised `NameError` at import and never
-  loaded. It now asks LibreOffice for the user profile path instead.
-- **`XSCRIPTCONTEXT.getDocument()` returns `None`** for a document with no frame
-  (hidden or headless). Document resolution now falls back to the desktop's
-  current component, then to the first open spreadsheet, and raises a clear
-  error instead of failing silently.
+- Long-term care, annuity purchase, equity release and bracket-filling
+  optimisation. Care costs can be entered as a spending row with a probability; an
+  annuity as an income row with the premium taken off a balance.
+- Monthly periods; stochastic mortality; the policy's cash buffer.
 
-## Known rough edges
+### Portfolios
 
-- `tools/simulate.py` must be given the workbook path; it saves in place.
-- The tornado and spending sweep only populate after **Full analysis**.
-- Very large trial counts (>20,000) with the full solver pass take a few minutes.
-- Chart colours are applied per series; LibreOffice occasionally re-orders the
-  legend on reload.
+- **One year of daily prices** is kept. It estimates volatility and correlation well
+  and the mean hardly at all, so expected returns lean on the asset-class
+  assumptions, blended with up to 20 years of monthly history where available.
+- **Yahoo's endpoints are unofficial** and can change, fail or throttle without
+  notice. A symbol that cannot be priced counts as zero.
+- **No transaction ledger.** Holdings are a snapshot; the year-of-value chart is a
+  back-cast of today's holdings, not a performance record.
+- **Currency risk only as far as the stored year**: foreign holdings are converted
+  day by day with the stored FX pair.
+- **Crisis replays are approximate**: rounded index paths, not a precise record of
+  any fund.
+- **No tax inside portfolio projections**: flows and growth are pre-tax.
+
+### Operations
+
+- No schema migrations: a schema change means editing both schema files and
+  altering or rebuilding the database.
+- One administrator account. `local_is_admin` must stay off behind a reverse proxy,
+  where every request looks local.
+- Simulation results are kept in memory and lost on restart; plans and portfolios
+  are not.
+
+### Where the answer will be least reliable
+
+- A large share of wealth in one illiquid asset, such as a business or a home to be
+  sold.
+- Tax that depends on rules that are not bands, or on two people's separate
+  assessments.
+- A plan that relies on the exact month of an event.
+- A success rate within its error bar of the target.
+
+**Not financial advice.** RetPlan projects the consequences of assumptions the user
+supplies; it does not predict markets.

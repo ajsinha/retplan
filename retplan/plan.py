@@ -112,6 +112,25 @@ class Ledger:
 
 
 @dataclass
+class Conversion:
+    """Move money between two accounts each year, taxed as a withdrawal from the
+    source account's wrapper - a Roth conversion is the best-known case, but any
+    pair of wrappers works.
+
+    mode 'amount' moves `amount` (real) a year; mode 'fill_to' moves just enough to
+    bring the year's taxable income up to `amount` - "fill the lower bands".
+    """
+    label: str = "Conversion"
+    from_ledger: int = 0
+    to_ledger: int = 1
+    mode: str = "amount"         # amount | fill_to
+    amount: float = 0.0          # real, per year (or the taxable-income target)
+    start_age: float = 0.0       # household (person 1) age
+    end_age: float = 0.0         # inclusive of start, exclusive of end
+    enabled: bool = True
+
+
+@dataclass
 class Policy:
     method: str = "fixed_real"   # fixed_real | fixed_nominal | pct_portfolio | vpw |
                                  # guardrails | table
@@ -144,6 +163,7 @@ class Plan:
     income: list = field(default_factory=list)
     expenses: list = field(default_factory=list)
     loans: list = field(default_factory=list)
+    conversions: list = field(default_factory=list)
     wrappers: list = field(default_factory=lambda: [Wrapper()])
     ledgers: list = field(default_factory=lambda: [Ledger()])
     market: MarketSpec = field(default_factory=MarketSpec)
@@ -160,6 +180,7 @@ class Plan:
 _TYPES = {
     "persons": Person, "income": IncomeRow, "expenses": ExpenseRow, "loans": Loan,
     "wrappers": Wrapper, "ledgers": Ledger, "assets": AssetClass, "regimes": Regime,
+    "conversions": Conversion,
 }
 
 

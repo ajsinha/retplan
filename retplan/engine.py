@@ -52,6 +52,7 @@ class Results:
     taxable_income: np.ndarray
     ages: np.ndarray             # (T+1,)
     employer: np.ndarray = None  # employer contributions (part of `contribution`)
+    conversion: np.ndarray = None  # amounts moved between accounts (inside the portfolio)
 
     @property
     def terminal(self):
@@ -246,7 +247,7 @@ class Projection:
 
         out = {k: np.zeros((n, T + 1)) for k in
                ("income", "spend", "tax", "withdrawal", "contribution", "fees",
-                "ret_rate", "shortfall", "taxable_income", "mrd", "employer")}
+                "ret_rate", "shortfall", "taxable_income", "mrd", "employer", "conversion")}
         bal_w = np.zeros((n, T + 1, NW))
         bal_tot = np.zeros((n, T + 1))
         bal_close = np.zeros((n, T + 1))
@@ -288,6 +289,36 @@ class Projection:
                 mrd_total += amt
                 taxable += amt * wr.withdrawal_taxable_fraction
             income_plus = income + mrd_total
+
+            # ---- conversions between accounts --------------------------------
+            # A move inside the portfolio: the total is unchanged, but the source
+            # wrapper's taxable share of it joins this year's taxable income, so
+            # its tax is found by the same exact gross-up as any other and paid by
+            # drawing on the accounts in the usual order.
+            for cv in p.conversions:
+                if (not cv.enabled or k == T or not (cv.start_age <= age < cv.end_age)
+                        or not (0 <= cv.from_ledger < NL) or not (0 <= cv.to_ledger < NL)
+                        or cv.from_ledger == cv.to_ledger):
+                    continue
+                src, dst = cv.from_ledger, cv.to_ledger
+                if not (p.ledgers[src].enabled and p.ledgers[dst].enabled):
+                    continue
+                wr_src = p.wrappers[p.ledgers[src].wrapper]
+                avail = S[:, src, :].sum(axis=1)
+                if cv.mode == "fill_to":
+                    f = max(wr_src.withdrawal_taxable_fraction, 1e-9)
+                    want = np.maximum(0.0, cv.amount - taxable) / f
+                else:
+                    want = np.full(n, max(0.0, cv.amount))
+                amt = np.minimum(avail, want)
+                if not np.any(amt > 0):
+                    continue
+                S[:, src, :] -= amt[:, None] * self._frac(S[:, src, :])
+                S[:, dst, :] += amt[:, None] * self.w[dst, k, :]
+                basis[:, src] = np.maximum(0.0, basis[:, src] * (1.0 - amt / np.maximum(avail, EPS)))
+                basis[:, dst] += amt
+                taxable = taxable + amt * wr_src.withdrawal_taxable_fraction
+                out["conversion"][:, k] += amt
 
             # ---- spending target --------------------------------------------
             ess = self.ess_real[k] + self.ess_nom[k] / cp
@@ -450,7 +481,7 @@ class Projection:
                        shortfall=out["shortfall"], debt_balance=debt_bal,
                        net_worth=nw, regime=gen["regime"],
                        taxable_income=out["taxable_income"], ages=self.age,
-                       employer=out["employer"])
+                       employer=out["employer"], conversion=out["conversion"])
 
     # ------------------------------------------------------------- components
     @staticmethod

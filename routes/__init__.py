@@ -13,6 +13,7 @@
     builder_routes     - the portfolio builder: upload a spreadsheet, review, import
     security_routes    - securities: lookup for anyone; add, amend, delete for admins
     admin_routes       - administrator sign-in, sign-out and password change
+    tools_routes       - what-if, levers, claiming-age and conversion explorers
     help_routes        - the help section, rendered from web/help_catalog.py
 
 Every handler is a class constructed with the FastAPI app and the plan store,
@@ -33,13 +34,14 @@ from .builder_routes import BuilderRoutes
 from .portfolio_routes import PortfolioRoutes
 from .security_routes import SecurityRoutes
 from .admin_routes import AdminRoutes
+from .tools_routes import ToolsRoutes
 from .help_routes import HelpRoutes
 
 ALL_ROUTES = (NoAuthRoutes, WizardRoutes, ScenarioRoutes, PlanRoutes, DashboardRoutes,
               SimulationRoutes, ReportRoutes, ExportRoutes, BuilderRoutes, PortfolioRoutes,
-              SecurityRoutes, AdminRoutes,
+              SecurityRoutes, AdminRoutes, ToolsRoutes,
               HelpRoutes)
 
 __all__ = ["ALL_ROUTES", "NoAuthRoutes", "WizardRoutes", "ScenarioRoutes", "PlanRoutes",
            "DashboardRoutes", "SimulationRoutes", "ReportRoutes", "ExportRoutes",
-           "BuilderRoutes", "PortfolioRoutes", "SecurityRoutes", "AdminRoutes", "HelpRoutes"]
+           "BuilderRoutes", "PortfolioRoutes", "SecurityRoutes", "AdminRoutes", "ToolsRoutes", "HelpRoutes"]

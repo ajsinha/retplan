@@ -51,6 +51,8 @@ class NoAuthRoutes:
         add = self.app.add_api_route
         add("/", self.index, methods=["GET"], name="index", include_in_schema=False)
         add("/about", self.about, methods=["GET"], name="about", include_in_schema=False)
+        add("/about/compare", self.compare, methods=["GET"], name="about_compare",
+            include_in_schema=False)
         add("/method", self.method, methods=["GET"], name="method",
             include_in_schema=False)
         add("/search", self.search, methods=["GET"], name="search",
@@ -64,6 +66,9 @@ class NoAuthRoutes:
 
     async def about(self, request: Request):
         return render(request, "about.html")
+
+    async def compare(self, request: Request):
+        return render(request, "about_compare.html")
 
     async def method(self, request: Request):
         return render(request, "method.html")

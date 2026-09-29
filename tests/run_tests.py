@@ -465,13 +465,44 @@ def test_model_fixes():
           by["Rental property"].weights[labels.index("Property")] == 1.0)
 
 
+def test_conversions():
+    print("\nconversions")
+    from retplan.plan import Conversion
+    def plan(conv):
+        p = simple_plan(0.0, 100000.0, 0.0, 0.0, 6, 1.0, ([0.0], [0.20]))
+        p.persons = [Person("A", 60, 60, 200)]
+        p.wrappers = [Wrapper("Deferred", withdrawal_taxable_fraction=1.0,
+                              realises_capital_gains=False, growth_taxed_annually=False),
+                      Wrapper("Tax-free", withdrawal_taxable_fraction=0.0,
+                              realises_capital_gains=False, growth_taxed_annually=False)]
+        p.ledgers = [Ledger("D", 0, 0, opening=100000, basis=0, weights=[1.0], withdraw_priority=1),
+                     Ledger("F", 1, 0, opening=0, basis=0, weights=[1.0], withdraw_priority=2)]
+        p.expenses = []
+        p.conversions = conv
+        return p
+    r = Projection(plan([Conversion("c", 0, 1, "amount", 10000, 60, 63)])).run(1)
+    check("a conversion moves the amount between accounts",
+          close(r.conversion[0, :3].sum(), 30000) and r.conversion[0, 3] == 0)
+    check("its tax is grossed up and drawn from the taxable account (2,500 a year)",
+          close(r.tax[0, 0], 2500.0, 1e-9) and close(r.withdrawal[0, 0], 2500.0, 1e-9),
+          f"tax {r.tax[0, 0]}, drawn {r.withdrawal[0, 0]}")
+    check("after three years the tax-free account holds 30,000",
+          close(r.balance_by_wrapper[0, 3, 1], 30000.0, 1e-9))
+    check("the reconciliation ties with conversions", reconcile(r)["pass"])
+    r = Projection(plan([Conversion("f", 0, 1, "fill_to", 12000, 60, 61)])).run(1)
+    check("fill-to converts just enough to reach the target income",
+          close(r.conversion[0, 0], 12000.0, 1e-9))
+    r0 = Projection(plan([])).run(1)
+    check("no conversion, no tax in this plan", r0.tax[0].sum() == 0)
+
+
 def main():
     slow = "--slow" in sys.argv
     t0 = time.time()
     test_rng(); test_tax(); test_amortisation()
     test_golden(); test_policies(); test_determinism()
     test_serialisation(); test_edges(); test_solvers()
-    test_convergence(); test_model_fixes()
+    test_convergence(); test_model_fixes(); test_conversions()
     test_market_statistics(200000 if slow else 40000)
     dt = time.time() - t0
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {dt:.1f}s")

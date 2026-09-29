@@ -612,3 +612,111 @@ def quarter_path(values, *, crisis_quarters=0, title="", desc="", start_label="S
                  f'y1="{f.pad_top}" y2="{f.height - f.pad_bottom}" visibility="hidden"/>')
     parts.append(_hover(f, xs, tips))
     return '<div class="viz-wrap">' + _svg(f, "".join(parts), title, desc) + '</div>'
+
+
+def life_timeline(plan, start_year: int) -> str:
+    """The plan laid out by age: people and their retirements, every income stream,
+    time-limited and recurring costs, loans until they are paid off, conversions.
+    One lane per row, grouped; a tooltip on each bar; a line at today."""
+    if not plan.persons:
+        return '<p class="viz-empty">No household yet.</p>'
+    p0 = plan.persons[0]
+    a0 = float(p0.age)
+    a1 = float(min(p0.age + plan.horizon, max(pp.death_age - pp.age for pp in plan.persons) + p0.age))
+
+    def own_to_p0(age, owner):
+        """An age of `owner` expressed on person 1's age axis."""
+        if 0 <= owner < len(plan.persons):
+            return age - plan.persons[owner].age + p0.age
+        return age
+
+    lanes = []            # (group, label, start, end, colour, tip, marker)
+    for i, pp in enumerate(plan.persons):
+        s, e = a0, own_to_p0(pp.death_age, i)
+        r = own_to_p0(pp.retire_age, i)
+        lanes.append(("People", pp.label, s, e, SEQ[1],
+                      f"{pp.label}\nage {pp.age:.0f} today, retires at {pp.retire_age:.0f}, "
+                      f"planned to {pp.death_age:.0f}", r))
+    cat_colour = {"employment": SERIES[0], "self_employment": SERIES[0], "state_pension": SERIES[2],
+                  "db_pension": SERIES[2], "annuity": SERIES[2], "rental": SERIES[3]}
+    for row in plan.income:
+        if not row.enabled or row.amount <= 0:
+            continue
+        s, e = own_to_p0(row.start_age, row.owner), own_to_p0(row.end_age, row.owner)
+        lanes.append(("Income", row.label, max(a0, s), min(a1, e),
+                      cat_colour.get(row.category, SERIES[6]),
+                      f"{row.label}\n{row.amount:,.0f} a year ({row.basis}) from age "
+                      f"{row.start_age:.0f}" + (f" to {row.end_age:.0f}" if row.end_age < 150 else ""),
+                      None))
+    for row in plan.expenses:
+        # lifelong costs are the background, not events: only what starts later,
+        # stops before the plan does, or comes round every few years
+        limited = (row.end_age < p0.death_age or row.start_age > a0 + 0.5
+                   or row.recur_years > 1)
+        if not row.enabled or row.amount <= 0 or not limited:
+            continue
+        s, e = max(a0, row.start_age), min(a1, row.end_age)
+        every = f", every {row.recur_years} years" if row.recur_years > 1 else ""
+        lanes.append(("Costs", row.label, s, e, SERIES[1],
+                      f"{row.label}\n{row.amount:,.0f}{every} from age {row.start_age:.0f}"
+                      + (f" to {row.end_age:.0f}" if row.end_age < 150 else ""), None))
+    for ln in plan.loans:
+        if not ln.enabled or ln.balance <= 0:
+            continue
+        s = a0 + ln.start_year
+        e = min(a1, s + ln.term_years)
+        lanes.append(("Debt", ln.label, s, e, SERIES[7],
+                      f"{ln.label}\n{ln.balance:,.0f} at {ln.rate:.2%}, {ln.term_years} years "
+                      f"({ln.kind.replace('_', ' ')}) - paid off at age {e:.0f}", None))
+    for cv in plan.conversions:
+        if not cv.enabled:
+            continue
+        what = (f"{cv.amount:,.0f} a year" if cv.mode == "amount"
+                else f"fill taxable income to {cv.amount:,.0f}")
+        lanes.append(("Conversions", cv.label, max(a0, cv.start_age), min(a1, cv.end_age),
+                      SERIES[6], f"{cv.label}\n{what}, age {cv.start_age:.0f} to {cv.end_age:.0f}",
+                      None))
+    lanes = [l for l in lanes if l[3] > l[2]]
+    if not lanes:
+        return '<p class="viz-empty">Nothing on the timeline yet.</p>'
+    row_h, gap, top, left, right = 13, 4, 18, 190, 16
+    groups = []
+    for l in lanes:
+        if l[0] not in groups:
+            groups.append(l[0])
+    height = top + (row_h + gap) * len(lanes) + 16 * len(groups) + 34
+    f = Frame(width=1300, height=height, pad_left=left, pad_right=right, pad_top=top, pad_bottom=30)
+    f.x_lo, f.x_hi = a0, a1
+    parts = []
+    ticks = nice_ticks(a0, a1, 10)
+    for t in ticks:
+        if a0 <= t <= a1:
+            x = f.x(t)
+            parts.append(f'<line class="viz-grid" x1="{x:.1f}" x2="{x:.1f}" y1="{top - 6}" '
+                         f'y2="{height - 26}"/><text class="viz-tick" x="{x:.1f}" '
+                         f'y="{height - 10}" text-anchor="middle">{t:.0f}'
+                         f'<tspan class="viz-tick" dx="3">({start_year + int(t - a0)})</tspan></text>')
+    parts.append(f'<text class="viz-tick" x="{left - 8}" y="{height - 10}" text-anchor="end">'
+                 f'age of {_e(p0.label)} (year)</text>')
+    y = top
+    last_group = None
+    for group, label, s, e, colour, tip, marker in lanes:
+        if group != last_group:
+            parts.append(f'<text class="viz-label" x="4" y="{y + 11}">{_e(group)}</text>')
+            y += 16
+            last_group = group
+        x0, x1 = f.x(s), f.x(e)
+        parts.append(f'<text class="viz-tick" x="{left - 8}" y="{y + row_h / 2 + 4:.1f}" '
+                     f'text-anchor="end">{_e(label[:26])}</text>')
+        parts.append(f'<rect class="viz-bar" x="{x0:.1f}" y="{y}" width="{max(3.0, x1 - x0):.1f}" '
+                     f'height="{row_h}" rx="5" fill="{colour}" fill-opacity="0.8" '
+                     f'data-tip="{_e(tip)}"/>')
+        if marker is not None and a0 <= marker <= a1:
+            xm = f.x(marker)
+            parts.append(f'<line x1="{xm:.1f}" x2="{xm:.1f}" y1="{y - 2}" y2="{y + row_h + 2}" '
+                         f'stroke="var(--viz-ink)" stroke-width="2"/>'
+                         f'<text class="viz-tick" x="{xm + 4:.1f}" y="{y + row_h / 2 + 4:.1f}" '
+                         f'fill="var(--viz-ink)">retires</text>')
+        y += row_h + gap
+    return '<div class="viz-wrap">' + _svg(f, "".join(parts), "Your plan over time",
+                                           "income, costs, debt and conversions by age") + '</div>'

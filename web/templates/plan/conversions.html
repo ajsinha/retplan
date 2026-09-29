@@ -1,0 +1,9 @@
+{% extends "plan/_layout.html" %}
+{% from "plan/_macros.html" import table_editor, save_bar with context %}
+{% set title = "Conversions" %}{% set icon = "bi-arrow-left-right" %}
+{% set blurb = "Move money from one account to another each year and pay the tax on it now - a Roth conversion is the best-known case. Worth it when your tax rate now is lower than it will be later. The conversion explorer tries several amounts for you." %}
+{% block form %}
+  {{ table_editor('conversions', conversion_fields, plan.conversions) }}
+  {{ save_bar('conversions', plan.conversions|length) }}
+  <p class="form-hint mt-3 mb-0">The tax on each conversion is worked out with the rest of the year's income and paid by drawing on your accounts in the usual order. <a href="{{ url_for('tool_conversions') }}">Compare conversion strategies <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
+{% endblock %}

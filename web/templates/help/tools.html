@@ -1,0 +1,87 @@
+{% extends "help/_layout.html" %}
+{% from "help/_macros.html" import note, steps, field_table, goto with context %}
+{% block help %}
+<p>Four tools turn "is my plan all right?" into "what should I do about it?". Each changes
+a <em>copy</em> of your active plan and simulates it with the same random seed as the
+original, so any difference you see comes from the change, not from different luck.
+Nothing is saved unless you ask.</p>
+
+<h2>What if… (the dashboard sliders)</h2>
+<p>{{ goto('dashboard', 'Open the dashboard') }} The sliders move one thing at a time,
+or several together, and each move re-runs 800 futures in well under a second:</p>
+{{ field_table([
+  ("Retire", "Everyone retires this many years later or earlier.", "Salaries that stopped at retirement stop at the new age; spending rows that switched at retirement switch then too."),
+  ("Spending", "Every spending row, up or down by this share.", "Essentials and wishes alike."),
+  ("Save more each year until retiring", "Spend this much less each working year.", "Unspent income is already saved automatically, so saving more means spending less now; spending in retirement is unchanged."),
+  ("Share of shares", "Moves this share of every account between shares and bonds.", "Glide paths move by the same amount."),
+  ("Fees", "The platform fee, up or down.", "Fund costs are unchanged."),
+  ("Start public pension", "Every public pension starts this many years later or earlier.", "The amount changes by 8% a year later and 6.67% a year earlier - the claiming explorer lets you set your country's rates."),
+]) }}
+<p>The panel shows the chance of success and how it moved, the median and bad-luck final
+wealth, the age the money runs out in a typical failing future, and lifetime tax.
+<strong>Save as scenario</strong> keeps the adjusted plan as a new scenario and switches to
+it; the original is untouched, so you can {{ goto('compare', 'compare them') }}.</p>
+{% call note('why', 'Why 800 futures, and what "within noise" means') %}
+<p>800 futures answer in a fraction of a second, with an error bar of about ±1.5 points
+on the odds. Because every run uses the same seed, two runs of the <em>same</em> plan give
+exactly the same answer; but a real change smaller than about two error bars may be too
+small to trust, and is marked <em>within noise</em>. For the precise figure, save the
+scenario and run the full simulation.</p>
+{% endcall %}
+
+<h2>Your biggest levers</h2>
+<p>On the dashboard, <em>Find my levers</em> tries each common change on its own - retire a
+year or two later or earlier, spend 5% or 10% less or 5% more, save more, 10% more or less in
+shares, lower fees, claim a public pension two years later or earlier - with 1,500 futures
+each, and ranks them by what they do to your odds. Rows that change the odds by less than
+the noise are faded. Click a row to load it into the sliders, combine it with others, and
+save the result as a scenario.</p>
+{% call note('tip', 'Read the list both ways') %}
+<p>The top of the list is where effort pays; the bottom is what to avoid. A lever with a
+small effect on the odds can still move median wealth a lot - fees usually do - which the
+sliders show.</p>
+{% endcall %}
+
+<h2>When to claim a public pension</h2>
+<p>{{ goto('tool_claiming', 'Open the claiming explorer') }} Choose a public-pension income
+row (category <em>state pension</em>); its current start age and amount are taken as the
+usual ones. RetPlan then tries every age in the range you give, scaling the pension down by
+the early rate for each year before the usual age and up by the late rate for each year
+after, and runs your whole plan for each. The table gives the yearly amount, the chance of
+success, median and bad-luck final wealth, and the <strong>break-even age</strong>: how long
+you must live for the later, larger pension to have paid out as much in total.</p>
+<ul>
+  <li>US Social Security is roughly 6.7% less a year early and 8% more a year late; the UK
+      State Pension cannot be taken early but grows about 5.8% a year deferred; other
+      countries differ. Set the rates for yours.</li>
+  <li>Waiting usually wins with a long life expectancy and other money to live on meanwhile.
+      Claiming early can win with thin savings or poor health.</li>
+</ul>
+
+<h2>Account conversions</h2>
+<p>{{ goto('tool_conversions', 'Open the conversion explorer') }} A conversion moves money
+from an account taxed on the way out (a traditional IRA, a 401(k), a pension) to one that is
+never taxed again (a Roth), paying the tax now. It pays when your tax rate now is lower than
+the rate you - or your heirs - would pay later, and it shrinks forced withdrawals later.</p>
+{% call steps() %}
+  <li>Pick the <strong>from</strong> and <strong>to</strong> accounts and the ages to convert
+      between - often the years between retiring and a pension starting, when income is low.</li>
+  <li>List some <strong>fixed amounts</strong> a year to try, and some <strong>taxable income
+      levels to fill to</strong> - the tops of your lower tax bands. "Fill to 50,270" converts
+      just enough each year to bring taxable income up to 50,270.</li>
+  <li>Set the <strong>tax your heirs pay</strong> on money left in accounts taxed on the way
+      out. Comparing final wealth without it would favour never converting, because that
+      money's tax would simply never be counted.</li>
+  <li>RetPlan runs your whole plan once per strategy and ranks them by the chance of success,
+      then by after-tax final wealth. <strong>Try it</strong> saves a copy of your plan with
+      that conversion as a new scenario.</li>
+{% endcall %}
+<p>Conversions you keep appear in the editor under {{ goto('plan_section', 'Plan → Conversions', 'conversions') }},
+where you can edit them. The tax on each is worked out with the rest of that year's income
+and paid by drawing on your accounts in the usual order.</p>
+{% call note('warn', 'Rules this model does not know') %}
+<p>RetPlan applies no country's conversion rules: waiting periods, income limits,
+conversion ladders and tax on benefits that rises with income are not modelled. Check the
+rules where you live before acting.</p>
+{% endcall %}
+{% endblock %}

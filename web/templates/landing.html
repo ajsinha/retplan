@@ -1,77 +1,254 @@
-{# The landing page, after MAYA's second-edition landing: a centred hero, a strip of numbers,
-   capability cards, the three ways in, and a closing call. Colour comes entirely from the
-   tokens, so it is the same page in all four themes. #}
+{# The landing page, after MAYA's: a centred hero with a drawn figure, a strip of numbers,
+   the chain of one year reconciled, sequence risk, capability cards, the ways in, the
+   ledger, a comparison, a closing call. Colour comes entirely from the tokens, so it is
+   the same page in all four themes. The three canvases are drawn by landing.js - each a
+   small, honest simulation - and each plays once when it comes into view. #}
 {% extends "base.html" %}
 {% block title %}{{ app_tagline }}{% endblock %}
 {% block content %}
 <section class="lp2-hero">
   <div class="lp2-hero-inner">
     <div class="lp2-badge"><i class="bi bi-circle-fill" aria-hidden="true"></i>
-      {{ app_tagline }} · version {{ app_version }} · self-hosted, no accounts</div>
-    <h1 class="lp2-title">Will the money last?<br><span class="lp2-gradient">See every future,</span> not just the average.</h1>
-    <p class="lp2-sub">RetPlan projects your income, spending, tax and savings year by year, then tests the plan
-      against thousands of market histories - bear markets, crashes, bad sequences. Track your real portfolio,
-      priced every day, and see where it could be in ten or thirty years.</p>
+      {{ app_tagline }} · version {{ app_version }} · self-hosted · no accounts to create</div>
+    <h1 class="lp2-title">Will the money last?<br><span class="lp2-gradient">A thousand futures</span> answer, not one average.</h1>
+    <p class="lp2-sub">RetPlan projects your income, spending, tax and savings year by year, then runs the plan
+      through a thousand market histories - bear markets, crashes, a bad first decade. You get the odds with their
+      error bar, the age the money runs out in a bad future, and every number traced back to the row that made it.</p>
     <div class="lp2-actions">
       <a class="lp2-btn lp2-btn-primary" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start in two minutes</a>
-      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> Explore the sample plan</a>
-      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('portfolios') }}"><i class="bi bi-briefcase" aria-hidden="true"></i> Track a portfolio</a>
+      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i> Upload your positions</a>
+      <a class="lp2-btn lp2-btn-outline" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> Explore the sample</a>
     </div>
+    <figure class="lp2-fig lp2-fig-hero">
+      <canvas id="lpFutures" role="img" aria-label="A thousand simulated futures fan out from today's savings of one million, drawing forty-two thousand a year from age 65. The few that run dry turn red; the middle eighty percent becomes a band; the median is drawn bold; and the answer appears as a share of futures that last to 95, with its error bar."></canvas>
+      <button class="lp2-replay" type="button" data-replay="lpFutures"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Replay</button>
+    </figure>
   </div>
 </section>
 
 <section class="lp2-stats" aria-label="RetPlan in numbers">
-  <div><span class="lp2-num">6</span><span class="lp2-label">questions to a first answer</span></div>
+  <div><span class="lp2-num">2 min</span><span class="lp2-label">from nothing to a first answer</span></div>
   <div><span class="lp2-num">25,000</span><span class="lp2-label">simulated futures a run</span></div>
-  <div><span class="lp2-num">3</span><span class="lp2-label">portfolio return models</span></div>
+  <div><span class="lp2-num">3</span><span class="lp2-label">market models for portfolios</span></div>
   <div><span class="lp2-num">5</span><span class="lp2-label">historical crises replayed</span></div>
   <div><span class="lp2-num">0</span><span class="lp2-label">countries hard-coded</span></div>
-  <div><span class="lp2-num">2</span><span class="lp2-label">databases: SQLite or PostgreSQL</span></div>
+  <div><span class="lp2-num">every</span><span class="lp2-label">year reconciled, every future</span></div>
 </section>
 
-<section class="lp2-section">
-  <div class="lp2-centre">
-    <div class="lp2-eyebrow">What it does</div>
-    <h2 class="lp2-h2">A plan you can check, and a portfolio you can see ahead</h2>
-    <p class="lp2-desc">Every number traces back to a visible row. Every assumption is yours to change.</p>
+<section class="lp2-section lp2-chain">
+  <div class="lp2-chain-copy">
+    <p class="lp2-eyebrow">One year of your plan</p>
+    <h2 class="lp2-h2">Every number has somewhere to come from.</h2>
+    <p class="lp2-desc">Each year, income arrives and is taxed by the bands you typed; essential spending is paid
+      before anything you would only like; the shortfall is drawn from the account that costs least in tax; what
+      is left grows, pays its fees and is rebalanced. Then the books are checked: the closing balance must equal
+      the opening one plus every flow. Every box in this figure is a row you can open in the cash-flow report -
+      so the picture is not a metaphor for the model. It is the model.</p>
+    <p class="lp2-desc mb-0"><a href="{{ url_for('method') }}">How the model works <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
   </div>
+  <figure class="lp-figure">
+    <svg viewBox="0 0 420 448" role="img" aria-labelledby="lp-fig-title">
+      <title id="lp-fig-title">One year of the plan: income, tax, spending, withdrawals, growth - reconciled</title>
+      <defs>
+        <marker id="lp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"></path>
+        </marker>
+      </defs>
+      <g class="lp-wire" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#lp-arrow)">
+        <path id="lp-w1" d="M210 66 L210 104"></path>
+        <path id="lp-w2" d="M210 150 L210 188"></path>
+        <path id="lp-w3" d="M210 234 L210 272"></path>
+        <path id="lp-w4" d="M210 318 L210 356"></path>
+      </g>
+      <g class="lp-node">
+        <rect x="100" y="28" width="220" height="38" rx="8"></rect>
+        <rect x="100" y="112" width="220" height="38" rx="8"></rect>
+        <rect x="100" y="196" width="220" height="38" rx="8"></rect>
+        <rect x="100" y="280" width="220" height="38" rx="8"></rect>
+        <rect x="100" y="364" width="220" height="38" rx="8"></rect>
+      </g>
+      {# One year making the whole journey, every six seconds: the money arrives, is taxed,
+         pays for the essentials first, is topped up from the cheapest account, grows - and
+         only then does the tick appear, because only then has the year been checked. Every
+         timing is a fraction of one 6.2s cycle, so the steps cannot drift apart however
+         long the page is left open. Hidden for a reader who asked for less motion; the
+         diagram underneath says the same thing standing still. #}
+      <g class="lp-motion" aria-hidden="true">
+        <g class="lp-lit" fill="none" stroke-width="2.5">
+          <rect x="100" y="28" width="220" height="38" rx="8" opacity="0">
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="1;1;0;0" keyTimes="0;0.02;0.12;1"></animate></rect>
+          <rect x="100" y="112" width="220" height="38" rx="8" opacity="0">
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;0;0" keyTimes="0;0.16;0.19;0.30;1"></animate></rect>
+          <rect x="100" y="196" width="220" height="38" rx="8" opacity="0">
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;0;0" keyTimes="0;0.36;0.39;0.50;1"></animate></rect>
+          <rect x="100" y="280" width="220" height="38" rx="8" opacity="0">
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;0;0" keyTimes="0;0.56;0.59;0.70;1"></animate></rect>
+          <rect x="100" y="364" width="220" height="38" rx="8" opacity="0">
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;1;0" keyTimes="0;0.76;0.79;0.94;1"></animate></rect>
+        </g>
+        <g class="lp-pulse">
+          <circle r="4" opacity="0">
+            <animateMotion dur="6.2s" repeatCount="indefinite" calcMode="linear"
+              keyPoints="0;0;1;1" keyTimes="0;0.02;0.16;1"><mpath href="#lp-w1"></mpath></animateMotion>
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;1;0;0" keyTimes="0;0.02;0.04;0.15;0.17;1"></animate></circle>
+          <circle r="4" opacity="0">
+            <animateMotion dur="6.2s" repeatCount="indefinite" calcMode="linear"
+              keyPoints="0;0;1;1" keyTimes="0;0.22;0.36;1"><mpath href="#lp-w2"></mpath></animateMotion>
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;1;0;0" keyTimes="0;0.22;0.24;0.35;0.37;1"></animate></circle>
+          <circle r="4" opacity="0">
+            <animateMotion dur="6.2s" repeatCount="indefinite" calcMode="linear"
+              keyPoints="0;0;1;1" keyTimes="0;0.42;0.56;1"><mpath href="#lp-w3"></mpath></animateMotion>
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;1;0;0" keyTimes="0;0.42;0.44;0.55;0.57;1"></animate></circle>
+          <circle r="4" opacity="0">
+            <animateMotion dur="6.2s" repeatCount="indefinite" calcMode="linear"
+              keyPoints="0;0;1;1" keyTimes="0;0.62;0.76;1"><mpath href="#lp-w4"></mpath></animateMotion>
+            <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+              values="0;0;1;1;0;0" keyTimes="0;0.62;0.64;0.75;0.77;1"></animate></circle>
+        </g>
+        <g class="lp-stamp" text-anchor="middle" opacity="0">
+          <animate attributeName="opacity" dur="6.2s" repeatCount="indefinite"
+            values="0;0;1;1;0;0" keyTimes="0;0.78;0.82;0.92;0.96;1"></animate>
+          <text x="210" y="430" class="ok">✓ closing = opening + every flow</text>
+        </g>
+      </g>
+      <g class="lp-label" text-anchor="middle">
+        <text x="210" y="52">income · salary, pension, rent</text>
+        <text x="210" y="136">tax · by the bands you typed</text>
+        <text x="210" y="220">spending · essentials first</text>
+        <text x="210" y="304">withdrawals · cheapest pot first</text>
+        <text x="210" y="388">growth · fees · rebalancing</text>
+      </g>
+      <g class="lp-aside" text-anchor="start">
+        <text x="326" y="136">inverted exactly</text>
+        <text x="326" y="220">floor before wishes</text>
+        <text x="326" y="304">in your draw order</text>
+        <text x="326" y="388">next year opens here</text>
+      </g>
+    </svg>
+    <figcaption>One year of a plan. Each box is a column of the cash-flow report; the tick is the audit.</figcaption>
+  </figure>
+</section>
+
+<section class="lp2-section lp2-figsec">
+  <p class="lp2-eyebrow">Sequence risk</p>
+  <h2 class="lp2-h2 lp2-centre">Same returns. Different order. Different retirement.</h2>
+  <p class="lp2-desc lp2-centre">Two retirees each start with a million and draw sixty thousand a year. They earn exactly
+    the same thirty yearly returns - the same average - but one meets the bad years first. An average-return
+    calculator shows them the same future. RetPlan shows you both, and how likely each is.</p>
+  <figure class="lp2-fig lp2-fig-wide">
+    <div class="lp2-fig-scroll"><canvas id="lpSequence" role="img" aria-label="Two balance lines over thirty years from one million, both drawing sixty thousand a year and earning the same thirty returns in opposite order. The one that meets the bad years first runs out in its twenties; the other ends with more than it started with. Below, the returns are drawn as bars, the second row the mirror of the first."></canvas></div>
+    <button class="lp2-replay" type="button" data-replay="lpSequence"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Replay</button>
+  </figure>
+</section>
+
+<section class="lp2-section" id="capabilities">
+  <p class="lp2-eyebrow lp2-centre">Capabilities</p>
+  <h2 class="lp2-h2 lp2-centre">Not a calculator. A plan you can check.</h2>
+  <p class="lp2-desc lp2-centre">A calculator gives you a number. A plan can say where every number came from, what it
+    assumed, how likely it is - and what would change it.</p>
   <div class="lp2-grid">
-    {% for icon, title, text, route in [
-      ('speedometer2', 'The odds, honestly', 'A success probability with its error bar, the range of outcomes, and the age the money runs out in a bad future.', 'dashboard'),
-      ('layers', 'What if…?', 'Copy the plan, retire two years later or spend a little less, and compare the scenarios side by side.', 'scenarios'),
-      ('briefcase', 'Your real holdings', 'Search any Yahoo symbol, paste from your broker, see value, gains, allocation and risk checks.', 'portfolios'),
-      ('graph-up', 'Ten years out, or forty', 'Correlated Monte Carlo on your actual mix, with contributions, withdrawals and a goal - by year or by quarter.', 'portfolios'),
-      ('lightning', 'Crisis replays', 'What 2008, the dot-com bust or the 2022 rate shock would do to today\'s portfolio, and how long it would take to recover.', 'portfolios'),
-      ('shield-lock', 'Any country\'s tax', 'Tax bands you type and account wrappers you define: a 401(k), an ISA, a TFSA - all one model.', 'help')] %}
-    <a class="lp2-card" href="{{ url_for(route) }}"><i class="bi bi-{{ icon }}" aria-hidden="true"></i><h3>{{ title }}</h3><p>{{ text }}</p></a>
-    {% endfor %}
+    <a class="lp2-card" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i>
+      <h3>The odds, with their error bar</h3>
+      <p>A success probability from thousands of futures - with the plus-or-minus that comes from running a
+        finite number of them - the bad-luck outcome, and the age the money runs out when it does.</p></a>
+    <a class="lp2-card" href="{{ url_for('scenarios') }}"><i class="bi bi-layers" aria-hidden="true"></i>
+      <h3>What if, side by side</h3>
+      <p>Copy the plan, retire two years later or spend a little less, and compare the versions on the same
+        random seed - so the difference is the plan's, not the dice's.</p></a>
+    <a class="lp2-card" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>
+      <h3>Your real portfolio, in one upload</h3>
+      <p>Drop in your broker's positions export. RetPlan finds the table, reads the columns, identifies every
+        security by symbol, ISIN or name, and flags anything doubtful before it saves a thing.</p></a>
+    <a class="lp2-card" href="{{ url_for('portfolios') }}"><i class="bi bi-graph-up" aria-hidden="true"></i>
+      <h3>Ten years out, or forty</h3>
+      <p>Correlated Monte Carlo on your actual holdings - lognormal, fat-tailed or resampled from their own
+        prices - with contributions, withdrawals and a goal, by year or by quarter.</p></a>
+    <a class="lp2-card" href="{{ url_for('portfolios') }}"><i class="bi bi-lightning" aria-hidden="true"></i>
+      <h3>History, replayed on your mix</h3>
+      <p>2008, the dot-com bust, Covid, the 2022 rate shock and the 1970s: how deep, how long to recover -
+        and what a crisis in your first year of retirement would do to the odds.</p></a>
+    <a class="lp2-card" href="{{ url_for('help_wrappers') }}"><i class="bi bi-shield-lock" aria-hidden="true"></i>
+      <h3>Any country's tax, exactly</h3>
+      <p>Tax bands you type and account wrappers you define - a 401(k), an ISA, a TFSA, a pension - all one
+        model, inverted exactly so "what must I withdraw to spend this" is never a guess.</p></a>
   </div>
 </section>
 
-<section class="lp2-section">
-  <div class="lp2-centre">
-    <div class="lp2-eyebrow">Three ways in</div>
-    <h2 class="lp2-h2">Start simple. Go as deep as you like.</h2>
+<section class="lp2-section lp2-ways">
+  <p class="lp2-eyebrow lp2-centre">Three ways in</p>
+  <h2 class="lp2-h2 lp2-centre">Start simple. Go as deep as you like.</h2>
+  <p class="lp2-desc lp2-centre">Every screen is a view of the same plan, and the plan is plain JSON you can download,
+    edit and upload - so nothing about it is locked inside the application.</p>
+  <div class="lp2-ways-grid">
+    <div class="lp2-ways-list">
+      <div class="lp2-way"><i class="bi bi-magic" aria-hidden="true"></i><div><strong>Quick start</strong>
+        <span>Ages, income, savings, spending, a risk level - six short steps, a complete plan</span></div></div>
+      <div class="lp2-way"><i class="bi bi-pencil-square" aria-hidden="true"></i><div><strong>The editor</strong>
+        <span>Every income stream, wrapper, tax band, market regime and withdrawal rule</span></div></div>
+      <div class="lp2-way"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i><div><strong>Upload</strong>
+        <span>Your broker's positions become a portfolio, then an account in the plan</span></div></div>
+      <div class="lp2-way"><i class="bi bi-braces" aria-hidden="true"></i><div><strong>JSON</strong>
+        <span>Plans export and import as JSON; portfolios and simulations answer over HTTP</span></div></div>
+    </div>
+    <div class="lp2-code" aria-label="An example of the HTTP interface">
+      <div class="lp2-code-bar"><span></span><span></span><span></span><em>shell</em></div>
+<pre><span class="c"># run 5,000 futures of the plan in this browser's workspace</span>
+curl -b cookie -X POST <span class="s">localhost:5007/api/simulate</span> \
+     -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{"trials": 5000}'</span>
+<span class="c">→ {"success": 0.874, "success_se": 0.0047,</span>
+<span class="c">   "terminal_p50": 1184022, "terminal_p5": 96310, …}</span>
+
+<span class="c"># a portfolio, valued at today's closes</span>
+curl -b cookie <span class="s">localhost:5007/api/portfolios/1</span>
+<span class="c">→ {"total": 340674.0, "as_of": "2026-09-28", "holdings": […]}</span></pre>
+    </div>
   </div>
-  <div class="row g-3">
-    {% for n, icon, title, text, route, cta in [
-      ('1', 'magic', 'Quick start', 'Ages, income, savings, spending, a risk level. Six short steps and a complete plan.', 'wizard', 'Start the wizard'),
-      ('2', 'pencil-square', 'The full editor', 'Every income stream, wrapper, tax band, market regime and withdrawal rule, table by table.', 'plan', 'Open the editor'),
-      ('3', 'briefcase', 'Portfolios', 'Holdings priced daily, projected forward, and copied into the plan in one click.', 'portfolio_new', 'Create a portfolio')] %}
+</section>
+
+<section class="lp2-section lp2-figsec">
+  <p class="lp2-eyebrow">The audit</p>
+  <h2 class="lp2-h2 lp2-centre">Every year, the books balance.</h2>
+  <p class="lp2-desc lp2-centre">A projection that loses a flow somewhere looks exactly like one that does not - until you
+    check. RetPlan checks, every year of every simulated future: the closing balance must equal the opening one plus
+    every contribution, withdrawal, fee and return. If it does not, the dashboard says so before it shows you a number.</p>
+  <figure class="lp2-fig lp2-fig-wide">
+    <div class="lp2-fig-scroll"><canvas id="lpLedger" role="img" aria-label="Six years of a plan written out as a ledger: each line an opening balance, minus the year's draw and fees, times the year's return, equals the closing balance, and a tick shows it ties to the next year's opening."></canvas></div>
+    <button class="lp2-replay" type="button" data-replay="lpLedger"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Replay</button>
+  </figure>
+</section>
+
+<section class="lp2-section">
+  <p class="lp2-eyebrow lp2-centre">How it compares</p>
+  <h2 class="lp2-h2 lp2-centre">What you get that a subscription planner will not give you.</h2>
+  <div class="row g-3 justify-content-center">
+    {% for icon, title, text in [
+      ('eye', 'Nothing hidden', 'Every assumption on a page you can edit; every number traced to a row; a reconciliation on every plan.'),
+      ('globe', 'Not only for Americans', 'No country built in. Your tax bands, your account types, your currency - or several.'),
+      ('house-lock', 'Yours, on your machine', 'No account, no subscription, no data sold or shared. SQLite by default, PostgreSQL if you like.')] %}
     <div class="col-md-4"><div class="card h-100"><div class="card-body p-4">
       <div class="d-flex align-items-center gap-2 mb-2"><span class="mega-icon"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></span><h3 class="h5 mb-0">{{ title }}</h3></div>
-      <p class="small-muted">{{ text }}</p>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for(route) }}">{{ cta }} <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div></div></div>
+      <p class="small-muted mb-0">{{ text }}</p></div></div></div>
     {% endfor %}
   </div>
+  <p class="text-center mt-3"><a href="{{ url_for('about_compare') }}">RetPlan beside Boldin, ProjectionLab and others <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
 </section>
 
 <section class="lp2-cta">
-  <h2>Ready when you are</h2>
-  <p>Nothing to install beyond this app, no account to create, and nothing leaves your machine except price lookups.</p>
+  <h2>{{ app_slogan }}</h2>
+  <p>No account to create, nothing to install beyond this app, and nothing leaves your machine except price look-ups.</p>
   <div class="lp2-actions">
     <a class="lp2-btn lp2-btn-light" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start a plan</a>
-    <a class="lp2-btn lp2-btn-ghost" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Read the help</a>
+    <a class="lp2-btn lp2-btn-ghost" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help centre</a>
+    <a class="lp2-btn lp2-btn-ghost" href="{{ url_for('about') }}"><i class="bi bi-info-circle" aria-hidden="true"></i> About {{ app_name }}</a>
   </div>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/landing.js', v=asset_v) }}"></script>{% endblock %}
