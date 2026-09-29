@@ -22,7 +22,7 @@ PCTS = [5, 10, 25, 50, 75, 90, 95]
 
 
 def deterministic(plan):
-    """The projection the sheet shows: fixed returns, fixed inflation."""
+    """The fixed-return projection: fixed returns, fixed inflation."""
     import copy
     q = copy.deepcopy(plan)
     q.market.mode = "fixed"
@@ -173,7 +173,7 @@ def solver_view(plan, trials: int) -> dict:
 
 
 def audit_checks(plan, view) -> list:
-    """The same discipline as the workbook's audit sheet, applied to the web model."""
+    """Checks run against the plan and its fixed-return projection on every view."""
     res = view["res"]
     out = []
 

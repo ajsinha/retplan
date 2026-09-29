@@ -24,8 +24,9 @@ class Config:
     prices_enabled: bool = True
     prices_run_at: str = "18:30"
     prices_retention_days: int = 365
-    admin_password: str = ""
-    admin_local: bool = True
+    admin_username: str = "admin"
+    admin_password: str = "retplan-dev-admin"
+    admin_local: bool = False
     source: str = "defaults"
 
     def secret(self) -> str:
@@ -64,6 +65,7 @@ def load_config(path: str | None = None, data_dir: str | None = None) -> Config:
         cfg.source = path
     app, db, px = raw.get("app", {}), raw.get("database", {}), raw.get("prices", {})
     adm = raw.get("admin", {})
+    cfg.admin_username = str(adm.get("username", cfg.admin_username) or "admin").strip()
     cfg.admin_password = str(adm.get("password", cfg.admin_password) or "")
     cfg.admin_local = _bool(adm.get("local_is_admin", cfg.admin_local))
     cfg.data_dir = app.get("data_dir", cfg.data_dir)
@@ -79,6 +81,7 @@ def load_config(path: str | None = None, data_dir: str | None = None) -> Config:
     if env("RETPLAN_PRICES_ENABLED") is not None:
         cfg.prices_enabled = _bool(env("RETPLAN_PRICES_ENABLED"))
     cfg.prices_run_at = env("RETPLAN_PRICES_RUN_AT") or cfg.prices_run_at
+    cfg.admin_username = env("RETPLAN_ADMIN_USERNAME") or cfg.admin_username
     cfg.admin_password = env("RETPLAN_ADMIN_PASSWORD") or cfg.admin_password
     if env("RETPLAN_ADMIN_LOCAL") is not None:
         cfg.admin_local = _bool(env("RETPLAN_ADMIN_LOCAL"))

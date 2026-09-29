@@ -17,6 +17,11 @@
 <a class="visually-hidden-focusable rp-skip" href="#main">Skip to content</a>
 {% include "_nav.html" %}
 <div class="rp-shell">
+  {% if admin_default_password %}
+  <div class="rp-banner warn" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    The <strong>admin</strong> account still uses the default password <code>retplan-dev-admin</code>.
+    <a href="{{ url_for('admin_password') }}">Change it now</a>.</div>
+  {% endif %}
   {% block banner %}{% endblock %}
   <main class="rp-content" id="main">
     <div aria-live="polite">

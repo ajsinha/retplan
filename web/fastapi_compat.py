@@ -134,11 +134,13 @@ def _inject_globals(request: Request) -> dict:
     context["path"] = request.url.path
     context["asset_v"] = ASSET_V
     context["workspace"] = _workspace(request)
-    from web.admin import is_admin
+    from web.admin import default_password_in_force, is_admin
     try:
         context["is_admin"] = is_admin(request)
+        context["admin_default_password"] = (context["is_admin"]
+                                             and default_password_in_force(request))
     except Exception:  # noqa: BLE001 - a page must render even if config is odd
-        context["is_admin"] = False
+        context["is_admin"] = context["admin_default_password"] = False
     return context
 
 

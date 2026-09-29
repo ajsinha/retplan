@@ -1,4 +1,4 @@
-"""The worked sample household, shared by the workbook and the web app.
+"""The worked sample household.
 
 Fictional, but deliberately not a toy: two earners retiring at different times,
 six accounts across four tax wrappers, a mortgage, a lumpy car-replacement cycle,

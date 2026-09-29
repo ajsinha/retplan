@@ -1,4 +1,4 @@
-"""Download and upload a plan; build the LibreOffice workbook on demand.
+"""Download and upload a plan (portable JSON); reload the sample; start empty.
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 """

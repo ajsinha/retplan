@@ -3,7 +3,7 @@
 # Every key can also be set from the environment, which wins over this file:
 #   RETPLAN_DATABASE_URL, RETPLAN_DATA, RETPLAN_SECRET,
 #   RETPLAN_PRICES_ENABLED, RETPLAN_PRICES_RUN_AT, RETPLAN_PRICES_RETENTION_DAYS
-#   RETPLAN_ADMIN_PASSWORD, RETPLAN_ADMIN_LOCAL
+#   RETPLAN_ADMIN_USERNAME, RETPLAN_ADMIN_PASSWORD, RETPLAN_ADMIN_LOCAL
 # A different file can be named with RETPLAN_CONFIG=/path/to/file.toml.
 
 [app]
@@ -29,10 +29,12 @@ run_at = "18:30"      # local time, after the US close; also runs at start-up if
 retention_days = 365  # closes older than this are deleted after each run
 
 [admin]
-# Administrators can add, amend and delete securities and their prices.
-# With no password, a request from this machine itself (127.0.0.1) is an
-# administrator - right for a personal install. Set a password if other people
-# can reach the app, and ALWAYS behind a reverse proxy (every proxied request
-# looks local). With a password set, sign in at /admin/login.
-password = ""
-local_is_admin = true   # ignored once a password is set
+# The administrator adds, amends and deletes securities and their prices - the
+# only things every workspace shares. Sign in at /admin/login.
+# CHANGE THE DEFAULT PASSWORD: once you do, from the app (Administrator ->
+# Change password), a salted hash is kept in the database and this line is no
+# longer used. Until then every page an administrator sees says so.
+username = "admin"
+password = "retplan-dev-admin"
+# Also treat requests from this computer as administrator without signing in.
+local_is_admin = false

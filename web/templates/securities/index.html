@@ -6,7 +6,7 @@
   {% if admin %}
     {{ ui.pill('brand', 'administrator') }}
     <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#add-sec"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a security</button>
-    {% if mode == 'password' %}<form method="post" action="{{ url_for('admin_logout') }}"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>{% endif %}
+
   {% elif mode == 'password' %}
     <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_login', next='/securities') }}"><i class="bi bi-shield-lock" aria-hidden="true"></i> Administrator sign-in</a>
   {% endif %}
@@ -65,6 +65,6 @@
   </table></div></div>
 </div>
 {% if not admin %}
-<p class="small-muted">{% if mode == 'password' %}Adding, amending and deleting securities needs the administrator password.{% elif mode == 'local' %}Adding, amending and deleting securities is allowed only from the computer RetPlan runs on.{% else %}Administration is switched off in the configuration.{% endif %} See <a href="{{ url_for('help_prices') }}#admin">Daily prices</a>.</p>
+<p class="small-muted">{% if mode == 'password' %}Adding, amending and deleting securities needs the administrator: <a href="{{ url_for('admin_login', next='/securities') }}">sign in</a>.{% elif mode == 'local' %}Adding, amending and deleting securities is allowed only from the computer RetPlan runs on.{% else %}Administration is switched off in the configuration.{% endif %} See <a href="{{ url_for('help_prices') }}#admin">Daily prices</a>.</p>
 {% endif %}
 {% endblock %}

@@ -34,10 +34,11 @@ the values in effect. Settings are read once, at start-up.</p>
 <p>The <code>[admin]</code> section decides who may add, amend and delete securities
 and their prices:</p>
 {{ field_table([
-  ("[admin] password", "A password for administrators. RETPLAN_ADMIN_PASSWORD.",
-   "Empty by default. When set, sign in at /admin/login; it is kept only as a flag in that browser's session."),
-  ("[admin] local_is_admin", "With no password, whether a request from this computer is an administrator. RETPLAN_ADMIN_LOCAL.",
-   "true by default - right for a personal install on 127.0.0.1. Set a password instead behind a reverse proxy, where every request looks local."),
+  ("[admin] username", "The administrator's user name. RETPLAN_ADMIN_USERNAME.", "admin by default."),
+  ("[admin] password", "The administrator's starting password. RETPLAN_ADMIN_PASSWORD.",
+   "retplan-dev-admin by default. Change it in the app (shield icon, Change password): the new one is stored as a salted PBKDF2 hash in the database and this setting is ignored from then on. Signing in marks only that browser's session."),
+  ("[admin] local_is_admin", "Also treat requests from this computer as administrator without signing in. RETPLAN_ADMIN_LOCAL.",
+   "false by default. Never turn it on behind a reverse proxy, where every request looks local."),
 ]) }}
 
 <h2>SQLite or PostgreSQL</h2>

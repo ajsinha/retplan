@@ -220,7 +220,7 @@ class Projection:
         if age < ages[0]:
             return np.inf
         # Step lookup, not interpolation: published minimum-distribution tables
-        # give one divisor per whole age, and the sheet does the same.
+        # give one divisor per whole age.
         idx = int(np.searchsorted(ages, age, side="right")) - 1
         return float(divs[max(0, min(idx, len(divs) - 1))])
 

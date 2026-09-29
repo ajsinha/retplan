@@ -92,6 +92,25 @@
       <div class="rp-tools">
         {% include "_theme_menu.html" %}
         <div class="dropdown">
+          <button class="tool dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"
+                  aria-label="Administrator{{ ' (signed in)' if is_admin else '' }}" title="Administrator">
+            <i class="bi bi-shield-{{ 'check' if is_admin else 'lock' }}" aria-hidden="true"></i>{% if is_admin %}<span class="dot" aria-hidden="true">A</span>{% endif %}</button>
+          <div class="dropdown-menu dropdown-menu-end rp-user-menu">
+            {% if is_admin %}
+            <div class="px-3 py-2"><div class="fw-semibold">Administrator</div><div class="small-muted">signed in</div></div>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="{{ url_for('securities') }}"><i class="bi bi-tags" aria-hidden="true"></i> Manage securities</a>
+            <a class="dropdown-item" href="{{ url_for('admin_password') }}"><i class="bi bi-key" aria-hidden="true"></i> Change password</a>
+            <a class="dropdown-item" href="{{ url_for('system') }}"><i class="bi bi-hdd-stack" aria-hidden="true"></i> System</a>
+            <div class="dropdown-divider"></div>
+            <form method="post" action="{{ url_for('admin_logout') }}"><button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</button></form>
+            {% else %}
+            <div class="px-3 py-2 small-muted" style="max-width:260px">Planning needs no sign-in. The administrator manages the shared securities list.</div>
+            <a class="dropdown-item" href="{{ url_for('admin_login', next=path) }}"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Administrator sign-in</a>
+            {% endif %}
+          </div>
+        </div>
+        <div class="dropdown">
           <button class="tool user dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"
                   title="Active plan: {{ workspace.plan_name or '—' }}">
             <span class="avatar" aria-hidden="true"><i class="bi bi-layers"></i></span>

@@ -4,7 +4,6 @@
     /securities/lookup?symbol=      inquiry: a year of prices and statistics for any
                                     symbol, straight from Yahoo, nothing stored
     /securities/{symbol}            one tracked security; admin tools beneath
-    /admin/login, /admin/logout     only when [admin] password is configured
 
 Anyone may inquire. Changing the shared securities master - adding one, editing
 its description or class, typing in or deleting prices, deleting it - needs an
@@ -28,7 +27,7 @@ from portfolio.assets import CASH_SYMBOL, CLASS_OPTIONS, CLASSES, classify
 from portfolio.fx import is_fx
 from portfolio.repository import normalise_symbol
 from web import charts
-from web.admin import SESSION_FLAG, admin_mode, check_password, is_admin
+from web.admin import admin_mode, is_admin
 from web.fastapi_compat import flash, redirect_to, render
 from web.store import session_id
 
@@ -111,9 +110,6 @@ class SecurityRoutes:
             name="security_refresh", **r)
         add("/securities/{symbol}/delete", self.delete, methods=["POST"],
             name="security_delete", **r)
-        add("/admin/login", self.login_form, methods=["GET"], name="admin_login", **r)
-        add("/admin/login", self.login, methods=["POST"], name="admin_login_post", **r)
-        add("/admin/logout", self.logout, methods=["POST"], name="admin_logout", **r)
 
     # -- helpers -------------------------------------------------------------
     def _mine(self, request) -> set[str]:
@@ -123,7 +119,8 @@ class SecurityRoutes:
 
     def _deny(self, request, symbol=None):
         flash(request, "Only an administrator can change the securities list. "
-                       + {"password": "Sign in as administrator first.",
+                       + {"password": "Sign in as administrator first (Administrator "
+                                      "in the top bar).",
                           "local": "Administration is allowed only from this computer.",
                           "off": "Administration is switched off in the configuration."}
                        [admin_mode(request)], "error")
@@ -331,30 +328,3 @@ class SecurityRoutes:
             return redirect_to(request, "security", symbol=sym)
         return redirect_to(request, "securities",
                            flash_message=f"{sym} and its prices were deleted.")
-
-    # -- sign-in (only when a password is configured) -------------------------
-    async def login_form(self, request: Request):
-        return render(request, "securities/login.html", mode=admin_mode(request),
-                      admin=is_admin(request), next=request.query_params.get("next", ""))
-
-    async def login(self, request: Request):
-        form = await request.form()
-        nxt = form.get("next") or "/securities"
-        if not nxt.startswith("/") or nxt.startswith("//"):
-            nxt = "/securities"
-        if admin_mode(request) != "password":
-            flash(request, "No administrator password is configured; see the System page.",
-                  "info")
-            return RedirectResponse(nxt, status_code=303)
-        if check_password(request, form.get("password") or ""):
-            request.session[SESSION_FLAG] = True
-            flash(request, "Signed in as administrator.", "success")
-            return RedirectResponse(nxt, status_code=303)
-        logger.warning("failed administrator sign-in from %s",
-                       request.client.host if request.client else "?")
-        flash(request, "That password is not right.", "error")
-        return redirect_to(request, "admin_login", next=nxt)
-
-    async def logout(self, request: Request):
-        request.session.pop(SESSION_FLAG, None)
-        return redirect_to(request, "securities", flash_message="Signed out of administration.")

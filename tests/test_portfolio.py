@@ -680,31 +680,61 @@ def test_security_admin():
 
 def test_admin_gate():
     from fastapi.testclient import TestClient
+    from web.admin import hash_password, verify_hash
     from web.config import Config
     from web.retplan_webapp import RetPlanWebApp
+    check("password hashes verify and differ per salt",
+          verify_hash("x" * 12, hash_password("x" * 12))
+          and not verify_hash("y" * 12, hash_password("x" * 12))
+          and hash_password("x" * 12) != hash_password("x" * 12))
     with tempfile.TemporaryDirectory() as d:
         wa = RetPlanWebApp(config=Config(data_dir=d, database_url=f"sqlite:///{d}/a.db",
-                                         prices_enabled=False, admin_password="s3cret"),
-                           start_scheduler=False)
+                                         prices_enabled=False), start_scheduler=False)
         c = TestClient(wa.app, raise_server_exceptions=False)
         c.post("/securities/new", data={"symbol": "XYZ", "source": "manual"})
-        check("a non-admin cannot add a security", wa.portfolios.security("XYZ") is None)
-        c.post("/admin/login", data={"password": "wrong"})
+        check("a visitor cannot add a security", wa.portfolios.security("XYZ") is None)
+        c.post("/admin/login", data={"username": "admin", "password": "wrong"})
+        c.post("/admin/login", data={"username": "root", "password": "retplan-dev-admin"})
         c.post("/securities/new", data={"symbol": "XYZ", "source": "manual"})
-        check("a wrong password does not grant admin", wa.portfolios.security("XYZ") is None)
-        c.post("/admin/login", data={"password": "s3cret"})
+        check("a wrong password or user name does not sign in",
+              wa.portfolios.security("XYZ") is None)
+        c.post("/admin/login", data={"username": "admin", "password": "retplan-dev-admin"})
+        page = c.get("/securities").text
+        check("the default admin can sign in", "administrator" in page)
+        check("the default password is warned about on every page",
+              "still uses the default password" in page
+              and "still uses the default password" in c.get("/dashboard").text)
         c.post("/securities/new", data={"symbol": "XYZ", "source": "manual",
                                         "prices": f"{date.today().isoformat()},10"})
         check("an admin can add a manual security with prices",
               (wa.portfolios.security("XYZ") or {}).get("last_price") == 10.0)
-        check("the admin sees it in the list", "XYZ" in c.get("/securities").text)
         other = TestClient(wa.app, raise_server_exceptions=False)
-        check("another browser is not admin", "XYZ" not in other.get("/securities").text)
+        check("another browser is not admin, and sees no warning",
+              "XYZ" not in other.get("/securities").text
+              and "default password" not in other.get("/dashboard").text)
+        c.post("/admin/password", data={"current": "wrong", "new": "a-much-better-one",
+                                        "again": "a-much-better-one"})
+        check("a password change needs the current password",
+              wa.db.get_setting("admin.password_hash") is None)
+        c.post("/admin/password", data={"current": "retplan-dev-admin", "new": "short",
+                                        "again": "short"})
+        check("a short password is refused", wa.db.get_setting("admin.password_hash") is None)
+        c.post("/admin/password", data={"current": "retplan-dev-admin",
+                                        "new": "a-much-better-one", "again": "a-much-better-one"})
+        check("the new password is stored as a hash",
+              str(wa.db.get_setting("admin.password_hash") or "").startswith("pbkdf2_sha256$"))
+        check("the warning goes once it is changed",
+              "default password" not in c.get("/dashboard").text)
         c.post("/admin/logout")
         c.post("/securities/XYZ/delete")
         check("after signing out, delete is refused", wa.portfolios.security("XYZ") is not None)
+        c.post("/admin/login", data={"username": "admin", "password": "retplan-dev-admin"})
+        c.post("/securities/XYZ/delete")
+        check("the old default no longer signs in", wa.portfolios.security("XYZ") is not None)
+        c.post("/admin/login", data={"username": "admin", "password": "a-much-better-one"})
+        c.post("/securities/XYZ/delete")
+        check("the new password signs in", wa.portfolios.security("XYZ") is None)
         wa.db.dispose()
-
 
 def main():
     global DB_URL

@@ -386,7 +386,8 @@ def test_convergence():
 
 
 def test_model_fixes():
-    """The five modelling fixes made when the app stopped mirroring the workbook."""
+    """Five modelling corrections: employer match, funded ratio, typical fixed
+    returns, solver drivers, sample allocations."""
     print("\nmodel fixes")
     import copy
     from retplan.metrics import funded_ratio

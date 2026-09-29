@@ -3,10 +3,10 @@
 Implements L'Ecuyer's 1988 combined multiplicative generator plus inverse-CDF
 samplers, exactly as specified in docs/04-math-and-simulation.md section 2-3.
 
-Why not numpy's Generator: the spreadsheet fallback and the Python engine must
-produce *bit-identical* streams, so the algorithm has to be one that a cell
-formula can also evaluate exactly in IEEE-754 doubles.  Every product below
-stays under 2**53, so no rounding occurs anywhere.
+Why not numpy's Generator: the stream is fully specified and portable. Every
+product below stays under 2**53, so it is evaluated exactly in IEEE-754 doubles
+on any platform, and a seed reproduces the same draws everywhere, forever -
+independent of numpy's version or its choice of default generator.
 """
 from __future__ import annotations
 

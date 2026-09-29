@@ -7,7 +7,7 @@ gains schedule, or a social contribution with a ceiling.
 
 The gross-up in :meth:`Schedule.gross_up` is the piece that matters most: the
 naive way to answer "how much must I withdraw to spend X after tax?" is a
-circular reference, which spreadsheets solve iteratively and non-deterministically.
+circular problem, usually solved by iterating until it converges.
 Because a stacked progressive tax is piecewise linear and strictly increasing in
 gross income, it can be inverted exactly in one pass instead.  See
 docs/04-math-and-simulation.md section 10.2.

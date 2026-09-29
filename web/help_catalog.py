@@ -165,7 +165,7 @@ CATEGORIES = [
         "id": "reference",
         "name": "Reference",
         "icon": "bi-journal-text",
-        "blurb": "Definitions, limits, and the spreadsheet that shares this engine.",
+        "blurb": "Definitions, limits, fixes, and how RetPlan is installed and run.",
         "topics": [
             dict(slug="glossary", title="Glossary", icon="bi-journal-text",
                  summary="Every term the app uses, defined in one line each.",
@@ -175,10 +175,6 @@ CATEGORIES = [
                  summary="The honest list: simplifications, omissions, and where the "
                          "answer will be wrong.",
                  keywords="limitations caveats assumptions weaknesses accuracy"),
-            dict(slug="workbook", title="The LibreOffice workbook", icon="bi-file-earmark-spreadsheet",
-                 summary="The original spreadsheet version of the model: what it is, "
-                         "and how it now differs from this application.",
-                 keywords="libreoffice excel ods spreadsheet workbook macros"),
             dict(slug="troubleshooting", title="Troubleshooting", icon="bi-tools",
                  summary="Numbers that look wrong, edits that seem not to apply, and "
                          "runs that fail - with the usual cause of each.",

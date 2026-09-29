@@ -1,8 +1,6 @@
 # RetPlan runtime dependencies.
 #
-# The engine needs only numpy. Everything else is the web application; the
-# LibreOffice workbook path additionally needs python3-uno, which ships with
-# LibreOffice and is not installable from PyPI.
+# The engine needs only numpy. Everything else is the web application.
 
 numpy>=1.26
 

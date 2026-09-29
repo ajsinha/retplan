@@ -132,12 +132,11 @@ securities and prices are shared by every workspace on the server:</p>
   <li><strong>Delete</strong> the security and all its prices - refused while any
       holding, in any workspace, still holds it.</li>
 </ul>
-<p>Who is an administrator is set in <code>config/retplan.toml</code> under
-<code>[admin]</code>. With no password (the default), anyone using the app <em>on the
-computer it runs on</em> is an administrator, which suits a personal install. Set a
-password to administer from elsewhere; you then sign in at
-<code>/admin/login</code>. Behind a reverse proxy always set one, because every
-proxied request looks as if it came from the same computer.</p>
+<p>Sign in with the shield icon in the top bar. The account ships as user
+<code>admin</code>, password <code>retplan-dev-admin</code>; until you change it
+(shield &rarr; <em>Change password</em>), every page you see as administrator carries a
+warning. A changed password is stored as a salted hash in the database. See
+{{ goto('help_system', 'System and database') }} for the settings.</p>
 {% call note('warn', 'Manual prices and the retention window') %}
 <p>Typed closes older than the retention window (365 days by default) are not stored,
 and are pruned like any others. A quarterly valuation is fine for the portfolio's value;
