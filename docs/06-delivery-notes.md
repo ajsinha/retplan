@@ -51,6 +51,18 @@ make test                               # both test suites, offline
 
 ## Changes
 
+### 2026-09-29 - Market data
+
+Securities can be collected every day whether anyone holds them or not: indices,
+stocks, ETFs, mutual funds, futures, currencies and crypto. The administrator adds
+them on the Market data page (`/market`) by Yahoo search, a pasted list or
+ready-made sets, and chooses how much history each keeps (the global year, or 2, 5,
+10 or 20 years; a lengthened window is backfilled). Every stored bar now has open,
+high, low, close, adjusted close and volume, and any security's bars download as
+CSV. Schema: `securities.collect` and `securities.keep_days`; `prices.open`,
+`prices.high`, `prices.low`. As before there are no migrations - an older database
+must be rebuilt, or have those columns added by hand.
+
 ### 2026-09-29 - Accounts, and portfolios as selections of them
 
 - **Accounts** are the building blocks and belong to the workspace, not to a

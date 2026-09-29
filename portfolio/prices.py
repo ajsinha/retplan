@@ -1,10 +1,13 @@
 """Daily price collection from Yahoo, with a bounded history.
 
-:class:`PriceCollector` keeps every held symbol priced: a symbol seen for the
-first time gets a year of daily closes, one already stored gets only the days
-since its last close (plus a small overlap, because adjusted closes are restated
-after dividends). After each run, closes older than the retention window are
-deleted.
+:class:`PriceCollector` keeps priced every held symbol, every security marked for
+collection (market data: indices, funds, currencies… followed whether held or
+not) and the FX pairs they need. Each day's bar is stored: open, high, low,
+close, adjusted close and volume. A symbol seen for the first time gets its
+whole history window (the global retention, or the security's own keep_days),
+one already stored gets only the days since its last close (plus a small overlap,
+because adjusted closes are restated after dividends). A run with reason
+'backfill' fetches whole windows again - after a window is lengthened. After each run, bars past each window are deleted.
 
 :class:`PriceScheduler` runs the collector once a day at a configured local time
 on a daemon thread, and once at start-up when the last successful run is more
@@ -88,8 +91,10 @@ class PriceCollector:
             if i and self._pause:
                 time.sleep(self._pause)
             try:
-                h = self._fetch(sym, range_=_range_for(self.repo.last_price_date(sym),
-                                                        self.retention_days))
+                keep = self.repo.keep_days(sym, self.retention_days)
+                # a backfill (a window just lengthened) fetches the whole window again
+                last = None if reason == "backfill" else self.repo.last_price_date(sym)
+                h = self._fetch(sym, range_=_range_for(last, keep))
                 self.repo.record_quote(h)
                 added += self.repo.store_bars(sym, h.bars, self.retention_days)
                 ok += 1

@@ -689,15 +689,84 @@ class PortfolioRepo:
             " FROM securities s ORDER BY s.symbol")
 
     def tracked_symbols(self) -> list[str]:
-        """Every Yahoo-priced symbol held anywhere, plus the FX pairs their
-        portfolios need - which is what the collector keeps priced. Manually
-        priced securities are left alone."""
+        """What the collector keeps priced: every Yahoo-priced symbol held anywhere,
+        every security marked for collection (market data), and the FX pairs the
+        accounts and portfolios need. Manually priced securities are left alone."""
         rows = self.db.query("SELECT DISTINCT h.symbol FROM holdings h"
                              " JOIN securities s ON s.symbol = h.symbol"
                              " WHERE h.symbol <> :c AND s.source <> 'manual'"
-                             " ORDER BY h.symbol", {"c": CASH_SYMBOL})
+                             " UNION SELECT symbol FROM securities WHERE collect = 1"
+                             " AND source <> 'manual' AND symbol <> :c", {"c": CASH_SYMBOL})
         out = [r["symbol"] for r in rows]
         return sorted(set(out) | set(self.fx_pairs_needed()))
+
+    # -- market data: securities collected whether held or not -----------------
+    def keep_days(self, symbol: str, default: int = PRICE_RETENTION_DAYS) -> int:
+        """Days of history kept for a symbol: its own setting, else the global one."""
+        sec = self.security(symbol) or {}
+        return int(sec.get("keep_days") or default)
+
+    def watch(self, symbol: str, keep_days: int | None = None) -> dict:
+        """Mark a symbol for daily collection (adding it if new)."""
+        symbol = normalise_symbol(symbol)
+        if not symbol or symbol == CASH_SYMBOL:
+            raise ValueError("choose a symbol other than CASH")
+        if not re.fullmatch(r"[A-Z0-9.^=\-_:/&]{1,32}", symbol):
+            raise ValueError(f"{symbol!r} is not a symbol Yahoo would know")
+        self.ensure_security(symbol)
+        with self.db.tx() as c:
+            self.db.run(c, "UPDATE securities SET collect = 1, keep_days = :k"
+                           " WHERE symbol = :s", {"k": keep_days, "s": symbol})
+        return self.security(symbol)
+
+    def unwatch(self, symbol: str) -> None:
+        """Stop collecting a symbol as market data. Its history is then pruned to the
+        global window, and it stops being fetched unless someone holds it."""
+        with self.db.tx() as c:
+            self.db.run(c, "UPDATE securities SET collect = 0, keep_days = NULL"
+                           " WHERE symbol = :s", {"s": normalise_symbol(symbol)})
+
+    def set_keep_days(self, symbol: str, keep_days: int | None) -> None:
+        with self.db.tx() as c:
+            self.db.run(c, "UPDATE securities SET keep_days = :k WHERE symbol = :s",
+                        {"k": keep_days, "s": normalise_symbol(symbol)})
+
+    def market_data(self) -> list[dict]:
+        """Every collected security with its latest bar, day change, 52-week range
+        and how much history is stored."""
+        year_ago = (date.today() - timedelta(days=365)).isoformat()
+        rows = self.db.query(
+            "SELECT s.*, (SELECT COUNT(*) FROM prices p WHERE p.symbol = s.symbol) AS n_prices,"
+            " (SELECT MIN(p.date) FROM prices p WHERE p.symbol = s.symbol) AS first_date,"
+            " (SELECT MAX(p.high) FROM prices p WHERE p.symbol = s.symbol"
+            "   AND p.date >= :y) AS high_52,"
+            " (SELECT MAX(p.close) FROM prices p WHERE p.symbol = s.symbol"
+            "   AND p.date >= :y) AS close_high_52,"
+            " (SELECT MIN(p.low) FROM prices p WHERE p.symbol = s.symbol"
+            "   AND p.date >= :y) AS low_52,"
+            " (SELECT MIN(p.close) FROM prices p WHERE p.symbol = s.symbol"
+            "   AND p.date >= :y) AS close_low_52,"
+            " (SELECT p.volume FROM prices p WHERE p.symbol = s.symbol"
+            "   ORDER BY p.date DESC LIMIT 1) AS last_volume"
+            " FROM securities s WHERE s.collect = 1 ORDER BY s.symbol", {"y": year_ago})
+        for r in rows:
+            r["high_52"] = r["high_52"] or r["close_high_52"]
+            r["low_52"] = r["low_52"] or r["close_low_52"]
+            px, prev = r.get("last_price"), r.get("prev_close")
+            r["change"] = (px - prev) if px is not None and prev else None
+            r["change_pct"] = (px / prev - 1) if px is not None and prev else None
+        return rows
+
+    def bars(self, symbol: str, since: str | None = None) -> list[dict]:
+        """Stored daily bars, oldest first."""
+        return self.db.query(
+            "SELECT date, open, high, low, close, adj_close, volume FROM prices"
+            " WHERE symbol = :s" + (" AND date >= :d" if since else "") + " ORDER BY date",
+            {"s": normalise_symbol(symbol), "d": since})
+
+    def first_price_date(self, symbol: str) -> str | None:
+        return self.db.scalar("SELECT MIN(date) FROM prices WHERE symbol = :s",
+                              {"s": symbol})
 
     def fx_pairs_needed(self) -> list[str]:
         """Every exchange-rate pair a valuation will ask for: each holding's currency
@@ -806,7 +875,7 @@ class PortfolioRepo:
 
     # -- security administration --------------------------------------------
     SECURITY_FIELDS = ("name", "quote_type", "currency", "exchange", "asset_class",
-                       "source", "notes")
+                       "source", "notes", "collect", "keep_days")
 
     def create_security(self, symbol: str, **fields) -> dict:
         symbol = normalise_symbol(symbol)
@@ -891,26 +960,37 @@ class PortfolioRepo:
                               {"s": symbol})
 
     def store_bars(self, symbol: str, bars, retention_days: int = PRICE_RETENTION_DAYS) -> int:
-        """Upsert daily bars inside the retention window; returns rows written."""
-        cutoff = retention_cutoff(retention_days)
+        """Upsert daily bars inside the symbol's retention window; returns rows written."""
+        cutoff = retention_cutoff(self.keep_days(symbol, retention_days))
         rows = [{"s": symbol, "d": b.date, "c": b.close, "a": b.adj_close,
-                 "v": b.volume} for b in bars if b.date >= cutoff]
+                 "v": b.volume, "o": getattr(b, "open", None), "h": getattr(b, "high", None),
+                 "l": getattr(b, "low", None)} for b in bars if b.date >= cutoff]
         if not rows:
             return 0
         with self.db.tx() as c:
             # Adjusted closes are restated after every dividend and split, so a
             # re-fetched date replaces what was stored rather than being skipped.
-            self.db.run(c, "INSERT INTO prices (symbol, date, close, adj_close, volume)"
-                           " VALUES (:s, :d, :c, :a, :v)"
+            self.db.run(c, "INSERT INTO prices (symbol, date, close, adj_close, volume,"
+                           " open, high, low) VALUES (:s, :d, :c, :a, :v, :o, :h, :l)"
                            " ON CONFLICT (symbol, date) DO UPDATE SET"
                            " close = excluded.close, adj_close = excluded.adj_close,"
-                           " volume = excluded.volume", rows)
+                           " volume = excluded.volume, open = COALESCE(excluded.open, prices.open),"
+                           " high = COALESCE(excluded.high, prices.high),"
+                           " low = COALESCE(excluded.low, prices.low)", rows)
         return len(rows)
 
     def prune(self, days: int = PRICE_RETENTION_DAYS) -> int:
+        """Delete closes past each symbol's window: its own keep_days, else ``days``."""
         with self.db.tx() as c:
-            return self.db.run(c, "DELETE FROM prices WHERE date < :d",
-                               {"d": retention_cutoff(days)}).rowcount
+            n = self.db.run(c, "DELETE FROM prices WHERE date < :d AND symbol NOT IN"
+                               " (SELECT symbol FROM securities WHERE keep_days IS NOT NULL)",
+                            {"d": retention_cutoff(days)}).rowcount
+            for r in self.db.run(c, "SELECT symbol, keep_days FROM securities"
+                                    " WHERE keep_days IS NOT NULL").mappings().all():
+                n += self.db.run(c, "DELETE FROM prices WHERE symbol = :s AND date < :d",
+                                 {"s": r["symbol"],
+                                  "d": retention_cutoff(int(r["keep_days"]))}).rowcount
+            return n
 
     def series(self, symbols, since: str | None = None) -> dict[str, list[tuple[str, float]]]:
         """{symbol: [(date, adj_close), ...]} in date order."""

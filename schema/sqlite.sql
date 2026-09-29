@@ -44,6 +44,8 @@ CREATE INDEX IF NOT EXISTS ix_portfolios_owner ON portfolios (owner);
 -- lt_* are long-run statistics from up to 20 years of monthly history; only the
 -- numbers are kept, never the monthly series. A 'manual' security is priced by an
 -- administrator (a private fund, a property) and never fetched from Yahoo.
+-- A security marked 'collect' is market data: collected every day whether or
+-- not anyone holds it - an index, a fund, a currency pair someone wants to follow.
 CREATE TABLE IF NOT EXISTS securities (
     symbol          TEXT PRIMARY KEY,
     name            TEXT NOT NULL DEFAULT '',
@@ -62,6 +64,8 @@ CREATE TABLE IF NOT EXISTS securities (
     lt_updated      TEXT,
     dividend_yield  REAL,
     source          TEXT NOT NULL DEFAULT 'yahoo',     -- yahoo | manual (prices typed in)
+    collect         INTEGER NOT NULL DEFAULT 0,        -- 1: collect daily, held or not
+    keep_days       INTEGER,                           -- days of history kept; NULL: the global setting
     notes           TEXT NOT NULL DEFAULT ''
 );
 
@@ -125,14 +129,18 @@ CREATE TABLE IF NOT EXISTS holdings (
 CREATE INDEX IF NOT EXISTS ix_holdings_account ON holdings (account_id);
 CREATE INDEX IF NOT EXISTS ix_holdings_symbol ON holdings (symbol);
 
--- Daily closes. Rows older than the retention window (365 days) are deleted
--- after every collection run.
+-- Daily bars: open, high, low, close, adjusted close (restated after dividends
+-- and splits) and volume. After every collection run, rows older than the
+-- security's keep_days - or the global retention window (365 days) - are deleted.
 CREATE TABLE IF NOT EXISTS prices (
     symbol    TEXT NOT NULL REFERENCES securities (symbol) ON DELETE CASCADE,
     date      TEXT NOT NULL,
     close     REAL NOT NULL,
     adj_close REAL NOT NULL,
     volume    REAL,
+    open      REAL,
+    high      REAL,
+    low       REAL,
     PRIMARY KEY (symbol, date)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS ix_prices_date ON prices (date);

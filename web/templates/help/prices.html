@@ -2,9 +2,44 @@
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
 <p>{{ goto('prices', 'Open the prices page') }}</p>
-<p>Every symbol held in any account is priced once a day from Yahoo Finance. The
-prices page shows what is tracked, how many daily closes are kept for each, the
-long-run statistics, and a log of every collection run.</p>
+<p>Every symbol held in any account, and every security collected as
+<a href="#market">market data</a>, is priced once a day from Yahoo Finance: open,
+high, low, close, adjusted close and volume. The prices page shows what is
+tracked, how many days are kept for each, the long-run statistics, and a log of
+every collection run.</p>
+
+<h2 id="market">Market data: collecting what nobody holds</h2>
+<p>{{ goto('market', 'Open market data') }} Indices, stocks, ETFs, mutual funds,
+futures, currencies and crypto can be collected every day whether or not anyone
+holds them - to follow the S&amp;P 500 or the FTSE, a sector, gold, a currency, or a
+fund you are thinking of buying. Securities are shared by everyone using this
+RetPlan, so the <a href="#admin">administrator</a> chooses what is collected;
+everyone can browse it, open any symbol and download its history.</p>
+{% call steps() %}
+  <li><strong>Add a symbol</strong> by searching Yahoo by symbol or name, or
+      <strong>paste a list</strong> (spaces, commas or lines), or take a
+      <strong>ready-made set</strong>: US indices, world indices, broad index funds, US
+      sector ETFs, rates and bonds, commodities, currencies, crypto.</li>
+  <li><strong>Choose how much history to keep</strong>: the global setting (a year),
+      or 2, 5, 10 or 20 years. The history is fetched at once; lengthening it later
+      fetches the older years too; shortening it deletes them after the next run.</li>
+  <li>From then on it is <strong>collected every day</strong> with everything else.
+      The page groups what is collected by kind and shows each one's last close, the
+      day's change, volume, where it sits in its 52-week range, and how many days are
+      stored.</li>
+  <li><strong>Download</strong> any security's stored days as CSV - date, open, high,
+      low, close, adjusted close, volume - from the list or from its own page.</li>
+  <li><strong>Stop collecting</strong> takes it off the list. It is still priced if
+      someone holds it; otherwise its history is pruned to the global window.</li>
+{% endcall %}
+{{ field_table([
+  ("^GSPC, ^FTSE, ^N225", "Indices start with ^.", "Most indices have no volume; the column shows a dash."),
+  ("EURUSD=X", "Currency pairs end in =X.", "The price of one euro in dollars."),
+  ("GC=F, CL=F", "Futures end in =F.", "The front contract, rolled by Yahoo."),
+  ("BTC-USD", "Crypto against a currency.", "Trades every day, so a year is 365 bars, not 252."),
+  ("VOD.L, SHOP.TO", "Other exchanges add a suffix.", ".L London, .TO Toronto, .DE Xetra, .T Tokyo…"),
+  ("^TNX", "Treasury yields are indices.", "Quoted in percent: 4.2 means 4.2%."),
+]) }}
 
 <h2>Where prices come from</h2>
 <p>RetPlan talks directly to two public Yahoo Finance endpoints: one returns daily or
@@ -39,7 +74,8 @@ than fetching twice. There is a short pause between symbols to be polite to the
 endpoint, so a large list takes a little while.</p>
 
 <h3>What a run fetches</h3>
-<p>A symbol seen for the first time gets a year of daily closes. After that, each run
+<p>A symbol seen for the first time gets its whole window of daily bars - a year, or
+the longer history a market-data symbol keeps. After that, each run
 asks only for the smallest range that covers the gap since the last stored close
 &mdash; five days, one, three or six months, or a year &mdash; and overwrites the
 overlap, because adjusted closes change after every dividend. Exchange-rate pairs
@@ -50,8 +86,9 @@ during the run itself when a new symbol turns out to be quoted in a new
 currency.</p>
 
 <h2>Why only a year is kept</h2>
-<p>After each run, daily closes older than the retention window
-(<code>retention_days</code>, 365 by default) are deleted. A year of daily data is
+<p>After each run, daily bars older than the retention window
+(<code>retention_days</code>, 365 by default) are deleted - or older than a
+market-data symbol's own window, when it keeps more. A year of daily data is
 what the projection needs for recent volatility, correlations and the bootstrap, and
 keeping it bounded keeps the database small no matter how long RetPlan runs.</p>
 <p>Long-run behaviour comes from somewhere else: about once every 30 days, each

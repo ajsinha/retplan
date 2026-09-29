@@ -135,10 +135,12 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 
 | ID | Feature | Where |
 |---|---|---|
-| F-PX-1 | Daily closes for every held symbol and every FX pair an account or portfolio needs (collected automatically), from Yahoo's chart endpoint | `portfolio/prices.PriceCollector` |
-| F-PX-2 | A new symbol gets a year of history; a known one gets only the gap since its last close | `prices._range_for` |
+| F-PX-1 | Daily bars - open, high, low, close, adjusted close, volume - for every held symbol, every market-data security and every FX pair an account or portfolio needs (collected automatically), from Yahoo's chart endpoint | `portfolio/prices.PriceCollector` |
+| F-PX-2 | A new symbol gets its whole window of history (a year, or its own `keep_days`); a known one gets only the gap since its last close; a lengthened window is backfilled | `prices._range_for` |
 | F-PX-3 | Background scheduler: daily at a configured local time, and at start-up when the last run is more than 20 hours old | `PriceScheduler` |
-| F-PX-4 | Closes older than the retention window (365 days by default) deleted after every run | `PortfolioRepo.prune` |
+| F-PX-4 | Bars older than the retention window (365 days by default, or a security's own `keep_days`) deleted after every run | `PortfolioRepo.prune` |
+| F-PX-8 | Market data: indices, stocks, ETFs, funds, futures, currencies and crypto collected daily whether held or not; added by Yahoo search, a pasted list or ready-made sets (US and world indices, index funds, sector ETFs, rates and bonds, commodities, currencies, crypto); history of 1, 2, 5, 10 or 20 years per symbol; grouped by kind with last close, day change, volume and 52-week range; administrator-only changes, open to all to browse | `/market`, `portfolio/market.py` |
+| F-PX-9 | Any security's stored bars downloadable as CSV (date, open, high, low, close, adj_close, volume); the security page shows the latest 60 bars | `/securities/{symbol}.csv` |
 | F-PX-5 | Long-run return and volatility from up to 20 years of monthly bars, refreshed every 30 days, stored as three numbers | `yahoo.long_run_stats` |
 | F-PX-6 | Refresh on demand per account, per portfolio or for everything; a status page with the schedule, tracked securities and run log | `/prices` |
 | F-PX-7 | One collection run from the command line for cron | `tools/fetch_prices.py` |

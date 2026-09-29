@@ -27,6 +27,7 @@ from portfolio.assets import CASH_SYMBOL, CLASS_OPTIONS, CLASSES, classify
 from portfolio.fx import is_fx
 from portfolio.repository import normalise_symbol
 from web import charts
+from portfolio import market
 from web.admin import admin_mode, is_admin
 from web.fastapi_compat import flash, redirect_to, render
 from web.store import session_id
@@ -136,7 +137,8 @@ class SecurityRoutes:
         for s in self.repo.securities():
             if s["symbol"] == CASH_SYMBOL:
                 continue
-            if not admin and s["symbol"] not in mine and not is_fx(s["symbol"]):
+            if not admin and s["symbol"] not in mine and not is_fx(s["symbol"]) \
+                    and not s.get("collect"):
                 continue
             if q and q not in f"{s['symbol']} {s['name']}".lower():
                 continue
@@ -173,6 +175,7 @@ class SecurityRoutes:
                       guess=CLASSES[classify(sym, h.name, h.quote_type)]["label"],
                       div_yield=(divs / h.price) if h.price and divs else None,
                       tracked=bool(tracked), admin=is_admin(request),
+                      keep_choices=market.KEEP_CHOICES,
                       portfolios=self.repo.list(session_id(request)))
 
     # -- one security --------------------------------------------------------
@@ -181,7 +184,7 @@ class SecurityRoutes:
         sec = self.repo.security(sym)
         admin = is_admin(request)
         mine = self._mine(request)
-        if sec is None or not (sym in mine or is_fx(sym) or admin):
+        if sec is None or not (sym in mine or is_fx(sym) or admin or sec.get("collect")):
             if sec is None and not admin:
                 return redirect_to(request, "security_lookup", symbol=sym)
             if sec is None:
@@ -203,7 +206,8 @@ class SecurityRoutes:
                       stats=stats_for([a for _, _, a in rows]), mine=held,
                       classes=CLASS_OPTIONS, fx=is_fx(sym), admin=admin,
                       mode=admin_mode(request), holders=self.repo.holders(sym),
-                      quote_types=QUOTE_TYPES, table=list(reversed(rows)),
+                      quote_types=QUOTE_TYPES, bars=list(reversed(self.repo.bars(sym)))[:60],
+                      keep_choices=market.KEEP_CHOICES,
                       retention=self.app.state.config.prices_retention_days)
 
     async def my_class(self, request: Request, symbol: str):

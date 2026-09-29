@@ -44,6 +44,9 @@ class Bar:
     close: float
     adj_close: float
     volume: float | None = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
 
 
 @dataclass
@@ -118,6 +121,7 @@ def fetch_history(symbol: str, range_: str = "1y", interval: str = "1d") -> Hist
     quote = (ind.get("quote") or [{}])[0]
     closes = quote.get("close") or []
     volumes = quote.get("volume") or []
+    opens, highs, lows = (quote.get(k) or [] for k in ("open", "high", "low"))
     adj = ((ind.get("adjclose") or [{}])[0]).get("adjclose") or closes
     seen = {}
     for i, ts in enumerate(stamps):
@@ -128,8 +132,12 @@ def fetch_history(symbol: str, range_: str = "1y", interval: str = "1d") -> Hist
         if a is None or a <= 0:
             a = c
         v = _num(volumes[i] if i < len(volumes) else None)
+
+        def at(xs):
+            x = _num(xs[i] if i < len(xs) else None)
+            return x if x is not None and x > 0 else None
         # The live session can repeat the last date; the latest bar wins.
-        seen[_iso(ts, offset)] = Bar(_iso(ts, offset), c, a, v)
+        seen[_iso(ts, offset)] = Bar(_iso(ts, offset), c, a, v, at(opens), at(highs), at(lows))
     h.bars = [seen[k] for k in sorted(seen)]
     for ev in ((r.get("events") or {}).get("dividends") or {}).values():
         amt = _num(ev.get("amount"))

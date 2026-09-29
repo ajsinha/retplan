@@ -991,6 +991,107 @@ def test_accounts_web():
         wa.db.dispose()
 
 
+def test_market_data():
+    """Securities collected daily whether held or not: OHLC bars, per-symbol history."""
+    from portfolio import market
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    idx = synthetic("^GSPC", days=900, quote_type="INDEX", name="S&P 500")
+    for b in idx.bars:
+        b.open, b.high, b.low = b.close * 0.99, b.close * 1.01, b.close * 0.98
+    fake = FakeYahoo({"^GSPC": idx, "VTI": synthetic("VTI", seed=1),
+                      "EURUSD=X": synthetic("EURUSD=X", quote_type="CURRENCY", start_price=1.1)})
+    col = PriceCollector(r, fetch=fake.fetch, long_run=fake.long_run, pause=0)
+    check("parsing a pasted list", market.parse_symbols("^gspc, vti\nEURUSD=X  vti;BTC-USD") ==
+          ["^GSPC", "VTI", "EURUSD=X", "BTC-USD"])
+    try:
+        r.watch("NOT A SYMBOL!")
+        refused = False
+    except ValueError:
+        refused = True
+    check("a malformed symbol is refused", refused)
+    r.watch("^gspc", 1827)
+    r.watch("EURUSD=X")
+    check("collected symbols are tracked though nobody holds them",
+          {"^GSPC", "EURUSD=X"} <= set(r.tracked_symbols()) and "VTI" not in r.tracked_symbols())
+    col.collect(reason="test")
+    check("a symbol keeping five years is first fetched with five years",
+          ("^GSPC", "5y") in fake.calls and ("EURUSD=X", "1y") in fake.calls, fake.calls)
+    bars = r.bars("^GSPC")
+    check("open, high, low, close, adjusted close and volume are stored",
+          bars and all(b[k] is not None for b in bars[-5:]
+                       for k in ("open", "high", "low", "close", "adj_close", "volume")))
+    check("a longer window keeps older bars", bars[0]["date"] < retention_cutoff(365)
+          and r.first_price_date("EURUSD=X") >= retention_cutoff(365))
+    rows = {x["symbol"]: x for x in r.market_data()}
+    g = rows["^GSPC"]
+    check("the market view has the day's change, volume and the 52-week range",
+          g["change_pct"] is not None and g["last_volume"] == 1000.0
+          and g["low_52"] < g["last_price"] <= g["high_52"] * 1.0001)
+    r.set_keep_days("^GSPC", None)
+    r.prune(365)
+    check("shortening the window prunes the older bars",
+          r.first_price_date("^GSPC") >= retention_cutoff(365))
+    fake.calls.clear()
+    r.set_keep_days("^GSPC", 3653)
+    col.collect(["^GSPC"], reason="backfill")
+    check("a lengthened window is backfilled", fake.calls == [("^GSPC", "10y")], fake.calls)
+    fake.calls.clear()
+    col.collect(reason="daily")
+    check("a daily run asks only for the gap", ("^GSPC", "5d") in fake.calls, fake.calls)
+    r.unwatch("^GSPC")
+    check("stopping collection stops tracking an unheld symbol",
+          "^GSPC" not in r.tracked_symbols() and r.security("^GSPC")["keep_days"] is None)
+
+
+def test_market_web():
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False)
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        fake = FakeYahoo({"^GSPC": synthetic("^GSPC", quote_type="INDEX", name="S&P 500"),
+                          "^DJI": synthetic("^DJI", quote_type="INDEX", seed=2)})
+        wa.collector._fetch, wa.collector._long_run, wa.collector._pause = \
+            fake.fetch, fake.long_run, 0
+        visitor = TestClient(wa.app, raise_server_exceptions=False)
+        page = visitor.get("/market").text
+        check("anyone can see the market data page", "Nothing collected yet" in page
+              and "Collect a symbol" not in page)
+        r = visitor.post("/market/add", data={"symbols": "^GSPC"}, follow_redirects=True)
+        check("only the administrator changes what is collected",
+              "Only an administrator" in r.text and wa.portfolios.security("^GSPC") is None)
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        c.post("/admin/login", data={"username": "admin", "password": "retplan-dev-admin"})
+        page = c.get("/market").text
+        check("the administrator sees the add form and the ready-made sets",
+              "Collect a symbol" in page and "US indices" in page and "Crypto" in page)
+        c.post("/market/add", data={"symbols": "^GSPC ^DJI NOPE!", "keep_days": "1827"})
+        time.sleep(0.5)
+        wa.collector.collect(reason="test")
+        page = c.get("/market").text
+        check("added symbols are collected and listed by kind",
+              "Indices" in page and "S&amp;P 500" in page and "keeps 5 years" in page)
+        csv_text = visitor.get("/securities/%5EGSPC.csv").text
+        head = csv_text.splitlines()[0]
+        check("anyone can download a collected security's bars as CSV",
+              head == "date,open,high,low,close,adj_close,volume" and len(csv_text.splitlines()) > 200)
+        check("a collected security's page is open to anyone",
+              visitor.get("/securities/%5EGSPC").status_code == 200
+              and "collected daily" in visitor.get("/securities/%5EGSPC").text)
+        c.post("/market/preset/us_indices")
+        check("a ready-made set marks all its symbols",
+              all((wa.portfolios.security(s) or {}).get("collect") for s in ("^IXIC", "^RUT", "^VIX")))
+        c.post("/market/%5EDJI/stop")
+        check("stopping takes it off the list", "^DJI" not in
+              {x["symbol"] for x in wa.portfolios.market_data()})
+        wa.db.dispose()
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -1462,7 +1563,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

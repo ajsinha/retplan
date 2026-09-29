@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Market data{% endblock %}
+{% macro keep_label(k) %}{% for v, l in keep_choices if v == k %}{{ l if v else ('1 year' if retention == 365 else retention ~ ' days') }}{% endfor %}{% endmacro %}
+{% macro vol(x) %}{% if x is none %}-{% elif x >= 1e9 %}{{ '%.1f'|format(x / 1e9) }}B{% elif x >= 1e6 %}{{ '%.1f'|format(x / 1e6) }}M{% elif x >= 1e3 %}{{ '%.0f'|format(x / 1e3) }}k{% else %}{{ '%.0f'|format(x) }}{% endif %}{% endmacro %}
+{% block content %}
+{% call ui.page_head('Market data', 'Indices, stocks, funds, currencies, futures and crypto, collected every day whether anyone holds them or not: open, high, low, close, adjusted close and volume.', eyebrow='Portfolio', help=url_for('help_prices') ~ '#market') %}
+  {% if admin %}
+  <form method="post" action="{{ url_for('market_collect') }}" data-busy="Collecting…">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" {% if running %}disabled{% endif %}><i class="bi bi-arrow-repeat {{ 'spin' if running }}" aria-hidden="true"></i> {{ 'Collecting…' if running else 'Collect now' }}</button></form>
+  {% endif %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prices') }}"><i class="bi bi-cloud-download" aria-hidden="true"></i> Collection log</a>
+{% endcall %}
+
+<div class="stat-grid">
+  {{ ui.kpi('Collected', n ~ ' symbol' ~ ('' if n == 1 else 's'), 'as market data - held symbols are collected too', 'activity') }}
+  {{ ui.kpi('Last run', last_run.started_at|dt if last_run else 'never', (last_run.ok ~ ' updated' ~ (', ' ~ last_run.failed ~ ' failed' if last_run.failed else '')) if last_run else '', 'clock-history', '' if last_run else 'warn') }}
+  {{ ui.kpi('Next run', scheduler.next_run|replace('T', ' ') if scheduler.next_run else ('off' if not scheduler.enabled else 'pending'), 'every day at ' ~ scheduler.run_at, 'calendar-check') }}
+  {{ ui.kpi('History kept', '1 year' if retention == 365 else retention ~ ' days', 'unless a symbol asks for more', 'hourglass-split') }}
+</div>
+
+{% if admin %}
+<div class="row g-3">
+  <div class="col-xl-5">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-plus-lg" aria-hidden="true"></i> Collect a symbol</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('market_add') }}" data-busy="Adding…">
+          <label class="form-label" for="m-sym">Symbol or name</label>
+          <div class="ticker-box"><input class="form-control mono" id="m-sym" name="symbols" autocomplete="off" required placeholder="^GSPC, VTI, EURUSD=X, apple" data-ticker data-ticker-name="#m-name"></div>
+          <div class="form-hint mt-1 text-truncate" id="m-name">Search Yahoo by symbol or by name.</div>
+          <div class="d-flex flex-wrap gap-2 align-items-end mt-2">
+            <div><label class="form-label small" for="m-keep">History to keep</label>
+              <select class="form-select form-select-sm" id="m-keep" name="keep_days">{% for v, l in keep_choices %}<option value="{{ v or '' }}">{{ l }}</option>{% endfor %}</select></div>
+            <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Collect it</button>
+          </div>
+        </form>
+        <details class="mt-3"><summary class="small fw-semibold">Or paste a list</summary>
+          <form class="mt-2" method="post" action="{{ url_for('market_add') }}" data-busy="Adding…">
+            <label class="visually-hidden" for="m-list">Symbols</label>
+            <textarea class="form-control mono" id="m-list" name="symbols" rows="4" placeholder="^GSPC ^IXIC VTI BND&#10;GC=F, BTC-USD, EURUSD=X"></textarea>
+            <div class="d-flex flex-wrap gap-2 align-items-end mt-2">
+              <select class="form-select form-select-sm w-auto" name="keep_days" aria-label="History to keep">{% for v, l in keep_choices %}<option value="{{ v or '' }}">{{ l }}</option>{% endfor %}</select>
+              <button class="btn btn-primary btn-sm" type="submit">Collect them</button>
+            </div>
+            <p class="form-hint mt-2 mb-0">Separated by spaces, commas or lines. Yahoo's symbols: <code>^</code> for indices, <code>=X</code> for currency pairs, <code>=F</code> for futures, <code>-USD</code> for crypto, a suffix for other exchanges (<code>VOD.L</code>, <code>SHOP.TO</code>).</p>
+          </form>
+        </details>
+      </div></div>
+  </div>
+  <div class="col-xl-7">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-collection" aria-hidden="true"></i> Ready-made sets</div>
+      <div class="card-body">
+        <div class="preset-grid">
+          {% for p in presets %}
+          <form class="preset" method="post" action="{{ url_for('market_preset', key=p.key) }}" data-busy="Adding…">
+            <span class="ico"><i class="bi bi-{{ p.icon }}" aria-hidden="true"></i></span>
+            <span class="body"><span class="t">{{ p.label }}</span><span class="d">{{ p.blurb }}</span>
+              <span class="d">{{ p.have }} of {{ p.symbols|length }} collected</span></span>
+            <button class="btn btn-sm {{ 'btn-outline-secondary' if p.have == p.symbols|length else 'btn-outline-primary' }}" type="submit" {% if p.have == p.symbols|length %}disabled{% endif %}>{{ 'All in' if p.have == p.symbols|length else 'Add' }}</button>
+          </form>
+          {% endfor %}
+        </div>
+      </div></div>
+  </div>
+</div>
+{% else %}
+<div class="link-box"><i class="bi bi-shield-lock" aria-hidden="true"></i>
+  <div class="grow">Market data is shared by everyone using this RetPlan, so an administrator chooses what is collected. You can browse it all, open any symbol and download its history.</div></div>
+{% endif %}
+
+{% if not groups %}
+<div class="card"><div class="card-body">
+  {% call ui.empty('activity', 'Nothing collected yet', 'Add a symbol, paste a list, or take a ready-made set - the major indices, sector ETFs, rates, commodities, currencies, crypto. Each is fetched at once and then every day.') %}{% endcall %}
+</div></div>
+{% endif %}
+
+{% for label, rows in groups %}
+<div class="card">
+  <div class="card-header"><i class="bi bi-activity" aria-hidden="true"></i> {{ label }} <span class="small-muted fw-normal">{{ rows|length }}</span></div>
+  <div class="card-body p-0"><div class="table-scroll">
+  <table class="table table-sm align-middle mb-0 market-table">
+    <thead><tr><th>Symbol</th><th class="num">Last</th><th class="num">Day</th><th class="num">Volume</th><th>52-week range</th><th>History</th>{% if admin %}<th><span class="visually-hidden">Manage</span></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><a class="mono fw-bold" href="{{ url_for('security', symbol=r.symbol) }}">{{ r.symbol }}</a>
+          <span class="cell-sub text-truncate" style="max-width:16rem">{{ r.name or '' }}{% if r.exchange %} · {{ r.exchange }}{% endif %}</span>
+          {% if r.fetch_error %}<span class="cell-sub down"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ r.fetch_error }}</span>{% endif %}</td>
+        <td class="num">{% if r.last_price is not none %}{{ '{:,.2f}'.format(r.last_price) }}<span class="cell-sub">{{ r.currency }} · {{ r.last_price_date }}</span>{% else %}<span class="small-muted">fetching…</span>{% endif %}</td>
+        <td class="num {{ 'up' if (r.change or 0) > 0 else ('down' if (r.change or 0) < 0 else '') }}">{% if r.change_pct is not none %}{{ r.change_pct|spct(2) }}<span class="cell-sub">{{ '{:+,.2f}'.format(r.change) }}</span>{% endif %}</td>
+        <td class="num">{{ vol(r.last_volume) if r.last_volume else '-' }}</td>
+        <td>{% if r.low_52 and r.high_52 and r.last_price is not none and r.high_52 > r.low_52 %}
+          {% set pos = ((r.last_price - r.low_52) / (r.high_52 - r.low_52) * 100) %}
+          <div class="range52" title="Low {{ '{:,.2f}'.format(r.low_52) }}, high {{ '{:,.2f}'.format(r.high_52) }}">
+            <span class="lo num">{{ '{:,.2f}'.format(r.low_52) }}</span>
+            <span class="track"><span class="mark" style="left:{{ [[pos, 0]|max, 100]|min|round(1) }}%"></span></span>
+            <span class="hi num">{{ '{:,.2f}'.format(r.high_52) }}</span></div>
+          {% else %}<span class="small-muted">-</span>{% endif %}</td>
+        <td><span class="small">{{ r.n_prices }} days{% if r.first_date %} since {{ r.first_date }}{% endif %}</span>
+          <span class="cell-sub">keeps {{ keep_label(r.keep_days) }} · <a href="{{ url_for('security_csv', symbol=r.symbol) }}">CSV</a></span></td>
+        {% if admin %}
+        <td class="text-nowrap">
+          <form class="d-inline-flex gap-1" method="post" action="{{ url_for('market_keep', symbol=r.symbol) }}">
+            <label class="visually-hidden" for="k-{{ loop.index }}-{{ r.symbol }}">History for {{ r.symbol }}</label>
+            <select class="form-select form-select-sm w-auto" id="k-{{ loop.index }}-{{ r.symbol }}" name="keep_days">{% for v, l in keep_choices %}<option value="{{ v or '' }}" {% if v == r.keep_days %}selected{% endif %}>{{ l if v else 'Global' }}</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Set</button></form>
+          <form class="d-inline" method="post" action="{{ url_for('market_stop', symbol=r.symbol) }}" data-confirm="Stop collecting {{ r.symbol }}?">
+            <button class="btn btn-sm btn-link text-danger p-0 ms-1" type="submit" title="Stop collecting"><i class="bi bi-x-circle" aria-hidden="true"></i><span class="visually-hidden">Stop collecting {{ r.symbol }}</span></button></form>
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+{% endfor %}
+{% endblock %}

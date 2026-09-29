@@ -33,12 +33,12 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 |---|---|---|
 | `plans` | `id` | One scenario: `owner`, `name`, `data` (the plan JSON, §2), `is_active` (0/1; one active per owner), `created_at`, `updated_at` |
 | `portfolios` | `id` | `owner`, `name`, `currency` (base, default USD), `description`, `settings` (JSON: `targets` by asset class, and the last `projection` settings) |
-| `securities` | `symbol` | Shared by every workspace. Descriptive fields (`name`, `quote_type`, `currency`, `exchange`, `asset_class`), latest quote (`last_price`, `prev_close`, `last_price_date`, `fetched_at`, `fetch_error`), long-run statistics (`lt_return`, `lt_vol`, `lt_years`, `lt_updated`), `dividend_yield`, `source` (`yahoo` or `manual`), `notes` |
+| `securities` | `symbol` | Shared by every workspace. Descriptive fields (`name`, `quote_type`, `currency`, `exchange`, `asset_class`), latest quote (`last_price`, `prev_close`, `last_price_date`, `fetched_at`, `fetch_error`), long-run statistics (`lt_return`, `lt_vol`, `lt_years`, `lt_updated`), `dividend_yield`, `source` (`yahoo` or `manual`), `collect` (1: market data, collected daily whether held or not), `keep_days` (days of history kept; NULL: `prices.retention_days`), `notes` |
 | `accounts` | `id` | One account of the workspace (not of a portfolio): `owner`, `name`, `type` (a key of `portfolio/account_types.TYPES`, which gives its kind - investments, cash, property, debt - and tax treatment), `owner_person` (0 you, 1 partner, −1 joint), `institution`, `currency` (of the values typed in; default the currency most of the workspace's accounts use), `value` (cash, property and debts), `as_of` (the date the value was set), `rate`, `payment` (monthly) and `term_months` (months left on `as_of`) for debts, `notes`, `created_at`, `updated_at` |
 | `portfolio_accounts` | (`portfolio_id`, `account_id`) | Which accounts a portfolio includes directly, many-to-many (one account can be in any number of portfolios), with `position` (display order) |
 | `portfolio_children` | (`parent_id`, `child_id`) | Portfolios made of other portfolios, with `position`: a parent includes every account of each child, recursively, each account counted once; the app refuses a cycle (a portfolio containing itself directly or through another) |
 | `holdings` | `id` | A position in an investment account: `account_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `asset_class` (blank = use the security's), `notes`, `added_at` |
-| `prices` | (`symbol`, `date`) | Daily `close`, `adj_close`, `volume`; `WITHOUT ROWID` on SQLite |
+| `prices` | (`symbol`, `date`) | Daily bars: `open`, `high`, `low`, `close`, `adj_close`, `volume` (open, high, low and volume nullable); `WITHOUT ROWID` on SQLite |
 | `fetch_runs` | `id` | One collection run: `reason` (schedule, startup, manual, new-symbol, admin), start/finish, counts of symbols, ok, failed, rows added and pruned, `message` |
 | `projections` | `id` | A saved portfolio projection: `portfolio_id`, `created_at`, `settings`, `summary`, `result` (all JSON) |
 | `import_drafts` | `id` | The portfolio builder's analysis of an upload: `owner`, `filename`, `created_at`, `data` (JSON) |
@@ -89,8 +89,9 @@ fetch_runs, app_settings: global
 
 ### 1.4 Retention rules
 
-- **DR-7.** `prices` keeps `prices.retention_days` (365) of closes; older rows are
-  deleted after every collection run. Monthly history is never stored — only the
+- **DR-7.** `prices` keeps `prices.retention_days` (365) of bars - or a security's own
+  `keep_days` when it is set (market data: 2 to 20 years); older rows are deleted
+  after every collection run. Monthly history is never stored — only the
   three `lt_*` numbers.
 - **DR-8.** `projections` keeps the 10 most recent runs per portfolio.
 - **DR-9.** `import_drafts` older than seven days are deleted when a new draft is

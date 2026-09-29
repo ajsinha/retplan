@@ -12,6 +12,7 @@
     account_routes     - accounts of every kind, their holdings and values
     portfolio_routes   - portfolios (selections of accounts), prices, projections, stress
     builder_routes     - the portfolio builder: upload a spreadsheet, review, import
+    market_routes      - market data: securities collected daily, held or not
     security_routes    - securities: lookup for anyone; add, amend, delete for admins
     admin_routes       - administrator sign-in, sign-out and password change
     tools_routes       - what-if, levers, claiming, conversions, spending check,
@@ -36,6 +37,7 @@ from .export_routes import ExportRoutes
 from .builder_routes import BuilderRoutes
 from .account_routes import AccountRoutes
 from .portfolio_routes import PortfolioRoutes
+from .market_routes import MarketRoutes
 from .security_routes import SecurityRoutes
 from .admin_routes import AdminRoutes
 from .tools_routes import ToolsRoutes
@@ -45,9 +47,9 @@ from .help_routes import HelpRoutes
 ALL_ROUTES = (NoAuthRoutes, WizardRoutes, ScenarioRoutes, PlanRoutes, DashboardRoutes,
               SimulationRoutes, ReportRoutes, ExportRoutes, BuilderRoutes, AccountRoutes,
               PortfolioRoutes,
-              SecurityRoutes, AdminRoutes, ToolsRoutes, NetWorthRoutes,
+              MarketRoutes, SecurityRoutes, AdminRoutes, ToolsRoutes, NetWorthRoutes,
               HelpRoutes)
 
 __all__ = ["ALL_ROUTES", "NoAuthRoutes", "WizardRoutes", "ScenarioRoutes", "PlanRoutes",
            "DashboardRoutes", "SimulationRoutes", "ReportRoutes", "ExportRoutes",
-           "BuilderRoutes", "AccountRoutes", "PortfolioRoutes", "SecurityRoutes", "AdminRoutes", "ToolsRoutes", "NetWorthRoutes", "HelpRoutes"]
+           "BuilderRoutes", "AccountRoutes", "PortfolioRoutes", "MarketRoutes", "SecurityRoutes", "AdminRoutes", "ToolsRoutes", "NetWorthRoutes", "HelpRoutes"]

@@ -44,6 +44,7 @@ page you see as administrator says so.
 | **Stress tests** | 2008, the dot-com bust, Covid, the 2022 rate shock and 1973-74 replayed on your mix; any of them can open every projection trial |
 | **Planning tools** (`/tools/*`) | what-if sliders and ranked levers on the dashboard; when to claim a public pension; Roth-style conversions; a spending check with guardrails; the tax-efficient draw order; health costs and long-term care simulated future by future |
 | **Net worth history** (`/networth`) | assets, debts and a breakdown by kind for every account together and for each portfolio, recorded after every price collection (or on demand) and kept for good; today's split into investments, cash, property and debts, and the history as a chart |
+| **Market data** (`/market`) | indices, stocks, ETFs, funds, futures, currencies and crypto collected every day whether held or not - open, high, low, close, adjusted close, volume; add by search, a pasted list or ready-made sets; up to 20 years of history per symbol; CSV download |
 | **Securities** (`/securities`) | look up any symbol live on Yahoo; the administrator adds, amends and deletes securities, including manually priced ones (private funds, property) |
 | **Help** (`/help`) | every screen and idea, searchable; `Ctrl-K` searches pages, help, accounts, portfolios and holdings |
 
@@ -88,11 +89,14 @@ make test-pg PG=postgresql+psycopg://.../empty_db        # run the suite on Post
 
 ### Prices
 
-Daily closes for every held symbol, and the exchange-rate pairs needed to convert
-each account into each portfolio's currency, come from Yahoo Finance's chart endpoint using only the standard library.
+Daily bars (open, high, low, close, adjusted close, volume) for every held symbol,
+every security collected as market data, and the exchange-rate pairs needed to
+convert each account into each portfolio's currency, come from Yahoo Finance's
+chart endpoint using only the standard library.
 The app collects them daily at `prices.run_at` and catches up at start-up when the
 last run is stale; `tools/fetch_prices.py` does one run for cron. Closes older than
-`prices.retention_days` (365) are deleted after every run; long-run return and
+`prices.retention_days` (365) are deleted after every run, unless a market-data
+symbol keeps more (2 to 20 years); long-run return and
 volatility from up to twenty years of monthly history are kept as numbers only.
 
 ### Workspaces

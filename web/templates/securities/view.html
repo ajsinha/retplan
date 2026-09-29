@@ -3,7 +3,8 @@
 {% block title %}{{ sec.symbol }}{% endblock %}
 {% block content %}
 {% call ui.page_head(sec.symbol ~ (' · ' ~ sec.name if sec.name else ''), (sec.quote_type ~ ' · ' if sec.quote_type else '') ~ (sec.exchange ~ ' · ' if sec.exchange else '') ~ 'quoted in ' ~ (sec.currency or 'an unknown currency') ~ ' · prices ' ~ ('typed in by an administrator' if sec.source == 'manual' else 'from Yahoo, daily'), eyebrow='Security', help=url_for('help_prices')) %}
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('securities') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Securities</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('market') if sec.collect else url_for('securities') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> {{ 'Market data' if sec.collect else 'Securities' }}</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('security_csv', symbol=sec.symbol) }}"><i class="bi bi-filetype-csv" aria-hidden="true"></i> Daily bars as CSV</a>
   {% if admin %}{{ ui.pill('brand', 'administrator') }}{% endif %}
 {% endcall %}
 {% if sec.fetch_error and sec.source != 'manual' %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Last fetch failed: {{ sec.fetch_error }}</div>{% endif %}
@@ -21,8 +22,9 @@
 <div class="row g-3">
   <div class="col-xl-8">
     {% call ui.chart_card('Daily closes', 'graph-up', chart, sec.currency or '') %}
-      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Close</th><th class="num">Adjusted</th></tr></thead>
-        <tbody>{% for d, c, a in table[:40] %}<tr><td>{{ d }}</td><td class="num">{{ '%.2f'|format(c) }}</td><td class="num">{{ '%.2f'|format(a) }}</td></tr>{% endfor %}</tbody></table>
+      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Open</th><th class="num">High</th><th class="num">Low</th><th class="num">Close</th><th class="num">Adjusted</th><th class="num">Volume</th></tr></thead>
+        <tbody>{% for b in bars %}<tr><td>{{ b.date }}</td>{% for k in ('open', 'high', 'low', 'close', 'adj_close') %}<td class="num">{{ '{:,.2f}'.format(b[k]) if b[k] is not none else '-' }}</td>{% endfor %}<td class="num">{{ '{:,.0f}'.format(b.volume) if b.volume else '-' }}</td></tr>{% endfor %}</tbody></table>
+      <p class="small-muted mb-0">The latest 60 days; the <a href="{{ url_for('security_csv', symbol=sec.symbol) }}">CSV</a> has every stored day.</p>
     {% endcall %}
   </div>
   <div class="col-xl-4">
@@ -36,10 +38,27 @@
         <p class="small-muted mt-2 mb-0">RetPlan classes it as <strong>{{ classes|selectattr(0, 'equalto', sec.asset_class)|map(attribute=1)|first or 'Other' }}</strong>. Saving here sets the class on your own holdings of {{ sec.symbol }} only.</p>
       </div></div>
     {% endif %}
-    <div class="card"><div class="card-header"><i class="bi bi-briefcase" aria-hidden="true"></i> In your portfolios</div>
+    <div class="card"><div class="card-header"><i class="bi bi-activity" aria-hidden="true"></i> Market data</div>
+      <div class="card-body">
+        {% if sec.collect %}
+          <p class="mb-2">{{ ui.pill('ok', 'collected daily') }} keeping {% for v, l in keep_choices if v == sec.keep_days %}{{ l|lower if v else 'the global ' ~ retention ~ ' days' }}{% endfor %} of history.</p>
+        {% elif sec.source == 'manual' %}
+          <p class="small-muted mb-0">Priced by hand, so never collected from Yahoo.</p>
+        {% else %}
+          <p class="small-muted mb-2">{{ 'Collected while someone holds it.' if holders else 'Not collected: nobody holds it and it is not in the market data.' }}</p>
+        {% endif %}
+        {% if admin and sec.source != 'manual' %}
+          {% if sec.collect %}
+          <form method="post" action="{{ url_for('market_stop', symbol=sec.symbol) }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Stop collecting</button></form>
+          {% else %}
+          <form method="post" action="{{ url_for('market_add') }}"><input type="hidden" name="symbols" value="{{ sec.symbol }}"><button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Collect it daily</button></form>
+          {% endif %}
+        {% endif %}
+      </div></div>
+    <div class="card"><div class="card-header"><i class="bi bi-wallet2" aria-hidden="true"></i> In your accounts</div>
       <div class="card-body">
         {% if mine %}<ul class="list-rows">{% for h in mine %}<li><span class="grow"><a href="{{ url_for('account_view', aid=h.account_id) }}">{{ h.account }}</a></span><span class="num">{{ '%g'|format(h.quantity) }}</span></li>{% endfor %}</ul>
-        {% else %}<p class="small-muted mb-0">{{ 'An exchange rate, priced so holdings in ' ~ sec.symbol[:3] ~ ' can be converted.' if fx else 'Not in any of your portfolios.' }}</p>{% endif %}
+        {% else %}<p class="small-muted mb-0">{{ 'An exchange rate, priced so holdings in ' ~ sec.symbol[:3] ~ ' can be converted.' if fx else 'Not in any of your accounts.' }}</p>{% endif %}
       </div></div>
   </div>
 </div>

@@ -27,18 +27,14 @@
       <div class="card-body">{{ ui.kv([('Name', h.name or '-'), ('Type', h.quote_type or '-'), ('Exchange', h.exchange or '-'), ('Currency', h.currency or '-'), ('RetPlan would class it as', guess)]) }}</div></div>
     <div class="card"><div class="card-header"><i class="bi bi-plus-square" aria-hidden="true"></i> Use it</div>
       <div class="card-body">
-        {% if portfolios %}
-        <p class="small-muted">Add it to one of your portfolios from the portfolio's <em>Add</em> form - search for <code>{{ h.symbol }}</code>.</p>
-        <div class="d-grid gap-1">{% for p in portfolios %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('portfolio_view', pid=p.id) }}#holdings">{{ p.name }}</a>{% endfor %}</div>
-        {% else %}<a class="btn btn-sm btn-primary" href="{{ url_for('portfolio_new') }}">Create a portfolio</a>{% endif %}
-        {% if admin and not tracked %}
-        <hr><form method="post" action="{{ url_for('security_create') }}" data-busy="Adding…">
-          <input type="hidden" name="symbol" value="{{ h.symbol }}"><input type="hidden" name="source" value="yahoo">
-          <input type="hidden" name="name" value="{{ h.name }}"><input type="hidden" name="currency" value="{{ h.currency }}">
-          <input type="hidden" name="quote_type" value="{{ h.quote_type }}"><input type="hidden" name="exchange" value="{{ h.exchange }}">
-          <label class="form-label small" for="lk-cls">Track it daily, as</label>
-          <div class="d-flex gap-1"><select class="form-select form-select-sm" id="lk-cls" name="asset_class">{% for k, v in [('equity','Equity'),('intl_equity','Intl equity'),('em_equity','Emerging equity'),('bond','Bonds'),('cash','Cash'),('property','Property / REIT'),('commodity','Commodities'),('crypto','Crypto'),('other','Other')] %}<option value="{{ k }}" {% if v == guess %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-            <button class="btn btn-sm btn-primary text-nowrap" type="submit">Track</button></div></form>
+        <p class="small-muted">To hold it, add it to one of your investment accounts - search for <code>{{ h.symbol }}</code> in the account's <em>Add one</em> form.</p>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('accounts') }}">Your accounts</a>
+        {% if admin %}
+        <hr><form method="post" action="{{ url_for('market_add') }}" data-busy="Adding…">
+          <input type="hidden" name="symbols" value="{{ h.symbol }}">
+          <label class="form-label small" for="lk-keep">Collect it every day, as market data, keeping</label>
+          <div class="d-flex gap-1"><select class="form-select form-select-sm" id="lk-keep" name="keep_days">{% for v, l in keep_choices %}<option value="{{ v or '' }}">{{ l }}</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-primary text-nowrap" type="submit">Collect</button></div></form>
         {% endif %}
       </div></div>
   </div>

@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS securities (
     lt_updated      TEXT,
     dividend_yield  DOUBLE PRECISION,
     source          TEXT NOT NULL DEFAULT 'yahoo',     -- yahoo | manual (prices typed in)
+    collect         BIGINT  NOT NULL DEFAULT 0,
+    keep_days       BIGINT,
     notes           TEXT NOT NULL DEFAULT ''
 );
 
@@ -110,6 +112,9 @@ CREATE TABLE IF NOT EXISTS prices (
     close     DOUBLE PRECISION NOT NULL,
     adj_close DOUBLE PRECISION NOT NULL,
     volume    DOUBLE PRECISION,
+    open      DOUBLE PRECISION,
+    high      DOUBLE PRECISION,
+    low       DOUBLE PRECISION,
     PRIMARY KEY (symbol, date)
 );
 CREATE INDEX IF NOT EXISTS ix_prices_date ON prices (date);
