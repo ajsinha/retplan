@@ -50,3 +50,9 @@
   </div>
   {{ save_bar('accounts', plan.ledgers|length) }}
 {% endblock %}
+{% block cards_note %}
+  {% if card_view %}
+  {% set sweep = plan.ledgers[plan.policy.sweep_ledger] if plan.policy.sweep_ledger < plan.ledgers|length else none %}
+  <p class="form-hint mt-3 mb-0">{% if sweep %}Money you earn but do not spend is saved into <strong>{{ sweep.label }}</strong>. {% endif %}Exact weights per asset class, glide paths and where unspent income goes are in the <a href="{{ url_for('plan_section', section='accounts', view='table') }}">table view</a>.</p>
+  {% endif %}
+{% endblock %}

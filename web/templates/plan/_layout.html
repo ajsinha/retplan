@@ -20,8 +20,8 @@
               <span>{{ label }}{% if completeness and completeness[key] %}<span class="desc">{{ completeness[key] }}</span>{% endif %}</span></a>
           {% endfor %}
         </nav>
-        <hr class="my-2">
-        <div class="d-grid gap-1 px-1 pb-1">
+        <hr class="my-2 d-none d-lg-block">
+        <div class="d-none d-lg-grid gap-1 px-1 pb-1">
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Quick start instead</a>
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('export_plan') }}"><i class="bi bi-download" aria-hidden="true"></i> Download plan</a>
           <form method="post" action="{{ url_for('plan_reset') }}" data-confirm="Replace this plan with the sample household?">
@@ -40,12 +40,35 @@
       {% endif %}
       <a class="btn btn-sm btn-primary" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> See the result</a>
     {% endcall %}
+    {% if card_view %}
+      {% from "plan/_cards.html" import card_list with context %}
+      <div class="card"><div class="card-body">
+        {{ card_list(section, item_cards, kinds, noun) }}
+        {% block cards_note %}{% endblock %}
+      </div></div>
+    {% else %}
     <div class="card"><div class="card-body">
+      {% if section in card_sections %}
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="muted small">Table view - every column at once, for editing many rows.</span>
+        <a class="btn btn-sm btn-link ms-auto" href="{{ url_for('plan_section', section=section) }}">
+          <i class="bi bi-card-list" aria-hidden="true"></i> Back to cards</a>
+      </div>
+      {% endif %}
       <form method="post" action="{{ url_for('plan_save', section=section) }}">
         {% block form %}{% endblock %}
       </form>
+      {{ self.cards_note() }}
     </div></div>
+    {% endif %}
     {% block extra %}{% endblock %}
+    {% if card_view %}
+    <div class="modal fade" id="rp-dialog" tabindex="-1" aria-labelledby="rp-dialog-title" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" data-dialog-body></div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

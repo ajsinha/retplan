@@ -48,6 +48,13 @@ portfolio projections, and financial advice.
   is inserted when missing.
 - **FR-ED-3 (S).** Columns rarely changed SHOULD be hidden until the user asks for
   advanced columns.
+- **FR-ED-3a (S).** Income, spending, debt, accounts, care risks and conversions SHOULD
+  be shown as cards in plain language and added or edited one at a time in a dialog that
+  first asks what kind of item it is, fills in sensible values for that kind, asks a few
+  questions per step, and leaves rarely needed fields to a final optional step. The dialog
+  MUST be validated by the same field specification as the table, which remains
+  available; it MUST work without script as an ordinary page. Items MAY be duplicated,
+  paused (kept but left out of the plan) and removed.
 - **FR-ED-4 (M).** Saving a plan MUST invalidate that plan's cached simulation
   results.
 - **FR-ED-5 (M).** A plan MUST round-trip through JSON export and import without

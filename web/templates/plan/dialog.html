@@ -1,0 +1,79 @@
+{% extends "plan/_bare.html" if partial else "plan/_dialog_page.html" %}
+{#- One item of the plan, asked about a step at a time. Loaded into the modal on
+    the plan page (partial=1), or shown as a page without script. The inputs are
+    named after the section's field specification, which the server parses. -#}
+{% block dialog %}
+{% from "plan/_dialog_macros.html" import question with context %}
+{% set close %}<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>{% endset %}
+
+{% if mode == 'kinds' %}
+<div class="modal-header">
+  <div><div class="eyebrow">Add {{ noun }}</div>
+    <h2 class="modal-title h5" id="rp-dialog-title">What would you like to add?</h2></div>
+  {% if partial %}{{ close }}{% endif %}
+</div>
+<div class="modal-body">
+  <p class="muted small mb-3">Pick the closest; the next steps are filled in with sensible answers you can change.</p>
+  <div class="kind-grid">
+    {% for k in kinds %}
+    <a class="kind-tile" href="{{ url_for('plan_dialog', section=section, kind=k.key) }}" data-dialog>
+      <span class="ico"><i class="bi bi-{{ k.icon }}" aria-hidden="true"></i></span>
+      <span><span class="t">{{ k.label }}</span><span class="d">{{ k.blurb }}</span></span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{% elif mode == 'blocked' %}
+<div class="modal-header">
+  <div><div class="eyebrow">Add {{ noun }}</div><h2 class="modal-title h5" id="rp-dialog-title">Not yet</h2></div>
+  {% if partial %}{{ close }}{% endif %}
+</div>
+<div class="modal-body"><p class="mb-0">{{ problem }}</p></div>
+
+{% else %}
+<form method="post" action="{{ url_for('plan_item_save', section=section) }}" class="dialog-form"
+      data-stepper data-save-from="{{ save_from }}" novalidate>
+  <input type="hidden" name="i" value="{{ i }}">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  {% if once %}<input type="hidden" name="once" value="1">{% endif %}
+  <div class="modal-header">
+    <div class="min-w-0">
+      <div class="eyebrow">{{ 'Edit' if editing else 'Add' }} {{ noun }}</div>
+      <h2 class="modal-title h5 text-truncate" id="rp-dialog-title">{{ heading }}</h2>
+    </div>
+    {% if partial %}{{ close }}{% endif %}
+  </div>
+  {% if steps|length > 1 %}
+  <ol class="stepper" aria-label="Steps">
+    {% for st in steps %}
+    <li data-step-dot="{{ loop.index0 }}" class="{{ 'active' if loop.first }}">
+      <button type="button" data-step-go="{{ loop.index0 }}">
+        <span class="n">{{ loop.index }}</span><span class="t">{{ st.title }}</span></button></li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+  <div class="modal-body">
+    {% for st in steps %}
+    <fieldset class="dialog-step" data-step="{{ loop.index0 }}">
+      <legend class="visually-hidden">{{ st.title }}</legend>
+      {% if st.optional %}
+      <p class="step-note"><i class="bi bi-lightbulb" aria-hidden="true"></i>
+        Optional. These answers are already sensible for most people{% if not editing %} - you can save now{% endif %}.</p>
+      {% endif %}
+      {% for q in st.fields %}{{ question(q, row) }}{% endfor %}
+    </fieldset>
+    {% endfor %}
+  </div>
+  <div class="modal-footer">
+    <span class="muted small me-auto" data-step-count aria-live="polite"></span>
+    <button type="button" class="btn btn-outline-secondary" data-step-back hidden>
+      <i class="bi bi-arrow-left" aria-hidden="true"></i> Back</button>
+    <button type="button" class="btn btn-outline-primary" data-step-next hidden>
+      <span>Next</span> <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+    <button type="submit" class="btn btn-primary" data-step-save>
+      <i class="bi bi-check2" aria-hidden="true"></i> {{ 'Save changes' if editing else 'Add to my plan' }}</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

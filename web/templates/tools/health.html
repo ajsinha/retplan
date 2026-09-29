@@ -37,7 +37,7 @@
 </form>
 {% if result %}{% set b, a = result.before, result.after %}
 <div class="stat-grid">
-  {{ ui.kpi('Chance of success', a.success|pct(0), 'was ' ~ b.success|pct(0) ~ ' without them (' ~ ((a.success - b.success) * 100)|round(1) ~ ' pts)', 'heart-pulse', 'bad' if a.success < b.success - 0.02 else '') }}
+  {{ ui.kpi('Chance of success', a.success|pct(0), 'was ' ~ b.success|pct(0) ~ ' without them (' ~ ((a.success - b.success) * 100)|round(1) ~ ' pts)', 'heart', 'bad' if a.success < b.success - 0.02 else '') }}
   {{ ui.kpi('Median final wealth', a.p50|money, (a.p50 - b.p50)|smoney ~ ' vs without', 'trophy') }}
   {{ ui.kpi('Bad-luck final wealth', a.p5|money, (a.p5 - b.p5)|smoney ~ ' vs without', 'cloud-lightning-rain') }}
   {{ ui.kpi('Lifetime tax', a.tax|money, (a.tax - b.tax)|smoney ~ ' vs without', 'receipt') }}

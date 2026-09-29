@@ -53,7 +53,7 @@ class WizardRoutes:
         portfolios = request.app.state.portfolios.list(session_id(request))
         return render(request, "wizard.html", step=step, idx=idx, steps=wizard.STEPS,
                       a=a, risk=wizard.RISK, tax=wizard.TAX,
-                      summary=wizard.summary(a) if step == "review" else None,
+                      summary=wizard.summary(a),
                       done=set(request.session.get("wizard_done") or []),
                       portfolios=portfolios,
                       prev=steps[idx - 1] if idx else None)

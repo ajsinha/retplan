@@ -29,7 +29,7 @@
               <button class="btn btn-sm btn-primary" type="submit">Open</button></form>{% else %}
             <a class="btn btn-sm btn-outline-primary" href="{{ url_for('dashboard') }}">Open</a>{% endif %}
             <form class="d-inline" method="post" action="{{ url_for('scenario_duplicate', plan_id=r.id) }}">
-              <button class="btn btn-sm btn-outline-secondary" type="submit" title="Copy"><i class="bi bi-copy" aria-hidden="true"></i><span class="visually-hidden">Copy {{ r.name }}</span></button></form>
+              <button class="btn btn-sm btn-outline-secondary" type="submit" title="Copy"><i class="bi bi-files" aria-hidden="true"></i><span class="visually-hidden">Copy {{ r.name }}</span></button></form>
             {% if rows|length > 1 %}
             <form class="d-inline" method="post" action="{{ url_for('scenario_delete', plan_id=r.id) }}" data-confirm="Delete '{{ r.name }}'? This cannot be undone.">
               <button class="btn btn-sm btn-outline-secondary" type="submit" title="Delete"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden">Delete {{ r.name }}</span></button></form>{% endif %}

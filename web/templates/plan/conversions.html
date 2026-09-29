@@ -5,5 +5,7 @@
 {% block form %}
   {{ table_editor('conversions', conversion_fields, plan.conversions) }}
   {{ save_bar('conversions', plan.conversions|length) }}
+  {% endblock %}
+{% block cards_note %}
   <p class="form-hint mt-3 mb-0">The tax on each conversion is worked out with the rest of the year's income and paid by drawing on your accounts in the usual order. <a href="{{ url_for('tool_conversions') }}">Compare conversion strategies <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
 {% endblock %}

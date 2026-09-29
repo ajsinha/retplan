@@ -11,7 +11,7 @@
     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"><i class="bi bi-three-dots" aria-hidden="true"></i><span class="visually-hidden">More</span></button>
     <div class="dropdown-menu dropdown-menu-end">
       <a class="dropdown-item" href="#settings" data-bs-toggle="collapse"><i class="bi bi-pencil" aria-hidden="true"></i> Rename, currency</a>
-      <form method="post" action="{{ url_for('portfolio_duplicate', pid=pf.id) }}"><button class="dropdown-item"><i class="bi bi-copy" aria-hidden="true"></i> Duplicate</button></form>
+      <form method="post" action="{{ url_for('portfolio_duplicate', pid=pf.id) }}"><button class="dropdown-item"><i class="bi bi-files" aria-hidden="true"></i> Duplicate</button></form>
       <a class="dropdown-item" href="{{ url_for('api_portfolio', pid=pf.id) }}"><i class="bi bi-filetype-json" aria-hidden="true"></i> As JSON</a>
       <div class="dropdown-divider"></div>
       <form method="post" action="{{ url_for('portfolio_delete', pid=pf.id) }}" data-confirm="Delete '{{ pf.name }}' and its projections? Prices are shared and stay."><button class="dropdown-item text-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete portfolio</button></form>

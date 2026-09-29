@@ -33,6 +33,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 |---|---|---|
 | F-EDIT-1 | Ten sections: Household, Income, Spending, Debt, Tax wrappers, Accounts, Markets, Tax, Policy, Conversions | `/plan/{section}` |
 | F-EDIT-2 | Rows added and removed in place; rarely changed columns behind *Show advanced columns* | `routes/plan_routes.py` |
+| F-EDIT-2a | Cards in plain language for income, spending, debt, accounts, care and conversions; adding asks *what kind* first, then a few questions a step at a time with presets, rarely used fields last; duplicate, pause and remove per item; the table stays as *Table view* | `web/plan_items.py`, `/plan/{section}/dialog` |
 | F-EDIT-3 | A section rail with a one-line summary of what each section holds | `plan_routes.completeness` |
 | F-EDIT-4 | Contextual help link from every section to its help topic | `web/help_catalog.CONTEXT_HELP` |
 | F-EDIT-5 | Export the active plan as JSON; import a JSON plan (replace or as a new scenario); reset to the sample; clear to a blank plan | `routes/export_routes.py` |

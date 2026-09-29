@@ -18,6 +18,8 @@
  *   [data-toggle-show]        show the element whose id matches a select's value
  *   form[data-busy]           disable the submit button and show a spinner
  *   [data-copy]               copy the <pre> in the same <figure>
+ *   a[data-dialog]            open the link's page in the #rp-dialog modal
+ *   form[data-stepper]        one [data-step] at a time, with Back / Next
  *
  * Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
  */
@@ -480,6 +482,134 @@
             (d.noise * 100).toFixed(1) + ' pts) are within the noise. Click a row to load it into the sliders.';
         })
         .catch(function (e) { btn.disabled = false; note.hidden = false; note.textContent = String(e); });
+    });
+  })();
+
+  // ---------- dialogs: a link's page in the modal, a step at a time ----------
+  // Without script every [data-dialog] link is an ordinary page and every step
+  // shows at once; with it, the page loads into #rp-dialog and the steps take turns.
+  function initStepper(form) {
+    var steps = Array.prototype.slice.call(form.querySelectorAll('[data-step]'));
+    var dots = form.querySelectorAll('[data-step-dot]');
+    var back = form.querySelector('[data-step-back]');
+    var next = form.querySelector('[data-step-next]');
+    var save = form.querySelector('[data-step-save]');
+    var count = form.querySelector('[data-step-count]');
+    var saveFrom = parseInt(form.getAttribute('data-save-from') || '0', 10);
+    var cur = 0, last = steps.length - 1;
+
+    function error(input, text) {
+      var box = input.closest('.question');
+      var slot = box && box.querySelector('[data-q-error]');
+      if (slot) { slot.textContent = text || ''; slot.hidden = !text; }
+      input.classList.toggle('is-invalid', !!text);
+    }
+    function valid(k) {
+      var ok = true;
+      steps[k].querySelectorAll('input, select').forEach(function (inp) {
+        if (inp.disabled || inp.type === 'hidden' || inp.type === 'radio' || inp.type === 'checkbox') { return; }
+        var msg = '';
+        if (inp.required && inp.value.trim() === '') {
+          msg = 'Please answer this one.';
+        } else if (!inp.checkValidity()) {
+          msg = inp.validationMessage;
+        } else if (inp.hasAttribute('data-after') && inp.value !== '') {
+          var other = form.querySelector('[name="' + inp.getAttribute('data-after') + '"]');
+          if (other && other.value !== '' && parseFloat(inp.value) <= parseFloat(other.value)) {
+            msg = 'This should be after ' + other.value + '.';
+          }
+        }
+        error(inp, msg);
+        if (msg && ok) { ok = false; inp.focus(); }
+      });
+      return ok;
+    }
+    function show(k) {
+      cur = Math.max(0, Math.min(last, k));
+      steps.forEach(function (st, n) { st.hidden = n !== cur; });
+      dots.forEach(function (d, n) {
+        d.classList.toggle('active', n === cur);
+        d.classList.toggle('done', n < cur);
+        var b = d.querySelector('button');
+        if (b) { b.setAttribute('aria-current', n === cur ? 'step' : 'false'); }
+      });
+      back.hidden = cur === 0;
+      next.hidden = cur === last;
+      var nextOptional = steps[cur + 1] && steps[cur + 1].querySelector('.step-note');
+      next.querySelector('span').textContent = nextOptional ? 'More options' : 'Next';
+      next.classList.toggle('btn-primary', cur < saveFrom);
+      next.classList.toggle('btn-outline-primary', cur >= saveFrom);
+      save.hidden = cur < saveFrom;
+      if (count) { count.textContent = steps.length > 1 ? 'Step ' + (cur + 1) + ' of ' + steps.length : ''; }
+      var first = steps[cur].querySelector('input:not([type=hidden]):not([disabled]), select');
+      if (first && form.closest('.modal.show')) { first.focus({ preventScroll: true }); }
+    }
+    back.addEventListener('click', function () { show(cur - 1); });
+    next.addEventListener('click', function () { if (valid(cur)) { show(cur + 1); } });
+    form.querySelectorAll('[data-step-go]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var k = parseInt(b.getAttribute('data-step-go'), 10);
+        if (k <= cur || valid(cur)) { show(k); }
+      });
+    });
+    // Enter moves on rather than saving half an answer.
+    form.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.target.tagName === 'INPUT' && cur < saveFrom) {
+        ev.preventDefault();
+        if (valid(cur)) { show(cur + 1); }
+      }
+    });
+    form.addEventListener('submit', function (ev) {
+      for (var k = 0; k < steps.length; k++) {
+        if (!valid(k)) { ev.preventDefault(); show(k); valid(k); return; }
+      }
+      save.disabled = true;
+    });
+    form.querySelectorAll('input[data-life]').forEach(function (sw) {
+      var target = document.getElementById(sw.getAttribute('data-life'));
+      sw.addEventListener('change', function () {
+        target.disabled = sw.checked;
+        if (sw.checked) { error(target, ''); } else { target.focus(); }
+      });
+    });
+    show(0);
+  }
+  document.querySelectorAll('form[data-stepper]').forEach(initStepper);
+
+  (function () {
+    var modalEl = document.getElementById('rp-dialog');
+    if (!modalEl || !window.bootstrap) { return; }
+    var body = modalEl.querySelector('[data-dialog-body]');
+    var modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+    function open(href) {
+      var url = href + (href.indexOf('?') < 0 ? '?' : '&') + 'partial=1';
+      body.setAttribute('aria-busy', 'true');
+      fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+        .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
+        .then(function (html) {
+          body.innerHTML = html;
+          body.removeAttribute('aria-busy');
+          body.querySelectorAll('form[data-stepper]').forEach(initStepper);
+          modal.show();
+          var first = body.querySelector('.kind-tile, input:not([type=hidden]):not([disabled])');
+          if (first && modalEl.classList.contains('show')) { first.focus(); }
+        })
+        .catch(function () { window.location.href = href; });
+    }
+    modalEl.addEventListener('shown.bs.modal', function () {
+      var first = body.querySelector('.kind-tile, [data-step]:not([hidden]) input:not([type=hidden]):not([disabled]), [data-step]:not([hidden]) select');
+      if (first) { first.focus(); }
+    });
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('a[data-dialog]');
+      if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey) { return; }
+      ev.preventDefault();
+      var dd = a.closest('.dropdown-menu');
+      if (dd) {
+        var t = dd.parentElement.querySelector('[data-bs-toggle="dropdown"]');
+        if (t) { window.bootstrap.Dropdown.getOrCreateInstance(t).hide(); }
+      }
+      open(a.getAttribute('href'));
     });
   })();
 

@@ -24,6 +24,8 @@
   {% endfor %}
 </ol>
 
+<div class="row g-4">
+<div class="{{ 'col-12' if step == 'review' else 'col-lg-8' }}">
 <div class="card wizard-card">
 <div class="card-header"><i class="bi bi-{{ steps[idx][2] }}" aria-hidden="true"></i> {{ steps[idx][1] }}
   <span class="ms-auto small-muted fw-normal">step {{ idx + 1 }} of {{ steps|length }}</span></div>
@@ -166,4 +168,28 @@
 </form>
 {% endif %}
 </div></div>
+</div>
+{% if step != 'review' %}
+{# What the plan holds so far, in words, beside the questions. #}
+<aside class="col-lg-4">
+  <div class="card so-far sticky-rail"><div class="card-body">
+    <div class="eyebrow mb-2">Your plan so far</div>
+    {% set shown = namespace(n=0) %}
+    {% for group, rows in summary %}
+      {% if loop.index0 < idx %}
+      {% set shown.n = shown.n + 1 %}
+      <div class="so-far-group">
+        <div class="d-flex align-items-baseline"><h3 class="h6 me-auto mb-1">{{ group }}</h3>
+          <a class="small" href="{{ url_for('wizard', step=steps[loop.index0][0]) }}">Change</a></div>
+        {{ ui.kv(rows) }}
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% if not shown.n %}
+      <p class="muted small mb-0">Your answers will gather here as you go, so you can see the plan take shape. Nothing is saved until the last step.</p>
+    {% endif %}
+  </div></div>
+</aside>
+{% endif %}
+</div>
 {% endblock %}

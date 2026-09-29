@@ -1,0 +1,100 @@
+{# The questions a plan dialog asks, one widget per kind of answer. #}
+{% macro question(q, row) %}
+{% set v = row.get(q.name) %}
+{% set id = 'q-' ~ q.name %}
+<div class="question">
+  {% if q.widget in ('basis', 'essential', 'yesno', 'mix', 'choice') %}
+    <div class="q-label" id="{{ id }}-l">{{ q.question }}</div>
+  {% else %}
+    <label class="q-label" for="{{ id }}">{{ q.question }}</label>
+  {% endif %}
+  {% if q.hint %}<div class="q-hint">{{ q.hint }}</div>{% endif %}
+
+  {% if q.widget == 'text' %}
+    <input type="text" class="form-control" id="{{ id }}" name="{{ q.name }}" value="{{ v or '' }}"
+           {% if q.required %}required{% endif %} maxlength="80" autocomplete="off">
+  {% elif q.widget == 'money' %}
+    <div class="input-group q-num">
+      <input type="number" class="form-control num" id="{{ id }}" name="{{ q.name }}" min="0" step="any"
+             inputmode="decimal" value="{{ '%.0f'|format(v) if v else ('' if q.required else '0') }}"
+             {% if q.required %}required{% endif %} placeholder="0">
+    </div>
+  {% elif q.widget == 'pct' %}
+    <div class="input-group q-num">
+      <input type="number" class="form-control num" id="{{ id }}" name="{{ q.name }}" step="any"
+             inputmode="decimal" value="{{ '%.4g'|format((v or 0) * 100) }}" {% if q.required %}required{% endif %}>
+      <span class="input-group-text">%</span>
+    </div>
+  {% elif q.widget == 'age' %}
+    <div class="input-group q-num">
+      <input type="number" class="form-control num" id="{{ id }}" name="{{ q.name }}" min="0" max="120" step="any"
+             inputmode="decimal" value="{{ '%.4g'|format(v) if v is number else '' }}" {% if q.required %}required{% endif %}>
+      <span class="input-group-text">years old</span>
+    </div>
+  {% elif q.widget == 'age_or_life' %}
+    {% set forever = v is number and v >= [120, plan.persons|map(attribute='death_age')|max]|min %}
+    <div class="d-flex flex-wrap align-items-center gap-3">
+      <div class="input-group q-num">
+        <input type="number" class="form-control num" id="{{ id }}" name="{{ q.name }}" min="0" max="120" step="any"
+               inputmode="decimal" data-after="start_age"
+               value="{{ '%.4g'|format(v) if v is number and not forever else '' }}" {% if forever %}disabled{% endif %}>
+        <span class="input-group-text">years old</span>
+      </div>
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="{{ id }}-life" name="end_age_life"
+               value="1" data-life="{{ id }}" {% if forever %}checked{% endif %}>
+        <label class="form-check-label" for="{{ id }}-life">For life</label>
+      </div>
+    </div>
+  {% elif q.widget in ('int', 'number') %}
+    <div class="input-group q-num">
+      <input type="number" class="form-control num" id="{{ id }}" name="{{ q.name }}" min="0"
+             step="{{ '1' if q.widget == 'int' else 'any' }}" inputmode="decimal"
+             value="{{ ('%d'|format(v) if q.widget == 'int' else '%.4g'|format(v)) if v is number else '' }}"
+             {% if q.required %}required{% endif %}>
+    </div>
+  {% elif q.widget in ('basis', 'essential', 'yesno') %}
+    {% if q.widget == 'basis' %}
+      {% set opts = [('real', "Yes - it keeps pace with prices"), ('nominal', "No - a fixed amount of future money")] %}{% set cur = v %}
+    {% elif q.widget == 'essential' %}
+      {% set opts = [('1', "No - it is essential"), ('0', "Yes - I could trim it")] %}{% set cur = '1' if v else '0' %}
+    {% else %}
+      {% set opts = [('1', "Yes"), ('0', "No")] %}{% set cur = '1' if v else '0' %}
+    {% endif %}
+    <div class="choice-row" role="radiogroup" aria-labelledby="{{ id }}-l">
+      {% for val, label in opts %}
+      <input type="radio" class="btn-check" name="{{ q.name }}" id="{{ id }}-{{ loop.index }}" value="{{ val }}"
+             {% if cur == val %}checked{% endif %}>
+      <label class="btn btn-outline-primary" for="{{ id }}-{{ loop.index }}">{{ label }}</label>
+      {% endfor %}
+    </div>
+  {% elif q.widget == 'mix' %}
+    <div class="choice-grid" role="radiogroup" aria-labelledby="{{ id }}-l">
+      {% for key, label, blurb in mixes %}
+      {% if key != 'keep' or editing %}
+      {% set checked = (key == 'keep') if editing else (key == 'balanced') %}
+      <input type="radio" class="btn-check" name="mix" id="{{ id }}-{{ key }}" value="{{ key }}" {% if checked %}checked{% endif %}>
+      <label class="choice-card" for="{{ id }}-{{ key }}"><span class="t">{{ label }}</span><span class="d">{{ blurb }}</span></label>
+      {% endif %}
+      {% endfor %}
+    </div>
+  {% elif q.widget == 'person' %}
+    <select class="form-select" id="{{ id }}" name="{{ q.name }}">
+      {% for p in plan.persons %}<option value="{{ loop.index0 }}" {% if v == loop.index0 %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+    </select>
+  {% elif q.widget == 'ledger' %}
+    <select class="form-select" id="{{ id }}" name="{{ q.name }}">
+      {% for lg in plan.ledgers %}<option value="{{ loop.index0 }}" {% if v == loop.index0 %}selected{% endif %}>{{ lg.label }}</option>{% endfor %}
+    </select>
+  {% elif q.widget == 'wrapper' %}
+    <select class="form-select" id="{{ id }}" name="{{ q.name }}">
+      {% for w in plan.wrappers %}<option value="{{ loop.index0 }}" {% if v == loop.index0 %}selected{% endif %}>{{ w.label }}</option>{% endfor %}
+    </select>
+  {% elif q.widget == 'select' %}
+    <select class="form-select" id="{{ id }}" name="{{ q.name }}">
+      {% for val, label in q.options %}<option value="{{ val }}" {% if v == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  {% endif %}
+  <div class="q-error" data-q-error hidden></div>
+</div>
+{% endmacro %}

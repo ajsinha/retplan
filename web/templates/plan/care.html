@@ -1,9 +1,11 @@
 {% extends "plan/_layout.html" %}
 {% from "plan/_macros.html" import table_editor, save_bar with context %}
-{% set title = "Health and care" %}{% set icon = "bi-heart-pulse" %}
+{% set title = "Health and care" %}{% set icon = "bi-heart" %}
 {% set blurb = "The chance of needing long-term care. Unlike a spending row, a care risk is simulated future by future: in some it happens and costs the full amount, in the rest it never does - which is how it really works, and why it matters more than its average cost suggests." %}
 {% block form %}
   {{ table_editor('care', care_fields, plan.care) }}
   {{ save_bar('care', plan.care|length) }}
+  {% endblock %}
+{% block cards_note %}
   <p class="form-hint mt-3 mb-0">Regular health costs - insurance until public cover starts, costs in later life - are ordinary essential spending rows. <a href="{{ url_for('tool_health') }}">The health and care tool adds both, and shows what they do to your odds <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
 {% endblock %}

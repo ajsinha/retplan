@@ -495,6 +495,98 @@ def test_plan_store_and_wizard():
     check("the wizard's plan runs", np.isfinite(res.net_worth).all())
 
 
+def test_plan_dialogs():
+    """The card view and the step-by-step dialog: add, edit, copy, pause, remove."""
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False)
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        sections = ("income", "expenses", "debt", "accounts", "care", "conversions")
+        bad = []
+        for s in sections:
+            for u in (f"/plan/{s}", f"/plan/{s}?view=table", f"/plan/{s}/dialog",
+                      f"/plan/{s}/dialog?partial=1", f"/plan/{s}/dialog?i=0&partial=1"):
+                if c.get(u).status_code != 200:
+                    bad.append(u)
+        check("every card view, table view and dialog renders", not bad, bad)
+        page = c.get("/plan/income").text
+        check("income shows as cards with an Add button", "item-card" in page
+              and "data-dialog" in page and 'id="rp-dialog"' in page)
+        kinds = c.get("/plan/income/dialog?partial=1").text
+        check("adding starts by asking what kind", "What would you like to add?" in kinds
+              and "A public pension" in kinds and "<html" not in kinds)
+        form = c.get("/plan/income/dialog?kind=public&partial=1").text
+        check("a kind opens its steps, pre-filled", "data-stepper" in form
+              and 'value="Public pension"' in form and "More options" in form)
+        check("the dialog also works as a page without script",
+              "<html" in c.get("/plan/income/dialog?kind=public").text)
+
+        n0 = len(c.get("/plan/income").text.split('class="item-card')) - 1
+        r = c.post("/plan/income/item", data={"i": "-1", "kind": "public", "label": "My pension",
+                                              "amount": "12000", "start_age": "67",
+                                              "end_age_life": "1"}, follow_redirects=False)
+        check("saving a new item redirects to the list", r.status_code == 303)
+        page = c.get("/plan/income").text
+        n1 = len(page.split('class="item-card')) - 1
+        check("the new income appears as a card", n1 == n0 + 1 and "My pension" in page
+              and "12,000 a year" in page and "for life" in page)
+        check("its preset category is kept", "public pension" in page)
+        i = n1 - 1
+        c.post("/plan/income/item", data={"i": str(i), "label": "My pension", "amount": "15000",
+                                          "start_age": "68", "end_age": "90",
+                                          "taxable_fraction": "50"})
+        page = c.get("/plan/income").text
+        check("editing changes only that item", "15,000 a year" in page and "age 68 to 90" in page
+              and len(page.split('class="item-card')) - 1 == n1)
+        r = c.post("/plan/income/item", data={"i": str(i), "start_age": "70", "end_age": "60"},
+                   follow_redirects=True)
+        check("an end before the start is refused", "Nothing was saved" in r.text
+              and "age 68 to 90" in r.text)
+        c.post(f"/plan/income/item/{i}/copy")
+        check("duplicate adds a copy", "My pension (copy)" in c.get("/plan/income").text)
+        c.post(f"/plan/income/item/{i}/toggle")
+        page = c.get("/plan/income").text
+        check("pause marks the item paused", "item-card paused" in page)
+        c.post(f"/plan/income/item/{i + 1}/delete")
+        c.post(f"/plan/income/item/{i}/delete")
+        page = c.get("/plan/income").text
+        check("remove deletes it", "My pension" not in page)
+
+        # a one-off spending item is a one-year stream at the age given
+        c.post("/plan/expenses/item", data={"i": "-1", "kind": "oneoff", "label": "Wedding",
+                                            "amount": "30000", "essential": "0",
+                                            "start_age": "50", "once": "1"})
+        page = c.get("/plan/expenses?view=table").text
+        check("a one-off is saved for one year", 'value="Wedding"' in page)
+        cards = c.get("/plan/expenses").text
+        check("its card says it can be trimmed", "Wedding" in cards and "could be cut" in cards)
+
+        # accounts: a named mix sets the weights
+        c.post("/plan/accounts/item", data={"i": "-1", "kind": "w1", "label": "New pension",
+                                            "opening": "1000", "mix": "growth"})
+        cards = c.get("/plan/accounts").text
+        check("an account added with a mix shows its share of shares",
+              "New pension" in cards and "85% shares" in cards)
+        n_acc = len(cards.split('class="item-card')) - 1
+        c.post(f"/plan/accounts/item/{n_acc - 1}/delete")
+        check("removing an account", "New pension" not in c.get("/plan/accounts").text)
+
+        # conversions refuse the same account at both ends
+        r = c.post("/plan/conversions/item", data={"i": "-1", "label": "X", "from_ledger": "0",
+                                                   "to_ledger": "0", "amount": "1000",
+                                                   "start_age": "60", "end_age": "65"},
+                   follow_redirects=True)
+        check("a conversion needs two accounts", "two different accounts" in r.text)
+        r = c.post("/plan/nonsense/item", data={}, follow_redirects=False)
+        check("an unknown section is refused", r.status_code == 303)
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -967,7 +1059,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

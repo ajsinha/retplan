@@ -10,11 +10,13 @@ Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 
 from fastapi import FastAPI, Request
 
 from retplan.plan import (CATEGORIES, CareRisk, Conversion, ExpenseRow, IncomeRow, Ledger,
                           Loan, Person, Wrapper)
+from web import plan_items, wizard
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.help_catalog import CONTEXT_HELP
 from web.store import session_id
@@ -137,6 +139,13 @@ CARE_FIELDS = [
     F("infl_delta", "Above CPI", "pct", adv=True, help="care costs usually rise faster than prices"),
 ]
 
+FIELDS = {"income": INCOME_FIELDS, "expenses": EXPENSE_FIELDS, "debt": LOAN_FIELDS,
+          "wrappers": WRAPPER_FIELDS, "accounts": LEDGER_FIELDS,
+          "conversions": CONVERSION_FIELDS, "care": CARE_FIELDS}
+
+# Sections shown as cards with a step-by-step dialog; the rest are short forms.
+CARD_SECTIONS = ("income", "expenses", "debt", "accounts", "care", "conversions")
+
 SECTIONS = [
     ("household", "Household", "bi-people", "Who the plan covers and how long it runs."),
     ("income", "Income", "bi-arrow-down-circle", "Every stream of money coming in."),
@@ -147,7 +156,7 @@ SECTIONS = [
     ("markets", "Markets", "bi-graph-up-arrow", "Returns, regimes, crashes, inflation, fees."),
     ("tax", "Tax", "bi-percent", "A table of bands. No jurisdiction is assumed."),
     ("policy", "Policy", "bi-sliders", "How much you take out, and what counts as success."),
-    ("care", "Health and care", "bi-heart-pulse",
+    ("care", "Health and care", "bi-heart",
      "The chance of needing long-term care, simulated future by future."),
     ("conversions", "Conversions", "bi-arrow-left-right",
      "Move money between accounts each year, paying the tax now to pay less later."),
@@ -202,6 +211,27 @@ def _pct(form, key, default=0.0):
         return default
 
 
+def parse_value(form, key: str, f: dict):
+    """One input, parsed by its field's kind."""
+    kind = f["kind"]
+    if kind == "check":
+        return (form.get(key) or "").strip().lower() not in ("", "0", "no", "false", "off")
+    if kind in ("money", "number"):
+        return _num(form, key)
+    if kind == "int":
+        return int(_num(form, key))
+    if kind == "pct":
+        return _pct(form, key)
+    if kind in ("wrapper", "ledger", "person"):
+        return int(_num(form, key))
+    if kind == "select":
+        opts = f.get("options") or []
+        if opts and isinstance(opts[0][0], int):
+            return int(_num(form, key))
+        return form.get(key, "")
+    return (form.get(key) or "").strip()
+
+
 def parse_rows(form, prefix: str, fields: list) -> list:
     """Collect ``prefix-<i>-<field>`` inputs into row dicts, skipping deletions."""
     indices = set()
@@ -214,29 +244,7 @@ def parse_rows(form, prefix: str, fields: list) -> list:
     for i in sorted(indices):
         if form.get(f"delete-{prefix}-{i}"):
             continue
-        row = {}
-        for f in fields:
-            key = f"{prefix}-{i}-{f['name']}"
-            kind = f["kind"]
-            if kind == "check":
-                row[f["name"]] = bool(form.get(key))
-            elif kind in ("money", "number"):
-                row[f["name"]] = _num(form, key)
-            elif kind == "int":
-                row[f["name"]] = int(_num(form, key))
-            elif kind == "pct":
-                row[f["name"]] = _pct(form, key)
-            elif kind in ("wrapper", "ledger", "person"):
-                row[f["name"]] = int(_num(form, key))
-            elif kind == "select":
-                val = form.get(key, "")
-                opts = f.get("options") or []
-                if opts and isinstance(opts[0][0], int):
-                    row[f["name"]] = int(_num(form, key))
-                else:
-                    row[f["name"]] = val
-            else:
-                row[f["name"]] = (form.get(key) or "").strip()
+        row = {f["name"]: parse_value(form, f"{prefix}-{i}-{f['name']}", f) for f in fields}
         if prefix in ("income", "expenses", "debt") and not row.get("label") \
                 and not row.get("amount") and not row.get("balance"):
             continue
@@ -262,6 +270,12 @@ class PlanRoutes:
             include_in_schema=False)
         add("/plan/{section}/add", self.add_row, methods=["POST"],
             name="plan_add_row", include_in_schema=False)
+        add("/plan/{section}/dialog", self.dialog, methods=["GET"], name="plan_dialog",
+            include_in_schema=False)
+        add("/plan/{section}/item", self.save_item, methods=["POST"], name="plan_item_save",
+            include_in_schema=False)
+        add("/plan/{section}/item/{i}/{action}", self.item_action, methods=["POST"],
+            name="plan_item_action", include_in_schema=False)
 
     # -- render ------------------------------------------------------------
     async def section(self, request: Request, section: str = "household"):
@@ -269,13 +283,16 @@ class PlanRoutes:
         known = {s[0] for s in SECTIONS}
         if section not in known:
             section = "household"
-        fields_for = {"income": INCOME_FIELDS, "expenses": EXPENSE_FIELDS,
-                      "debt": LOAN_FIELDS, "wrappers": WRAPPER_FIELDS,
-                      "accounts": LEDGER_FIELDS, "conversions": CONVERSION_FIELDS,
-                      "care": CARE_FIELDS}
+        card_view = (section in CARD_SECTIONS
+                     and request.query_params.get("view") != "table")
         ctx = dict(plan=plan, section=section, sections=SECTIONS,
                    context_help=CONTEXT_HELP, completeness=completeness(plan),
-                   has_advanced=any(f.get("adv") for f in fields_for.get(section, [])),
+                   card_view=card_view, card_sections=CARD_SECTIONS,
+                   item_cards=plan_items.cards(section, plan) if card_view else [],
+                   kinds=plan_items.KINDS[section](plan) if section in plan_items.KINDS else [],
+                   noun=plan_items.NOUNS.get(section, "item"),
+                   has_advanced=(not card_view
+                                 and any(f.get("adv") for f in FIELDS.get(section, []))),
                    income_fields=INCOME_FIELDS, expense_fields=EXPENSE_FIELDS,
                    loan_fields=LOAN_FIELDS, wrapper_fields=WRAPPER_FIELDS,
                    ledger_fields=LEDGER_FIELDS, conversion_fields=CONVERSION_FIELDS,
@@ -315,7 +332,8 @@ class PlanRoutes:
             elif section == "household" and len(plan.persons) < 4:
                 plan.persons.append(Person(f"Person {len(plan.persons) + 1}", 40, 65, 95))
             self.store.put(sid, plan)
-            return redirect_to(request, "plan_section", section=section)
+            extra = {"view": "table"} if section in CARD_SECTIONS else {}
+            return redirect_to(request, "plan_section", section=section, **extra)
         except Exception as exc:  # noqa: BLE001
             flash_error_and_log(request, "Could not add the row", exc)
             return redirect_to(request, "plan_section", section=section)
@@ -336,9 +354,171 @@ class PlanRoutes:
         self.store.put(sid, plan)
         for note in self._notes:
             flash(request, note, "warning")
+        extra = {"view": "table"} if section in CARD_SECTIONS else {}
         return redirect_to(request, "plan_section",
                            flash_message=f"{section.title()} saved.",
-                           section=section)
+                           section=section, **extra)
+
+    # -- one item at a time: the dialog -------------------------------------
+    async def dialog(self, request: Request, section: str):
+        """The add/edit dialog: a partial for the modal, or a page without script."""
+        if section not in CARD_SECTIONS:
+            return redirect_to(request, "plan_section", section="household")
+        plan = self.store.get(session_id(request))
+        rows = plan_items.rows_of(section, plan)
+        q = request.query_params
+        raw_i = q.get("i", "")
+        i = int(raw_i) if raw_i.lstrip("-").isdigit() else -1
+        kind = q.get("kind") or None
+        editing = 0 <= i < len(rows)
+        kinds = plan_items.KINDS[section](plan) if section in plan_items.KINDS else []
+        partial = q.get("partial") == "1"
+        ctx = dict(plan=plan, section=section, noun=plan_items.NOUNS[section],
+                   editing=editing, i=i if editing else -1, kind=kind or "",
+                   partial=partial, sections=SECTIONS, context_help=CONTEXT_HELP,
+                   completeness=completeness(plan), card_view=True,
+                   card_sections=CARD_SECTIONS, has_advanced=False)
+        if not editing and kinds and not kind:
+            return render(request, "plan/dialog.html", mode="kinds", kinds=kinds, **ctx)
+        if section in ("accounts", "conversions") and not editing:
+            problem = self._cannot_add(section, plan)
+            if problem:
+                return render(request, "plan/dialog.html", mode="blocked", problem=problem, **ctx)
+        row = asdict(rows[i]) if editing else plan_items.new_row(section, plan, kind)
+        steps = plan_items.steps(section, plan, row)
+        heading = row.get("label") if editing else next(
+            (k["label"] for k in kinds if k["key"] == kind), f"A new {plan_items.NOUNS[section]}")
+        save_from = 0 if editing else max(
+            (n for n, st in enumerate(steps) if not st.get("optional")), default=0)
+        return render(request, "plan/dialog.html", mode="steps", row=row, steps=steps,
+                      heading=heading, save_from=save_from,
+                      once=plan_items.is_once(section, row), mixes=plan_items.MIXES,
+                      life=plan_items.LIFE, **ctx)
+
+    @staticmethod
+    def _cannot_add(section, plan):
+        if section == "conversions" and len(plan.ledgers) < 2:
+            return "A conversion moves money between two accounts; add a second account first."
+        if section == "accounts" and not plan.wrappers:
+            return "Every account needs a tax wrapper; add one under Tax wrappers first."
+        return None
+
+    async def save_item(self, request: Request, section: str):
+        """Save one item from the dialog, starting from its old values or its preset."""
+        if section not in CARD_SECTIONS:
+            return redirect_to(request, "plan_section", section="household")
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        form = await request.form()
+        rows = plan_items.rows_of(section, plan)
+        i = int(_num(form, "i", -1))
+        editing = 0 <= i < len(rows)
+        row = (asdict(rows[i]) if editing
+               else plan_items.new_row(section, plan, form.get("kind") or None))
+        row.pop("kind_key", None)
+        for f in FIELDS[section]:
+            if f["name"] in form:
+                row[f["name"]] = parse_value(form, f["name"], f)
+        if form.get("end_age_life"):
+            row["end_age"] = plan_items.LIFE
+        if form.get("once"):
+            row["end_age"] = row["start_age"] + 1
+        if section == "accounts":
+            mix = form.get("mix") or "keep"
+            if mix == "cash":
+                row["weights"] = wizard._weights(plan, {"cash": 1.0})
+            elif mix in wizard.RISK:
+                row["weights"] = wizard._weights(plan, wizard.RISK[mix]["mix"])
+            if not editing and not row.get("basis"):
+                row["basis"] = row["opening"]
+        row["label"] = (row.get("label") or "").strip() or plan_items.NOUNS[section].capitalize()
+        problem = self._check_item(section, plan, row)
+        if problem:
+            flash(request, problem, "error")
+            return redirect_to(request, "plan_section", section=section)
+        try:
+            item = plan_items.FACTORY[section](**row)
+        except TypeError as exc:
+            flash_error_and_log(request, "Could not save it", exc)
+            return redirect_to(request, "plan_section", section=section)
+        if editing:
+            rows[i] = item
+        else:
+            rows.append(item)
+        self.store.put(sid, plan)
+        return redirect_to(request, "plan_section", section=section,
+                           flash_message=f"Saved “{item.label}”.")
+
+    @staticmethod
+    def _check_item(section, plan, row):
+        for key in ("amount", "balance", "opening", "contribution"):
+            if row.get(key, 0) < 0:
+                return "Amounts can't be negative."
+        if "start_age" in row and "end_age" in row and section != "care" \
+                and row["end_age"] <= row["start_age"]:
+            return (f"“{row['label']}” would end at {row['end_age']:.0f}, before it starts at "
+                    f"{row['start_age']:.0f}. Nothing was saved.")
+        if section == "care" and row["start_max"] < row["start_min"]:
+            return "The latest age care could start must be after the earliest."
+        if section == "conversions" and row["from_ledger"] == row["to_ledger"]:
+            return "A conversion needs two different accounts."
+        if "probability" in row and not 0 <= row["probability"] <= 1:
+            return "A chance is between 0% and 100%."
+        return None
+
+    async def item_action(self, request: Request, section: str, i: int, action: str):
+        """Delete, copy, or pause/include one item."""
+        if section not in CARD_SECTIONS:
+            return redirect_to(request, "plan_section", section="household")
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        rows = plan_items.rows_of(section, plan)
+        if not 0 <= i < len(rows):
+            flash(request, "That item no longer exists.", "warning")
+            return redirect_to(request, "plan_section", section=section)
+        item = rows[i]
+        if action == "delete":
+            if section == "accounts":
+                problem = self._account_in_use(plan, i)
+                if problem:
+                    flash(request, problem, "error")
+                    return redirect_to(request, "plan_section", section=section)
+                self._drop_account(plan, i)
+            else:
+                rows.pop(i)
+            msg = f"Removed “{item.label}”."
+        elif action == "copy":
+            copy = plan_items.FACTORY[section](**asdict(item))
+            copy.label = f"{item.label} (copy)"
+            rows.insert(i + 1, copy)
+            msg = f"Copied “{item.label}”."
+        elif action == "toggle":
+            item.enabled = not item.enabled
+            msg = (f"“{item.label}” is back in the plan." if item.enabled
+                   else f"“{item.label}” is paused: kept, but left out of the plan.")
+        else:
+            flash(request, f"Unknown action '{action}'.", "error")
+            return redirect_to(request, "plan_section", section=section)
+        self.store.put(sid, plan)
+        return redirect_to(request, "plan_section", section=section, flash_message=msg)
+
+    @staticmethod
+    def _account_in_use(plan, i):
+        if len(plan.ledgers) <= 1:
+            return "A plan needs at least one account."
+        if any(c.from_ledger == i or c.to_ledger == i for c in plan.conversions):
+            return "A conversion uses this account; change or remove it first."
+        return None
+
+    @staticmethod
+    def _drop_account(plan, i):
+        """Remove an account and re-point what refers to later ones."""
+        plan.ledgers.pop(i)
+        for c in plan.conversions:
+            c.from_ledger -= c.from_ledger > i
+            c.to_ledger -= c.to_ledger > i
+        sweep = plan.policy.sweep_ledger
+        plan.policy.sweep_ledger = 0 if sweep == i else sweep - (sweep > i)
 
     # -- per-section savers ------------------------------------------------
     def _save_household(self, plan, form):

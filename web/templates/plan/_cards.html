@@ -1,0 +1,71 @@
+{# A plan list as cards that read as sentences. Adding or editing opens the dialog. #}
+{% macro card_list(section, cards, kinds, noun) %}
+<div class="item-toolbar">
+  <a class="btn btn-primary" href="{{ url_for('plan_dialog', section=section) }}" data-dialog>
+    <i class="bi bi-plus-lg" aria-hidden="true"></i> Add {{ noun }}</a>
+  <span class="muted small">{{ cards|length }} item{{ '' if cards|length == 1 else 's' }}</span>
+  <a class="btn btn-sm btn-link ms-auto" href="{{ url_for('plan_section', section=section, view='table') }}">
+    <i class="bi bi-table" aria-hidden="true"></i> Table view</a>
+</div>
+
+{% if not cards %}
+  <div class="item-empty">
+    <p class="mb-2"><strong>Nothing here yet.</strong> Start with one of these - each opens a few short questions.</p>
+    {% if kinds %}
+    <div class="kind-chips">
+      {% for k in kinds %}
+      <a class="kind-chip" href="{{ url_for('plan_dialog', section=section, kind=k.key) }}" data-dialog>
+        <i class="bi bi-{{ k.icon }}" aria-hidden="true"></i> {{ k.label }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+{% else %}
+<ul class="item-list">
+  {% for c in cards %}
+  <li class="item-card {{ 'paused' if not c.enabled }}">
+    <span class="ico"><i class="bi bi-{{ c.icon }}" aria-hidden="true"></i></span>
+    <div class="body">
+      <a class="title stretched-link" href="{{ url_for('plan_dialog', section=section, i=c.i) }}" data-dialog>
+        {{ c.title }}</a>
+      <div class="detail">{{ c.detail }}</div>
+      {% if c.chips or not c.enabled %}
+      <div class="chips">
+        {% if not c.enabled %}<span class="chip chip-paused"><i class="bi bi-pause-circle" aria-hidden="true"></i> paused</span>{% endif %}
+        {% for ch in c.chips %}<span class="chip">{{ ch }}</span>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="amount num">{{ c.amount }}</div>
+    <div class="dropdown actions">
+      <button class="btn btn-sm btn-link" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+              aria-label="More for {{ c.title }}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="{{ url_for('plan_dialog', section=section, i=c.i) }}" data-dialog>
+          <i class="bi bi-pencil" aria-hidden="true"></i> Edit</a></li>
+        <li><form method="post" action="{{ url_for('plan_item_action', section=section, i=c.i, action='copy') }}">
+          <button class="dropdown-item" type="submit"><i class="bi bi-files" aria-hidden="true"></i> Duplicate</button></form></li>
+        <li><form method="post" action="{{ url_for('plan_item_action', section=section, i=c.i, action='toggle') }}">
+          <button class="dropdown-item" type="submit">
+            {% if c.enabled %}<i class="bi bi-pause-circle" aria-hidden="true"></i> Pause - leave out for now
+            {% else %}<i class="bi bi-play-circle" aria-hidden="true"></i> Include again{% endif %}</button></form></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><form method="post" action="{{ url_for('plan_item_action', section=section, i=c.i, action='delete') }}"
+                  data-confirm="Remove “{{ c.title }}” from the plan?">
+          <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Remove</button></form></li>
+      </ul>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% if kinds %}
+<div class="kind-chips mt-3">
+  <span class="muted small me-1">Quick add:</span>
+  {% for k in kinds %}
+  <a class="kind-chip" href="{{ url_for('plan_dialog', section=section, kind=k.key) }}" data-dialog>
+    <i class="bi bi-{{ k.icon }}" aria-hidden="true"></i> {{ k.label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ heading or ('Add ' ~ noun) }} · Plan{% endblock %}
+{% block content %}
+{# The dialog as a page of its own, for a browser without script. #}
+<div class="dialog-page mx-auto">
+  <a class="small" href="{{ url_for('plan_section', section=section) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to the plan</a>
+  <div class="card mt-2"><div class="modal-content border-0">{% block dialog %}{% endblock %}</div></div>
+</div>
+{% endblock %}
