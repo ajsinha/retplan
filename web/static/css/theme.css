@@ -880,8 +880,12 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
   border: 1px solid var(--rp-border); color: var(--rp-ink); text-decoration: none; font-size: 13px; background: var(--rp-surface); }
 .kind-chip:hover, .kind-chip:focus-visible { border-color: var(--rp-crimson); color: var(--rp-crimson); background: var(--rp-crimson-tint); }
 @media (max-width: 575.98px) {
-  .item-card { flex-wrap: wrap; }
-  .item-card .amount { order: 3; flex-basis: 100%; text-align: left; padding-left: calc(40px + .9rem); }
+  .item-card { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: .75rem;
+    row-gap: .15rem; align-items: start; }
+  .item-card .ico { grid-row: 1 / span 2; }
+  .item-card .body { grid-column: 2; grid-row: 1; }
+  .item-card .amount { grid-column: 2; grid-row: 2; text-align: left; }
+  .item-card .actions { grid-column: 3; grid-row: 1; }
 }
 
 .kind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .6rem; }
@@ -975,3 +979,21 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .dr-scale .now::before { content: ""; display: block; margin: 0 auto; width: 0; height: 0;
   border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 8px solid var(--rp-ink); }
 .dr-scale .now .lbl { display: block; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--rp-ink); }
+
+/* ---------- portfolios as collections of accounts ---------- */
+.acct-group + .acct-group { margin-top: 1.25rem; }
+.acct-group-head { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .5rem; }
+.acct-group-head h3 { margin-right: auto; }
+.acct-group-head .bi { color: var(--rp-crimson); }
+.item-card .chip.up { color: var(--rp-ok); }
+.item-card .chip.down { color: var(--rp-bad); }
+.tint-panel { background: var(--rp-crimson-tint); }
+.file-input { max-width: 320px; }
+.card-link { color: inherit; }
+.all-holdings > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5rem; }
+.all-holdings > summary::-webkit-details-marker { display: none; }
+.link-box { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .7rem 1rem; margin-bottom: 1rem;
+  border: 1px dashed var(--rp-border); border-radius: 12px; font-size: 14px; }
+.link-box > .bi { font-size: 1.3rem; color: var(--rp-crimson); }
+.link-box .grow { flex: 1 1 18rem; }
+.link-box.linked { border-style: solid; border-color: var(--rp-crimson); background: var(--rp-crimson-tint); }

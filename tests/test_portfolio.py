@@ -161,10 +161,12 @@ def test_repository():
     r = PortfolioRepo(db)
     pid = r.create("alice", "Core", "usd")
     check("portfolio currency is upper-cased", r.get("alice", pid)["currency"] == "USD")
-    r.add_holding("alice", pid, "vti", 10, 3000, "Roth")
-    r.add_holding("alice", pid, "$cash", 500)
+    roth = r.create_account("alice", pid, "My Roth", "roth_ira")
+    r.add_holding("alice", pid, roth, "vti", 10, 3000)
+    r.add_holding("alice", pid, roth, "$cash", 500)
     hs = r.holdings("alice", pid)
     check("symbols are normalised", sorted(h["symbol"] for h in hs) == ["CASH", "VTI"])
+    check("a holding knows its account", {h["account"] for h in hs} == {"My Roth"})
     check("cash cost basis defaults to its amount",
           [h["cost_basis"] for h in hs if h["symbol"] == "CASH"] == [500])
     try:
@@ -174,26 +176,93 @@ def test_repository():
         iso = True
     check("another workspace cannot read the portfolio", iso)
     try:
-        r.add_holding("bob", pid, "AAPL", 1)
+        r.add_holding("bob", pid, roth, "AAPL", 1)
         iso2 = False
     except NotFound:
         iso2 = True
     check("another workspace cannot add to it", iso2)
+    try:
+        r.account("bob", pid, roth)
+        iso3 = False
+    except NotFound:
+        iso3 = True
+    check("another workspace cannot read its accounts", iso3)
     check("another workspace sees no portfolios", r.list("bob") == [])
+    home = r.create_account("alice", pid, "House", "home", value=500000)
+    try:
+        r.add_holding("alice", pid, home, "VTI", 1)
+        refused = False
+    except ValueError:
+        refused = True
+    check("only investment accounts hold positions", refused)
     r.update("alice", pid, settings={"targets": {"equity": 0.6}})
     check("settings round-trip as JSON", r.get("alice", pid)["settings"]["targets"]["equity"] == 0.6)
     new = r.duplicate("alice", pid)
-    check("duplicate copies holdings", len(r.holdings("alice", new)) == 2)
+    check("duplicate copies accounts and holdings",
+          len(r.holdings("alice", new)) == 2 and len(r.accounts("alice", new)) == 2)
     r.save_projection("alice", pid, {"a": 1}, {"b": 2}, {"c": 3})
     r.delete("alice", pid)
-    check("delete removes holdings and projections",
+    check("delete removes accounts, holdings and projections",
           db.scalar("SELECT COUNT(*) FROM holdings WHERE portfolio_id = :p", {"p": pid}) == 0
+          and db.scalar("SELECT COUNT(*) FROM accounts WHERE portfolio_id = :p", {"p": pid}) == 0
           and db.scalar("SELECT COUNT(*) FROM projections WHERE portfolio_id = :p", {"p": pid}) == 0)
     check("the duplicate survives", len(r.holdings("alice", new)) == 2)
     for i in range(13):
         r.save_projection("alice", new, {"i": i}, {}, {})
     runs = r.projections("alice", new)
     check("only the last ten projections are kept", len(runs) == 10 and runs[0]["settings"]["i"] == 12)
+
+
+def test_accounts():
+    """Accounts of every kind, and a valuation that is a net worth."""
+    from portfolio import account_types as at
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    pid = r.create("al", "Household")
+    k401 = r.create_account("al", pid, "Work 401(k)", "k401")
+    brk = r.create_account("al", pid, "Joint brokerage", "brokerage", owner_person=-1)
+    r.add_holding("al", pid, k401, "CASH", 100000)
+    r.add_holding("al", pid, brk, "CASH", 50000)
+    r.create_account("al", pid, "Savings", "savings", value=20000)
+    r.create_account("al", pid, "House", "home", value=400000)
+    year_ago = (date.today() - timedelta(days=366)).isoformat()
+    mort = r.create_account("al", pid, "Mortgage", "mortgage", value=200000, as_of=year_ago,
+                            rate=0.06, term_months=240)
+    v = r.valuation("al", pid)
+    debt = next(a for a in v.accounts if a.id == mort)
+    pay = at.monthly_payment(200000, 0.06, 20)
+    check("a debt's payment is worked out from its rate and term", close(debt.payment, pay, 1e-9))
+    check("a debt pays itself down month by month",
+          close(debt.value, at.amortised(200000, 0.06, pay, 12), 1e-9) and debt.value < 200000
+          and debt.months_left == 228, (debt.value, debt.months_left))
+    check("investable assets are investments plus cash accounts", close(v.total, 170000))
+    check("property and debts are kept apart",
+          v.property_total == 400000 and close(v.debts, debt.value))
+    check("net worth is assets less debts", close(v.net_worth, 570000 - debt.value))
+    check("a cash account is a cash position in every analysis",
+          any(p.synthetic and p.asset_class == "cash" and p.value == 20000 for p in v.positions))
+    tax = dict((k, x) for k, x, _ in v.by_tax())
+    check("investable assets by tax treatment",
+          tax == {"Tax-deferred": 100000, "Taxable": 70000}, tax)
+    owners = dict((k, x) for k, x, _ in v.by_owner())
+    check("and by owner", owners == {"You": 120000, "Joint": 50000}, owners)
+    r.update_account("al", pid, mort, value=150000)
+    a = r.account("al", pid, mort)
+    check("a new value restarts the pay-down from today",
+          a["as_of"] == date.today().isoformat()
+          and close(r.valuation("al", pid).debts, 150000))
+    r.delete_account("al", pid, brk)
+    check("removing an account removes its holdings", len(r.holdings("al", pid)) == 1)
+    one = r.valuation("al", pid, k401)
+    check("one account can be valued alone", len(one.accounts) == 1 and one.total == 100000)
+    check("names give an account's type away",
+          [at.guess(n) for n in ("Roth IRA", "ROTH 401K", "401(k) Plan", "Rollover IRA",
+                                 "Individual - TOD", "HSA", "Chase Savings", "SIPP")] ==
+          ["roth_ira", "roth401k", "k401", "ira", "brokerage", "hsa", "savings", "pension_pot"])
+    same = r.find_or_create_account("al", pid, "work 401(k)")
+    made = r.find_or_create_account("al", pid, "My Roth IRA")
+    check("an import finds an account by name, or makes one of the guessed type",
+          same == k401 and r.account("al", pid, made)["type"] == "roth_ira")
 
 
 def test_classify():
@@ -222,10 +291,11 @@ def test_prices_and_retention():
     db = fresh_db()
     r = PortfolioRepo(db)
     pid = r.create("alice", "Mixed", "USD")
-    r.add_holding("alice", pid, "VTI", 10, 2000)
-    r.add_holding("alice", pid, "VOD.L", 1000, 1200)
-    r.add_holding("alice", pid, "NOPE", 5)
-    r.add_holding("alice", pid, "CASH", 1000)
+    aid = r.create_account("alice", pid, "Brokerage", "brokerage")
+    r.add_holding("alice", pid, aid, "VTI", 10, 2000)
+    r.add_holding("alice", pid, aid, "VOD.L", 1000, 1200)
+    r.add_holding("alice", pid, aid, "NOPE", 5)
+    r.add_holding("alice", pid, aid, "CASH", 1000)
     vod = synthetic("VOD.L", mu=0.02, sigma=0.25, seed=2, currency="GBp",
                     quote_type="EQUITY", name="Vodafone Group Plc", start_price=120)
     fx = synthetic("GBPUSD=X", mu=0.0, sigma=0.08, seed=3, currency="USD",
@@ -691,6 +761,190 @@ def test_draw_rate_web():
               "draw rate" in r.text and "Saved and switched" in r.text)
 
 
+def test_accounts_web():
+    """Accounts on the web: the dialog, uploads into an account or across accounts,
+    and plans linked to a portfolio."""
+    import openpyxl
+    from fastapi.testclient import TestClient
+    from portfolio import builder
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False)
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        wa.collector.collect = lambda *a, **k: {"ok": 0, "failed": 0, "errors": []}
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        r = c.post("/portfolios/new", data={"name": "Household"}, follow_redirects=False)
+        pid = int(r.headers["location"].rsplit("/", 1)[-1])
+        page = c.get(f"/portfolios/{pid}/accounts/dialog?partial=1").text
+        check("adding an account starts with its type, grouped by kind",
+              all(x in page for x in ("Investments", "Cash", "Property", "Debts", "Roth IRA",
+                                      "Mortgage", "Home")) and "<html" not in page)
+        page = c.get(f"/portfolios/{pid}/accounts/dialog?type=mortgage&partial=1").text
+        check("a debt asks what is owed, the rate and the years left",
+              "How much is owed today?" in page and 'name="rate"' in page
+              and 'name="years"' in page and "data-stepper" in page)
+        r = c.post(f"/portfolios/{pid}/accounts/save",
+                   data={"type": "roth_ira", "name": "Roth", "owner_person": "1"},
+                   follow_redirects=False)
+        check("a new investment account goes straight to its page to add holdings",
+              "/accounts/" in r.headers["location"])
+        roth = int(r.headers["location"].split("?")[0].rsplit("/", 1)[-1])
+        c.post(f"/portfolios/{pid}/accounts/save",
+               data={"type": "mortgage", "name": "Mortgage", "value": "250000", "rate": "6.5",
+                     "years": "25"})
+        c.post(f"/portfolios/{pid}/accounts/save", data={"type": "home", "name": "Home",
+                                                          "value": "450000"})
+        r = c.post(f"/portfolios/{pid}/accounts/save",
+                   data={"type": "savings", "name": "Bad", "value": "-5"}, follow_redirects=True)
+        check("a negative value is refused", "be negative" in r.text)
+        accts = {a["name"]: a for a in wa.portfolios.accounts(
+            next(iter({x["owner"] for x in wa.db.query("SELECT owner FROM portfolios")})), pid)}
+        sid = wa.db.query("SELECT owner FROM portfolios")[0]["owner"]
+        check("the debt's payment is worked out", accts["Mortgage"]["payment"] > 1000
+              and accts["Mortgage"]["term_months"] == 300 and accts["Mortgage"]["rate"] == 0.065)
+        view = c.get(f"/portfolios/{pid}").text
+        check("the portfolio page groups accounts by kind with net worth",
+              "Net worth" in view and "Roth" in view and "Mortgage" in view
+              and "−" in view and "Partner" in view)
+
+        # upload into one account: every line goes there, whatever the file says
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Symbol", "Quantity", "Account"])
+        ws.append(["AAPL", 10, "Somewhere else"])
+        ws.append(["MSFT", 5, "Another"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        real_analyse = builder.analyse
+        builder.analyse = lambda content, name, resolver=None: real_analyse(
+            content, name, resolver=_fake_resolver())
+        try:
+            r = c.post("/portfolios/build", data={"pid": str(pid), "aid": str(roth)},
+                       files={"file": ("pos.xlsx", buf.getvalue())}, follow_redirects=False)
+            did = int(r.headers["location"].rsplit("/", 1)[-1])
+            review = c.get(f"/portfolios/build/{did}").text
+            check("the review says which account it goes into",
+                  "Into <strong>Roth</strong>" in review and 'name="n_accounts"' not in review)
+            form = {f"l{i}-{k}": v for i, (sym, q) in enumerate([("AAPL", 10), ("MSFT", 5)])
+                    for k, v in (("include", "1"), ("symbol", sym), ("quantity", str(q)))}
+            r = c.post(f"/portfolios/build/{did}", data=form, follow_redirects=False)
+            hs = wa.portfolios.holdings(sid, pid, roth)
+            check("an upload into an account puts every line there",
+                  sorted(h["symbol"] for h in hs) == ["AAPL", "MSFT"]
+                  and f"/accounts/{roth}" in r.headers["location"])
+            # a file across accounts: one account per name, types confirmed
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.append(["Account Name", "Symbol", "Quantity"])
+            ws.append(["ROLLOVER IRA", "AAPL", 3])
+            ws.append(["Roth", "BND", 4])
+            ws.append(["Company 401K", "MSFT", 2])
+            buf = io.BytesIO()
+            wb.save(buf)
+            r = c.post("/portfolios/build", data={"pid": str(pid)},
+                       files={"file": ("all.xlsx", buf.getvalue())}, follow_redirects=False)
+            did = int(r.headers["location"].rsplit("/", 1)[-1])
+            review = c.get(f"/portfolios/build/{did}").text
+            check("a multi-account file lists its accounts with guessed types",
+                  'name="n_accounts" value="3"' in review
+                  and re.search(r'value="ira" selected', review)
+                  and re.search(r'value="k401" selected', review))
+            lines = wa.portfolios.draft(sid, did)["lines"]
+            form = {"mode": "merge", "portfolio": str(pid), "n_accounts": "3",
+                    "acct-0-name": "ROLLOVER IRA", "acct-0-type": "ira",
+                    "acct-1-name": "Roth", "acct-1-type": "roth_ira",
+                    "acct-2-name": "Company 401K", "acct-2-type": "k401"}
+            for i, ln in enumerate(lines):
+                form.update({f"l{i}-include": "1", f"l{i}-symbol": ln["symbol"],
+                             f"l{i}-quantity": str(ln["quantity"]),
+                             f"l{i}-account": ln["account"]})
+            c.post(f"/portfolios/build/{did}", data=form)
+        finally:
+            builder.analyse = real_analyse
+        types = {a["name"]: a["type"] for a in wa.portfolios.accounts(sid, pid)}
+        check("each account in the file is made with its type, or joined by name",
+              types.get("ROLLOVER IRA") == "ira" and types.get("Company 401K") == "k401"
+              and list(types).count("Roth") == 1, types)
+        check("and its lines land in it",
+              [h["symbol"] for h in wa.portfolios.holdings(sid, pid, roth)] == ["AAPL", "BND", "MSFT"])
+
+        # a plan linked to the portfolio follows it
+        with wa.db.tx() as cx:
+            Database.run(cx, "UPDATE securities SET last_price = 100 WHERE symbol IN"
+                             " ('AAPL', 'MSFT', 'BND')")
+        r = c.post("/plan/link", data={"portfolio": str(pid)}, follow_redirects=True)
+        plan = wa.store.get(sid)
+        linked = {lg.label: lg for lg in plan.ledgers}
+        check("linking brings every account into the plan, with its wrapper",
+              {"Roth", "ROLLOVER IRA", "Company 401K", "Home"} <= set(linked)
+              and plan.wrappers[linked["Roth"].wrapper].label == "Roth IRA"
+              and plan.wrappers[linked["Company 401K"].wrapper].label == "401(k) / 403(b)"
+              and not plan.wrappers[linked["Home"].wrapper].liquid, sorted(linked))
+        check("the partner's account belongs to the partner",
+              linked["Roth"].owner == (1 if len(plan.persons) > 1 else 0))
+        check("debts become loans", [ln.label for ln in plan.loans] == ["Mortgage"]
+              and close(plan.loans[0].balance, 250000, 1e-6))
+        check("the accounts page says it is linked", "Linked to" in r.text
+              and "from portfolio" in r.text)
+        i = plan.ledgers.index(linked["Company 401K"])
+        c.post("/plan/accounts/item", data={"i": str(i), "contribution_pct_income": "10",
+                                            "employer_match_pct": "100",
+                                            "employer_match_cap_pct": "5"})
+        wa.portfolios.update_holding(sid, pid, wa.portfolios.holdings(sid, pid, roth)[0]["id"],
+                                     quantity=20)
+        plan = wa.store.get(sid)
+        linked = {lg.label: lg for lg in plan.ledgers}
+        check("a change in the portfolio reaches the plan, keeping what the plan added",
+              close(linked["Roth"].opening, 100 * (20 + 4 + 5), 1e-6)
+              and linked["Company 401K"].contribution_pct_income == 0.10
+              and linked["Company 401K"].employer_match_cap_pct == 0.05)
+        wa.store.get(sid)
+        c.post("/api/simulate", json={"trials": 200})
+        wa.store.get(sid)
+        check("simulation results survive reading a linked plan", wa.store.results(sid) is not None)
+        wa.portfolios.update_account(sid, pid, next(a["id"] for a in wa.portfolios.accounts(sid, pid)
+                                                     if a["name"] == "Home"), value=460000)
+        wa.store.get(sid)
+        check("and are dropped once the portfolio moves", wa.store.results(sid) is None)
+        acct_id = next(a["id"] for a in wa.portfolios.accounts(sid, pid) if a["name"] == "Home")
+        c.post(f"/portfolios/{pid}/accounts/{acct_id}/delete")
+        check("an account removed from the portfolio leaves the plan",
+              "Home" not in {lg.label for lg in wa.store.get(sid).ledgers})
+        check("the portfolio lists the plans that use it",
+              "Their accounts, balances, mix and debts come from this portfolio"
+              in c.get(f"/portfolios/{pid}").text)
+        c.post("/plan/unlink")
+        plan = wa.store.get(sid)
+        check("unlinking freezes today's figures as the plan's own",
+              plan.portfolio_id == 0 and all(lg.account_id == 0 for lg in plan.ledgers)
+              and any(lg.label == "Roth" for lg in plan.ledgers))
+
+        # the quick start takes accounts from a portfolio
+        page = c.get(f"/start?step=savings&portfolio={pid}").text
+        check("the quick start offers the portfolio's accounts",
+              "Your accounts come from" in page and f'lk_{roth}_save' in page)
+        k401 = next(a["id"] for a in wa.portfolios.accounts(sid, pid) if a["type"] == "k401")
+        c.post("/start/savings", data={f"lk_{k401}_save": "7", f"lk_{k401}_match": "3",
+                                       f"lk_{roth}_save": "6000", "go": "next"})
+        review = c.get("/start?step=review").text
+        check("the review lists the linked accounts", "From portfolio" in review
+              and "saving 7% of pay" in review and "adding 6,000 a year" in review)
+        c.post("/start/finish", data={"mode": "new"})
+        plan = wa.store.get(sid)
+        by = {lg.label: lg for lg in plan.ledgers}
+        check("the plan it builds is linked, with the saving on each account",
+              plan.portfolio_id == pid and by["Company 401K"].contribution_pct_income == 0.07
+              and by["Company 401K"].employer_match_cap_pct == 0.03
+              and by["Roth"].contribution == 6000)
+        check("its debts come from the portfolio, not the quick start",
+              [ln.label for ln in plan.loans] == ["Mortgage"])
+        wa.db.dispose()
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -716,14 +970,19 @@ def test_web():
         bad = [(u, c.get(u).status_code) for u in pages]
         bad = [x for x in bad if x[1] != 200]
         check("every top-level page renders", not bad, bad)
-        r = c.post("/portfolios/new", data={"name": "T", "currency": "USD",
-                                            "holdings": "VTI, 10, 2000\nBND, 20\nCASH, 500"},
+        r = c.post("/portfolios/new", data={"name": "T", "currency": "USD"},
                    follow_redirects=False)
         pid = int(r.headers["location"].rsplit("/", 1)[-1])
+        r = c.post(f"/portfolios/{pid}/accounts/save", data={"type": "brokerage",
+                                                              "name": "Brokerage"},
+                   follow_redirects=False)
+        aid = int(r.headers["location"].split("?")[0].rsplit("/", 1)[-1])
+        c.post(f"/portfolios/{pid}/accounts/{aid}/import",
+               data={"text": "VTI, 10, 2000\nBND, 20\nCASH, 500"})
         time.sleep(0.5)                     # the background fetch for new symbols
         wa.collector.collect(reason="test")
         pages = [f"/portfolios/{pid}", f"/portfolios/{pid}/project", f"/portfolios/{pid}/stress",
-                 "/securities/VTI"]
+                 f"/portfolios/{pid}/accounts/{aid}", "/securities/VTI"]
         bad = [(u, c.get(u).status_code) for u in pages]
         check("portfolio pages render", all(s == 200 for _, s in bad), bad)
         r = c.post(f"/portfolios/{pid}/project", data={
@@ -851,7 +1110,7 @@ def test_security_admin():
     r.delete_prices("MYFUND", [date.today().isoformat()])
     check("deleting the latest close rolls the price back", r.security("MYFUND")["last_price"] == 100.0)
     pid = r.create("w", "P")
-    r.add_holding("w", pid, "MYFUND", 3)
+    r.add_holding("w", pid, r.create_account("w", pid, "Private", "brokerage"), "MYFUND", 3)
     check("a manual security is never fetched", "MYFUND" not in r.tracked_symbols())
     try:
         r.delete_security("MYFUND")
@@ -1107,41 +1366,29 @@ def test_new_tools():
         plan = wa.store.get(sid)
         check("health costs and care risks are added to the plan",
               len(plan.care) == 2 and any("later life" in e.label for e in plan.expenses))
-        today = date.today()
-        c.post("/networth/snapshot", data={"taken_on": (today - timedelta(days=90)).isoformat(),
-                                           "it-0-name": "Home", "it-0-kind": "asset", "it-0-value": "400000",
-                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "150000"})
-        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
-                                           "it-0-name": "Joint brokerage", "it-0-kind": "account",
-                                           "it-0-value": "130000", "it-0-ref": "0",
-                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "140000",
-                                           "it-1-ref": "0"})
-        snaps = wa.networth.manual(sid)
-        check("snapshots record assets, debts and net worth",
-              len(snaps) == 2 and snaps[0]["net"] == 250000 and snaps[1]["net"] == -10000)
-        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
-                                           "it-0-name": "Home", "it-0-kind": "asset", "it-0-value": "410000"})
-        check("a second snapshot on the same day replaces the first", len(wa.networth.manual(sid)) == 2)
-        c.post(f"/networth/{snaps[1]['id']}/delete")
-        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
-                                           "it-0-name": "Joint brokerage", "it-0-kind": "account",
-                                           "it-0-value": "130000", "it-0-ref": "0",
-                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "140000",
-                                           "it-1-ref": "0"})
-        last = wa.networth.manual(sid)[-1]
-        c.post(f"/networth/{last['id']}/to-plan")
-        plan = wa.store.get(sid)
-        check("a snapshot brings the plan's balances up to date",
-              plan.ledgers[0].opening == 130000 and plan.loans[0].balance == 140000)
-        check("the net-worth page shows the chart", "Net worth over time" in c.get("/networth").text)
-        # portfolio values are recorded after a price run and kept
+        # net worth: each portfolio's assets and debts recorded after a price run
         fake = FakeYahoo({"VTI": synthetic("VTI", seed=1)})
         wa.collector._fetch, wa.collector._long_run, wa.collector._pause = fake.fetch, fake.long_run, 0
         pid = wa.portfolios.create(sid, "P")
-        wa.portfolios.add_holding(sid, pid, "VTI", 10)
+        aid = wa.portfolios.create_account(sid, pid, "Brokerage", "brokerage")
+        wa.portfolios.add_holding(sid, pid, aid, "VTI", 10)
+        wa.portfolios.create_account(sid, pid, "House", "home", value=300000)
+        wa.portfolios.create_account(sid, pid, "Mortgage", "mortgage", value=100000,
+                                     rate=0.05, term_months=120)
         wa.collector.collect(reason="test")
-        check("each portfolio's value is recorded after a price run",
-              str(pid) in wa.networth.portfolio_series(sid))
+        hist = wa.networth.history(sid, pid)
+        v = wa.portfolios.valuation(sid, pid)
+        check("each portfolio's net worth is recorded after a price run",
+              len(hist) == 1 and close(hist[0]["net"], v.net_worth, 1e-9)
+              and hist[0]["liabilities"] == 100000 and hist[0]["data"]["property"] == 300000)
+        with wa.db.tx() as cx:
+            Database.run(cx, "UPDATE snapshots SET taken_on = :d",
+                         {"d": (date.today() - timedelta(days=30)).isoformat()})
+        c.post(f"/portfolios/{pid}/record")
+        check("a portfolio records today's net worth on demand",
+              len(wa.networth.history(sid, pid)) == 2)
+        check("the net-worth page shows the history", "Over time" in c.get("/networth").text
+              and "Net worth over time" in c.get(f"/portfolios/{pid}").text)
         wa.db.dispose()
 
 
@@ -1157,13 +1404,13 @@ def main():
     t0 = time.time()
     print(f"database: {DB_URL}")
     test_schema_files(); test_schema_mismatch_detected()
-    test_repository(); test_classify(); test_fx_helpers()
+    test_repository(); test_accounts(); test_classify(); test_fx_helpers()
     test_prices_and_retention(); test_importer(); test_config()
     test_projection_closed_forms(); test_projection_statistics()
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

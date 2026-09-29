@@ -1,14 +1,17 @@
 """The portfolio builder: upload a spreadsheet of positions, review, confirm.
 
-    GET  /portfolios/build              the upload form and recent drafts
+    GET  /portfolios/build[?pid=&aid=]  the upload form: into one account (aid), into
+                                        a portfolio's accounts (pid), or a new portfolio
     POST /portfolios/build              analyse the file (portfolio/builder.py),
                                         keep the result as a draft, go to review
     GET  /portfolios/build/{did}        review every proposed holding
-    POST /portfolios/build/{did}        confirm: into a new portfolio, or merged
-                                        into / replacing an existing one
+    POST /portfolios/build/{did}        confirm
     POST /portfolios/build/{did}/delete discard the draft
 
-Nothing reaches a portfolio until the review is confirmed.
+Uploading into one account puts every position there. A file listing several
+accounts (an account column, or one sheet per account) makes one account per
+name, its type guessed from the name ("Roth IRA", "401k") and confirmed on the
+review. Nothing reaches a portfolio until the review is confirmed.
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 """
@@ -19,6 +22,7 @@ import os
 
 from fastapi import FastAPI, Request
 
+from portfolio import account_types as at
 from portfolio import builder
 from portfolio.assets import CASH_SYMBOL, CLASSES
 from portfolio.prices import collect_in_background
@@ -28,6 +32,7 @@ from web.store import session_id
 
 logger = logging.getLogger(__name__)
 MAX_UPLOAD = 10 * 1024 * 1024
+DEFAULT_ACCOUNT = "Brokerage"          # for positions the file does not assign
 CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "CHF", "JPY", "INR", "SGD", "HKD",
               "NZD", "SEK", "NOK", "DKK", "ZAR"]
 
@@ -62,10 +67,24 @@ class BuilderRoutes:
         add("/portfolios/build/{did}/delete", self.discard, methods=["POST"],
             name="builder_discard", **r)
 
+    def _target(self, sid, pid, aid):
+        """(portfolio, account) the upload is aimed at; either may be None."""
+        pf = acct = None
+        try:
+            if pid:
+                pf = self.repo.get(sid, int(pid))
+                if aid:
+                    acct = self.repo.account(sid, int(pid), int(aid))
+        except (NotFound, ValueError):
+            return None, None
+        return pf, acct
+
     async def form(self, request: Request):
         sid = session_id(request)
+        pf, acct = self._target(sid, request.query_params.get("pid"),
+                                request.query_params.get("aid"))
         return render(request, "portfolio/build.html", drafts=self.repo.drafts(sid),
-                      portfolios=self.repo.list(sid))
+                      portfolios=self.repo.list(sid), pf=pf, acct=acct)
 
     async def upload(self, request: Request):
         sid = session_id(request)
@@ -94,7 +113,9 @@ class BuilderRoutes:
             for m in draft["messages"]:
                 flash(request, m, "warning")
             return redirect_to(request, "builder")
-        draft["target"] = form.get("target") or ""
+        pf, acct = self._target(sid, form.get("pid"), form.get("aid"))
+        draft["target_pid"] = pf["id"] if pf else None
+        draft["target_aid"] = acct["id"] if acct else None
         did = self.repo.save_draft(sid, name, draft)
         return redirect_to(request, "builder_review", did=did)
 
@@ -106,9 +127,17 @@ class BuilderRoutes:
             flash(request, "That draft has expired or does not exist.", "warning")
             return redirect_to(request, "builder")
         stem = os.path.splitext(d["filename"])[0].replace("_", " ").strip() or "Imported"
+        pf, acct = self._target(sid, d.get("target_pid"), d.get("target_aid"))
+        names = []
+        for ln in d["lines"]:
+            n = (ln.get("account") or "").strip() or DEFAULT_ACCOUNT
+            if n not in names:
+                names.append(n)
         return render(request, "portfolio/build_review.html", d=d,
                       portfolios=self.repo.list(sid), classes=builder.classes(),
-                      class_info=CLASSES, currencies=CURRENCIES,
+                      class_info=CLASSES, currencies=CURRENCIES, pf=pf, acct=acct,
+                      accounts=[(n, at.guess(n)) for n in names],
+                      investment_types=at.of_kind("investments"),
                       default_name=stem[:60], default_currency=builder.guess_currency(d))
 
     async def confirm(self, request: Request, did: int):
@@ -137,21 +166,40 @@ class BuilderRoutes:
         if not rows:
             flash(request, "Nothing was ticked to import.", "warning")
             return redirect_to(request, "builder_review", did=did)
-        mode = form.get("mode") or "new"
+        pf, acct = self._target(sid, d.get("target_pid"), d.get("target_aid"))
         try:
-            if mode == "new":
-                pid = self.repo.create(sid, form.get("name") or "Imported portfolio",
-                                       form.get("currency") or "USD",
-                                       f"Built from {d['filename']}")
-            else:
-                pid = int(form.get("portfolio") or 0)
-                self.repo.get(sid, pid)
-                if mode == "replace":
-                    for h in self.repo.holdings(sid, pid):
+            if acct:                                   # everything into one account
+                pid, aid = pf["id"], acct["id"]
+                if form.get("replace"):
+                    for h in self.repo.holdings(sid, pid, aid):
                         self.repo.delete_holding(sid, pid, h["id"])
-            for r in rows:
-                self.repo.add_holding(sid, pid, r["symbol"], r["quantity"], r["cost"],
-                                      r["account"], r["asset_class"])
+                for r in rows:
+                    self.repo.add_holding(sid, pid, aid, r["symbol"], r["quantity"],
+                                          r["cost"], r["asset_class"])
+                where = dict(endpoint="account_view", pid=pid, aid=aid)
+            else:                                      # one account per name in the file
+                if (form.get("mode") or "new") == "new":
+                    pid = self.repo.create(sid, form.get("name") or "Imported portfolio",
+                                           form.get("currency") or "USD",
+                                           f"Built from {d['filename']}")
+                else:
+                    pid = int(form.get("portfolio") or 0)
+                    self.repo.get(sid, pid)
+                chosen = {}
+                for i in range(int(form.get("n_accounts") or 0)):
+                    name = (form.get(f"acct-{i}-name") or "").strip()
+                    typ = form.get(f"acct-{i}-type") or ""
+                    if name:
+                        chosen[name.lower()] = typ if typ in at.BY_KEY else None
+                ids = {}
+                for r in rows:
+                    name = r["account"] or DEFAULT_ACCOUNT
+                    if name.lower() not in ids:
+                        ids[name.lower()] = self.repo.find_or_create_account(
+                            sid, pid, name, chosen.get(name.lower()))
+                    self.repo.add_holding(sid, pid, ids[name.lower()], r["symbol"],
+                                          r["quantity"], r["cost"], r["asset_class"])
+                where = dict(endpoint="portfolio_view", pid=pid)
         except (NotFound, ValueError) as exc:
             flash(request, f"Could not import: {exc}", "error")
             return redirect_to(request, "builder_review", did=did)
@@ -159,9 +207,10 @@ class BuilderRoutes:
         if fetch:
             collect_in_background(self.app.state.collector, fetch, "import")
         self.repo.delete_draft(sid, did)
-        return redirect_to(request, "portfolio_view", pid=pid, flash_message=
+        endpoint = where.pop("endpoint")
+        return redirect_to(request, endpoint, flash_message=
                            f"Imported {len(rows)} holding(s). Prices are arriving in the "
-                           "background - reload in a few seconds.")
+                           "background - reload in a few seconds.", **where)
 
     async def discard(self, request: Request, did: int):
         self.repo.delete_draft(session_id(request), did)

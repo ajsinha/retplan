@@ -2,35 +2,93 @@
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
 <p>{{ goto('portfolios', 'Open portfolios') }} {{ goto('portfolio_new', 'Start a new portfolio') }}</p>
-<p>A portfolio is a list of what you actually hold &mdash; symbols and quantities
-&mdash; priced every day from Yahoo Finance. It is separate from the retirement plan:
-the plan works with account balances and asset-class mixes, the portfolio with real
-securities. You can copy a portfolio's value and mix into the plan whenever you
-like.</p>
+<p>A portfolio is a collection of <strong>accounts</strong> &mdash; everything you
+own and owe, in one place. Investment accounts hold real securities, priced every day
+from Yahoo Finance; cash accounts, property and debts are balances you keep up to date.
+Together they give your net worth, and the investable part of it is what the
+projection and stress tests work on.</p>
+<p>You can keep as many portfolios as you like, and they are all equal. Most people
+keep one for the whole household; others are useful for what-ifs &mdash; a model
+portfolio, or a parent's money you look after. A retirement plan can be
+<a href="#plan">linked to a portfolio</a>, so its accounts and debts always come from
+it.</p>
 
 <h2>Creating a portfolio</h2>
 {% call steps() %}
 <li><strong>Name it and choose its currency.</strong> The currency is the one you
     think in. Every value, gain and projection is shown in it; holdings quoted in
-    other currencies are converted daily (see below). You can change it later from
-    the portfolio's <em>&hellip;</em> menu.</li>
-<li><strong>Optionally paste your holdings</strong> into the box on the same page.</li>
-<li><strong>Create.</strong> Prices for new symbols are fetched in the background;
-    reload after a few seconds.</li>
+    other currencies are converted daily (see below), and cash, property and debts are
+    entered in it. You can change it later from the portfolio's <em>&hellip;</em>
+    menu.</li>
+<li><strong>Create and add accounts.</strong> The portfolio page opens, ready for its
+    first account.</li>
 {% endcall %}
-<p>You can keep several portfolios &mdash; one per broker, or one per person. A
-portfolio can be duplicated (to try a different mix without touching the original)
-or deleted; deleting removes its holdings and saved projections, but the shared price
-history stays.</p>
+<p>Have a file from your broker listing several accounts? Start from it instead:
+{{ goto('builder', 'From a multi-account file') }} (see
+<a href="#builder">below</a>). A portfolio can be duplicated (to try a different mix
+without touching the original) or deleted; deleting removes its accounts, holdings and
+saved projections, but the shared price history stays.</p>
 
-<h2>Adding one holding</h2>
+<h2 id="accounts">Accounts</h2>
+<p>Every account has a <strong>name</strong>, an <strong>owner</strong> (You, Partner or
+Joint), where it is held (an institution or lender, optional) and a
+<strong>type</strong>. The type says what kind of account it is and how it is taxed
+&mdash; taxable, tax-deferred, tax-free or not invested &mdash; which is what the
+tax-treatment view and a linked retirement plan need.</p>
+<div class="help-table-wrap"><table class="table table-sm">
+  <thead><tr><th>Kind</th><th>Types</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td>Investments</td><td>Brokerage, 401(k) / 403(b), Roth 401(k), Traditional IRA,
+      Roth IRA, HSA, 529 plan, Pension pot (outside the US: SIPP, RRSP, super),
+      Tax-free savings (ISA, TFSA)</td><td>Positions, priced daily from Yahoo.</td></tr>
+    <tr><td>Cash</td><td>Checking, Savings, CD / fixed term, Money market</td>
+      <td>A balance you update by hand.</td></tr>
+    <tr><td>Property</td><td>Home, Other real estate, Vehicle, Other asset</td>
+      <td>A value you update by hand. Counts in net worth, never in investable assets.</td></tr>
+    <tr><td>Debts</td><td>Mortgage, Home equity loan, Car loan, Student loan, Credit card,
+      Other loan</td><td>What is owed, the rate, the monthly payment and the years left.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Adding an account</h3>
+{% call steps() %}
+<li><strong>Add account</strong> on the portfolio page opens a dialog.</li>
+<li><strong>Pick the type</strong> from the tiles, grouped by kind.</li>
+<li><strong>Answer a few questions</strong>, a step at a time: its name, the owner and
+    where it is held; for cash and property, its value; for a debt, what is owed, the
+    rate, the years left and, optionally, the monthly payment.</li>
+<li>A new <strong>investment</strong> account goes straight to its own page, where you
+    add its holdings.</li>
+{% endcall %}
+<p>To update a cash, property or debt account, open its card: the same dialog asks for
+the new value. Each card shows when it was last updated (<em>updated 12 days
+ago</em>), and a value more than 90 days old is flagged, as a nudge to look at it
+again.</p>
+{% call note('why', 'Debts pay themselves down') %}
+<p>A debt is paid down month by month from the date its balance was set, so it stays
+roughly right between updates. If you give no monthly payment, RetPlan uses the level
+payment worked out from the rate and the years left. Update the balance from a
+statement now and then and the clock starts again.</p>
+{% endcall %}
+
+<h2 id="account-page">An investment account's page</h2>
+<p>Each investment account has its own page, reached from its card. It shows the
+account's holdings and offers three ways to add to them:</p>
+<ul>
+  <li><strong>Add one</strong>: a single holding, with symbol search (below).</li>
+  <li><strong>Paste</strong>: rows copied from a spreadsheet, or a CSV
+      (<a href="#paste">below</a>).</li>
+  <li><strong>Upload positions</strong>: your broker's file, read by the
+      <a href="#builder">spreadsheet builder</a> aimed at this account.</li>
+</ul>
+
+<h3>Adding one holding</h3>
 {{ field_table([
   ("Symbol or name", "The Yahoo Finance symbol.",
-   "Start typing a symbol or a company name and pick from the list; it searches Yahoo as you type. CASH (or $) is a cash balance."),
+   "Start typing a symbol or a company name and pick from the list; it searches Yahoo as you type. CASH (or $) is a cash balance inside the account."),
   ("Quantity", "Shares or units held.", "For CASH, the amount of money, in the portfolio’s currency."),
   ("Cost", "What you paid, optional.",
    "Choose total (everything paid for the position) or per share (multiplied by the quantity for you). Stored as a total, in the portfolio’s currency. Leave blank if unknown."),
-  ("Account", "Where it is held, free text.", "“Roth IRA”, “ISA”, “Brokerage”. Used for the by-account allocation; earlier names are suggested."),
   ("Asset class", "What kind of asset it is.", "Leave on Detect automatically unless you know better; see below."),
 ]) }}
 <p>When you add a symbol RetPlan has never priced, it fetches it immediately, so the
@@ -39,15 +97,32 @@ still added and you are told why it could not be priced &mdash; see
 <a href="{{ url_for('help_prices') }}#troubleshooting">when a symbol will not
 price</a>.</p>
 {% call note('tip', 'Cash') %}
-<p>Enter uninvested cash as the symbol <code>CASH</code> with the amount as the
-quantity. It is always worth exactly its amount, is never fetched, never converted,
-and its cost is set to the amount so it shows no gain.</p>
+<p>Enter uninvested cash inside an investment account as the symbol <code>CASH</code>
+with the amount as the quantity. It is always worth exactly its amount, is never
+fetched, never converted, and its cost is set to the amount so it shows no gain. Money
+in the bank is better as a cash account of its own.</p>
 {% endcall %}
 
-<h2 id="builder">Building a portfolio from a spreadsheet</h2>
-<p>The quickest start: {{ goto('builder', 'Build from a spreadsheet') }} and upload the
-positions export your broker or bank gives you - an Excel workbook (.xlsx, .xlsm) or a
-CSV. Nothing is saved until you have reviewed it.</p>
+<h3>Editing holdings</h3>
+<p>The holdings table is one form. Change quantities, costs or classes in place, move a
+holding to another investment account of the same portfolio, mark rows for deletion
+with the bin, and press <em>Save changes</em>. Cost here is always the total. A symbol
+held in two accounts is two rows, one in each; the projection treats it as one
+asset.</p>
+
+<h2 id="builder">Building from a spreadsheet</h2>
+<p>Upload the positions export your broker or bank gives you - an Excel workbook
+(.xlsx, .xlsm) or a CSV. Nothing is saved until you have reviewed it. The builder works
+in two ways:</p>
+<ul>
+  <li><strong>Into one account.</strong> <em>Upload positions</em> on an investment
+      account's page: every line goes into that account. You can choose to replace what
+      it holds now; otherwise the lines are added to it.</li>
+  <li><strong>A file listing several accounts</strong> - with an account column, or one
+      sheet per account. Start it from the Portfolios page
+      ({{ goto('builder', 'From a multi-account file') }}) or from a portfolio's
+      <em>&hellip;</em> menu (<em>Import a multi-account file</em>).</li>
+</ul>
 {% call steps() %}
   <li><strong>RetPlan finds the table.</strong> The header row is found wherever it
       sits, below any title block, by matching cells against the words brokers use -
@@ -71,39 +146,47 @@ CSV. Nothing is saved until you have reviewed it.</p>
   <li><strong>You review.</strong> Each line shows what the file said, the match and
       how it was made, and a confidence: <em>certain</em>, <em>likely</em>,
       <em>uncertain</em> or <em>not found</em>. Change a symbol (the alternatives it
-      considered are offered), a quantity, cost, account or class; untick anything you
-      do not want. Lines that could not be found start unticked.</li>
-  <li><strong>You choose where it goes</strong>: a new portfolio, added to an existing
-      one, or replacing an existing one's holdings. Prices arrive in the background a
-      few seconds later.</li>
+      considered are offered), a quantity, cost or class - and, for a multi-account
+      file, the account; untick anything you do not want. Lines that could not be
+      found start unticked.</li>
+  <li><strong>For a multi-account file, you confirm the accounts.</strong> Each account
+      name found is listed with a type guessed from its words - <em>Roth</em>,
+      <em>401k</em>, <em>Rollover</em>, <em>IRA</em>, <em>HSA</em>, <em>SIPP</em>,
+      <em>Individual</em> and so on. Check each type: it decides how the account is
+      taxed in a retirement plan. Positions with no account go to one called
+      <em>Brokerage</em>.</li>
+  <li><strong>You choose where it goes</strong>: a new portfolio, or an existing one.
+      Each account in the file becomes an account, or joins an existing account of the
+      same name; the portfolio's other accounts are untouched. Prices arrive in the
+      background a few seconds later.</li>
 {% endcall %}
 {% call note('tip', 'A security Yahoo does not know') %}
-<p>A private fund, a property or an unlisted share will come back <em>not found</em>.
-An administrator can add it as a <strong>manual</strong> security with typed-in prices
+<p>A private fund or an unlisted share will come back <em>not found</em>. An
+administrator can add it as a <strong>manual</strong> security with typed-in prices
 (see {{ goto('help_prices', 'Daily prices') }}); then type its symbol into the line and
-tick it.</p>
+tick it. A home or other real estate is better as a property account.</p>
 {% endcall %}
 <p>Old-style <code>.xls</code> files are not read - open them and save as .xlsx or CSV.
 The uploaded file itself is not kept; an unfinished review is kept for a week.</p>
 
-<h2>Pasting from a spreadsheet</h2>
-<p>Use <em>Paste / import</em> on the holdings card (or the box on the new-portfolio
-page). Paste rows copied from a spreadsheet or a broker's export, or choose a CSV
-file. Commas, semicolons and tabs are all recognised.</p>
+<h2 id="paste">Pasting from a spreadsheet</h2>
+<p>Use <em>Paste</em> on an investment account's page. Paste rows copied from a
+spreadsheet or a broker's export, or choose a CSV file. Commas, semicolons and tabs are
+all recognised. Every row goes into that account.</p>
 <p><strong>Without a header row</strong>, columns are taken in this order:</p>
-<pre class="mono">symbol, quantity[, cost basis][, account][, asset class]
-VTI, 120, 21000, Roth IRA
-BND, 300, 22500, 401(k)
+<pre class="mono">symbol, quantity[, cost basis][, asset class]
+VTI, 120, 21000
+BND, 300, 22500, bond
 CASH, 5000</pre>
 <p><strong>With a header row</strong>, columns are found by name, in any order, and
-extra columns are ignored. The names recognised (case does not matter):</p>
+extra columns (an account column among them) are ignored. The names recognised (case
+does not matter):</p>
 <div class="help-table-wrap"><table class="table table-sm">
   <thead><tr><th>Column</th><th>Header names accepted</th></tr></thead>
   <tbody>
     <tr><td>Symbol</td><td>symbol, ticker, code, security, instrument</td></tr>
     <tr><td>Quantity</td><td>quantity, qty, shares, units, amount held, holding</td></tr>
     <tr><td>Cost basis</td><td>cost basis, cost, book value, book cost, total cost, cost_basis, basis</td></tr>
-    <tr><td>Account</td><td>account, account name, wrapper, portfolio</td></tr>
     <tr><td>Asset class</td><td>asset class, class, asset_class, type</td></tr>
   </tbody>
 </table></div>
@@ -116,21 +199,37 @@ extra columns are ignored. The names recognised (case does not matter):</p>
       else is ignored and the class is detected automatically.</li>
   <li>Rows without a symbol or quantity, or with an unreadable number, are skipped
       and listed by line number; the rest are imported.</li>
-  <li>Tick <em>Replace all current holdings</em> to clear the portfolio first;
+  <li>Tick <em>Replace this account's holdings</em> to clear the account first;
       otherwise the rows are added to what is there.</li>
 </ul>
 {% call note('tip', 'Broker headers usually just work') %}
 <p>A header cell is matched against the names above exactly first, then by containing
 one of them, so "Ticker Symbol", "Qty held" or "Total cost" are recognised. Each column
 is used for one field only. If a column is still misread, rename the header or delete
-the header row and put the columns in the default order.</p>
+the header row and put the columns in the default order. For an Excel file, or an
+export that needs its securities identified, use <em>Upload positions</em>
+instead.</p>
 {% endcall %}
 
-<h2>Editing holdings</h2>
-<p>The holdings table is one form. Change quantities, costs, accounts or classes
-in place, mark rows for deletion with the bin, and press <em>Save changes</em>. A
-symbol held in two accounts can be two rows; the projection treats it as one asset.
-Cost here is always the total.</p>
+<h2 id="page">The portfolio page</h2>
+{{ field_table([
+  ("Net worth", "Everything owned less everything owed.", "Investments, cash and property, less debts."),
+  ("Investable", "Investment accounts plus cash accounts, with today's change.", "What the projection, stress tests, checks and target mix work on."),
+  ("Property", "The value of the property accounts.", "Counts in net worth, never in investable assets."),
+  ("Debts", "What is owed today on the debt accounts.", "Paid down month by month between updates."),
+  ("Past year", "How the investable assets would have moved over the stored year.", "A back-cast of today's holdings; see the value chart below."),
+]) }}
+<p>Below the figures, the accounts are listed as cards grouped by kind, with each
+group's total. Then come <em>A year of value</em> (investable assets), the allocation of
+investable assets &mdash; with tabs <strong>by class</strong>, <strong>by tax
+treatment</strong> (taxable, tax-deferred, tax-free), <strong>by account</strong> and
+<strong>by owner</strong> &mdash; and <em>Net worth over time</em>, drawn from the daily
+records (see {{ goto('networth', 'Net worth') }}). Further down are the portfolio checks,
+the target mix, the retirement plans that use the portfolio, recent projections, and
+<em>Every holding</em>, a collapsible list of every holding across the accounts.</p>
+<p>The <em>&hellip;</em> menu holds rename and currency, <em>Record today's net
+worth</em>, duplicate, <em>Import a multi-account file</em>, the JSON download and
+delete.</p>
 
 <h2>Asset classes</h2>
 <p>Every holding belongs to one class. The class supplies the long-run return and
@@ -198,7 +297,9 @@ converts every price with it:</p>
 
 <h2 id="checks">The portfolio checks</h2>
 <p>A short list of rules, run every time the portfolio page opens. They are prompts
-to look, not advice. Problems sort to the top.</p>
+to look, not advice. Problems sort to the top. They look at the investable assets:
+every investment account's holdings, with cash accounts counted as cash. Property and
+debts are left out.</p>
 {{ field_table([
   ("N holding(s) have no price", "Bad. Those holdings count as zero in every total and projection.",
    "Check the symbol, then press Refresh prices."),
@@ -223,7 +324,8 @@ never priced successfully has no type, so it is judged as a single company.</p>
 {% endcall %}
 
 <h2>Target mix and rebalancing</h2>
-<p>Enter a target percentage for each asset class you want to hold and save. The
+<p>The target mix works on the investable assets, like the checks: cash accounts count
+as cash. Enter a target percentage for each asset class you want to hold and save. The
 targets need not add to exactly 100 &mdash; they are scaled to 100% &mdash; and a
 class left blank has a target of zero. The table then shows, per class:</p>
 <ul>
@@ -243,13 +345,28 @@ for a portfolio still growing by contributions, it is often all the rebalancing 
 need.</p>
 {% endcall %}
 
-<h2>Using a portfolio in your retirement plan</h2>
-<p><em>Use in your retirement plan</em> copies the portfolio into one account of the
-active plan: its <strong>balance</strong> becomes the portfolio's value, its
-<strong>cost basis</strong> the total cost of the holdings that have one, plus today's
-value of those that do not (treating them as having no gain yet), and
-its <strong>allocation</strong> the portfolio's mix, mapped onto the plan's asset
-classes like this:</p>
+<h2 id="plan">Using a portfolio in your retirement plan</h2>
+<p>A retirement plan can be <strong>linked</strong> to a portfolio. The link is live:
+every time the plan is read &mdash; the dashboard, the editor, a simulation &mdash; its
+accounts and loans are brought in line with the portfolio. A portfolio knows what you
+own and owe today; the plan adds what a portfolio cannot know: ages, income, spending,
+what you will save and in which order you will spend.</p>
+{{ field_table([
+  ("Investment, cash and property accounts", "Each becomes a plan account.",
+   "Its name, owner (joint counts as you), today's value, cost basis and - for investments - the mix of what it holds. 529 plans, vehicles and other assets start paused in the plan."),
+  ("Cost basis", "What the plan treats as already taxed.",
+   "Holdings with a known cost count at cost; the rest at today's value, as if they had no gain yet. Tax-deferred accounts have no basis."),
+  ("Tax wrapper", "Follows the account's type.",
+   "401(k) and IRA: taxed on the way out, with required withdrawals from 73 or 75. Roth: tax-free. HSA: tax-free, assuming it pays for health spending. Brokerage: gains taxed. Cash accounts: cash. Property: illiquid, never sold to fund spending."),
+  ("Debts", "Each becomes a loan.", "What is owed today, the rate and the years left."),
+  ("Changes in the portfolio", "Followed by the plan.",
+   "Accounts removed from the portfolio leave the plan; new ones join it."),
+]) }}
+<p>What the plan adds to a linked account is kept: contributions (a fixed amount or a %
+of pay), the employer match, the draw and pay-in order, a glide path, rebalancing, and
+whether it is paused. Accounts added in the plan itself, with no link, stay the plan's
+own.</p>
+<p>A holding's class is mapped onto the plan's asset classes like this:</p>
 <div class="help-table-wrap"><table class="table table-sm">
   <thead><tr><th>Portfolio class</th><th>Plan asset class</th></tr></thead>
   <tbody>
@@ -260,14 +377,38 @@ classes like this:</p>
     <tr><td>Commodities, Crypto</td><td>Alternatives</td></tr>
   </tbody>
 </table></div>
-<p>Plan classes are matched by their labels, and a class the plan does not have is
-folded into equity. Nothing else about the account changes. It is a one-off copy:
-re-run it when the portfolio has moved. The plan has no currency, so the value is
-copied as a number in the portfolio's currency.</p>
+<p>The plan has no currency, so values are taken as numbers in the portfolio's
+currency.</p>
+
+<h3>Linking and unlinking</h3>
+<ul>
+  <li>The portfolio page's <em>Retirement plans using it</em> card lists the plans
+      linked to it, and offers <em>Start a plan from it</em> (the
+      {{ goto('wizard', 'quick start') }}, with its accounts filled in) and
+      <em>Link</em> the active plan to it.</li>
+  <li>In the plan, the Accounts and Debt pages show a banner: linked (with
+      <em>Unlink</em>), or an offer to link to a portfolio.
+      {{ goto('plan_section', 'Plan accounts', 'accounts') }}</li>
+  <li><strong>Linking replaces</strong> the plan's own accounts and loans with the
+      portfolio's.</li>
+  <li><strong>Unlinking</strong> freezes today's figures as the plan's own; from then
+      on they do not move with the portfolio.</li>
+</ul>
+{% call note('tip', 'Linked accounts in the plan editor') %}
+<p>A linked account's card carries a <em>from portfolio</em> chip. Its dialog asks only
+what the plan adds &mdash; what you save into it, the draw and pay-in order,
+rebalancing &mdash; and says that the balance, owner and investments come from the
+portfolio. A linked account cannot be removed from the plan: remove it in the
+portfolio, or pause it in the plan.</p>
+{% endcall %}
 
 <h2>The value chart</h2>
-<p><em>A year of value</em> prices <strong>today's</strong> holdings on each past day
-of the stored year. It answers "what would what I hold now have been worth", not "how
+<p><em>A year of value</em> prices <strong>today's</strong> investable assets -
+the holdings of every investment account, and the cash accounts - on each past day of
+the stored year. It answers "what would what I hold now have been worth", not "how
 did my portfolio perform" &mdash; RetPlan does not record trades, so it cannot know
 what you held last spring.</p>
+<p><em>Net worth over time</em> is different: it is drawn from what was actually
+recorded each day (see {{ goto('networth', 'Net worth') }}), so it starts on the day
+the portfolio was first recorded.</p>
 {% endblock %}

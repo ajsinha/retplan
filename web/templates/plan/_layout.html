@@ -40,6 +40,31 @@
       {% endif %}
       <a class="btn btn-sm btn-primary" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> See the result</a>
     {% endcall %}
+    {% if section in ('accounts', 'debt') %}
+    <div class="link-box {{ 'linked' if link and not link.missing }}">
+      {% if link and not link.missing %}
+        <i class="bi bi-link-45deg" aria-hidden="true"></i>
+        <div class="grow">Linked to <a href="{{ url_for('portfolio_view', pid=link.id) }}">{{ link.name }}</a>: its accounts, balances, mix and debts are brought in every time this plan runs. Here you add what the plan needs on top - what you save into each account, and the order they are spent in.</div>
+        <form method="post" action="{{ url_for('plan_unlink') }}" data-confirm="Unlink? The accounts and debts keep today's figures and stop following the portfolio.">
+          <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit">Unlink</button></form>
+      {% elif link and link.missing %}
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="grow">This plan was linked to a portfolio that no longer exists. Its accounts keep their last figures.</div>
+        <form method="post" action="{{ url_for('plan_unlink') }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Clear the link</button></form>
+      {% elif portfolios %}
+        <i class="bi bi-link-45deg" aria-hidden="true"></i>
+        <div class="grow">Keep this plan current: link it to a portfolio, and its accounts, balances and debts will come from there.</div>
+        <form class="d-flex gap-2" method="post" action="{{ url_for('plan_link') }}" data-confirm="Link this plan? Its own accounts and loans are replaced by the portfolio's.">
+          <label class="visually-hidden" for="lnk-pf">Portfolio</label>
+          <select class="form-select form-select-sm" id="lnk-pf" name="portfolio">{% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary" type="submit">Link</button></form>
+      {% else %}
+        <i class="bi bi-briefcase" aria-hidden="true"></i>
+        <div class="grow">Track your real accounts - investments priced daily, cash, property, debts - in a portfolio, then link this plan to it so the balances are always current.</div>
+        <a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ url_for('portfolio_new') }}">Create a portfolio</a>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if card_view %}
       {% from "plan/_cards.html" import card_list with context %}
       <div class="card"><div class="card-body">
@@ -62,13 +87,7 @@
     </div></div>
     {% endif %}
     {% block extra %}{% endblock %}
-    {% if card_view %}
-    <div class="modal fade" id="rp-dialog" tabindex="-1" aria-labelledby="rp-dialog-title" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content" data-dialog-body></div>
-      </div>
-    </div>
-    {% endif %}
+
   </div>
 </div>
 {% endblock %}

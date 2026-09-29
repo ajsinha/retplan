@@ -57,6 +57,7 @@
     {% for st in steps %}
     <fieldset class="dialog-step" data-step="{{ loop.index0 }}">
       <legend class="visually-hidden">{{ st.title }}</legend>
+      {% if st.note %}<p class="step-note"><i class="bi bi-link-45deg" aria-hidden="true"></i> {{ st.note }}</p>{% endif %}
       {% if st.optional %}
       <p class="step-note"><i class="bi bi-lightbulb" aria-hidden="true"></i>
         Optional. These answers are already sensible for most people{% if not editing %} - you can save now{% endif %}.</p>

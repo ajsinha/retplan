@@ -58,9 +58,9 @@ back it up. It needs the <code>psycopg</code> driver, installed from
 
 <h2>The two schema files, and no migrations</h2>
 <p>The tables are described twice, by hand: <code>schema/sqlite.sql</code> and
-<code>schema/postgres.sql</code>, one per database, defining the same ten tables
+<code>schema/postgres.sql</code>, one per database, defining the same eleven tables
 (<code>plans</code>, <code>portfolios</code>, <code>securities</code>,
-<code>holdings</code>, <code>prices</code>, <code>fetch_runs</code>,
+<code>accounts</code>, <code>holdings</code>, <code>prices</code>, <code>fetch_runs</code>,
 <code>projections</code>, <code>import_drafts</code>, <code>snapshots</code>, <code>app_settings</code>). On
 start-up RetPlan checks the database against the file for its dialect:</p>
 <ul>
@@ -79,6 +79,13 @@ start-up RetPlan checks the database against the file for its dialect:</p>
 <p>There is no migration tool. If a future version needs a schema change, create the
 missing tables from the schema file by hand, or point RetPlan at a fresh database and
 copy the data into it.</p>
+{% call note('warn', 'A database from before portfolio accounts') %}
+<p>Since portfolios became collections of accounts, <code>holdings</code> belong to an
+<code>accounts</code> row and no longer have a free-text <code>account</code> column.
+A database made before that change must be rebuilt: start a fresh one, or add the
+<code>accounts</code> table from the schema file and recreate <code>holdings</code> by
+hand.</p>
+{% endcall %}
 
 <h2>Copying between databases</h2>
 <pre class="mono">python tools/copy_db.py --from sqlite:///data/retplan.db \
@@ -90,7 +97,7 @@ copy the data into it.</p>
       <strong>no rows</strong> in any RetPlan table: the tool refuses rather than
       merging into live data.</li>
   <li>Every table is copied, parents before children, with the same ids, so the links
-      between plans, portfolios, holdings and projections survive. On PostgreSQL the id
+      between plans, portfolios, accounts, holdings and projections survive. On PostgreSQL the id
       sequences are moved past the copied ids afterwards.</li>
   <li>Stop RetPlan first, so nothing changes mid-copy.</li>
 </ul>
@@ -99,7 +106,8 @@ copy the data into it.</p>
 <h2>Where your data lives</h2>
 {{ field_table([
   ("plans", "Every scenario of every workspace, one row each, the whole plan as JSON.", "Exactly what Download JSON gives you."),
-  ("portfolios, holdings", "Portfolios, their settings (targets, last projection settings) and holdings.", "Scoped to a workspace."),
+  ("portfolios, accounts, holdings", "Portfolios and their settings (targets, last projection settings); their accounts - investments, cash, property, debts - with type, owner and, for cash, property and debts, the value and when it was set; and each investment account's holdings.", "Scoped to a workspace. Removing an account removes its holdings."),
+  ("snapshots", "Each portfolio's net worth, one row a day: assets, debts and a breakdown by kind.", "Kept for good, even after the daily prices behind them are pruned."),
   ("projections", "Saved projection runs, the last ten per portfolio.", "Deleted with their portfolio."),
   ("securities, prices", "Every tracked symbol, its latest quote and long-run statistics, and up to a year of daily closes.",
    "Shared by all workspaces on the server: a symbol is priced once however many people hold it."),

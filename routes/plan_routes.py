@@ -16,7 +16,8 @@ from fastapi import FastAPI, Request
 
 from retplan.plan import (CATEGORIES, CareRisk, Conversion, ExpenseRow, IncomeRow, Ledger,
                           Loan, Person, Wrapper)
-from web import plan_items, wizard
+from portfolio.repository import NotFound
+from web import plan_items, plan_link, wizard
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.help_catalog import CONTEXT_HELP
 from web.store import session_id
@@ -262,6 +263,11 @@ class PlanRoutes:
 
     def _register_routes(self) -> None:
         add = self.app.add_api_route
+        # before /plan/{section}, which would otherwise take these
+        add("/plan/link", self.link, methods=["POST"], name="plan_link",
+            include_in_schema=False)
+        add("/plan/unlink", self.unlink, methods=["POST"], name="plan_unlink",
+            include_in_schema=False)
         add("/plan", self.section, methods=["GET"], name="plan",
             include_in_schema=False)
         add("/plan/{section}", self.section, methods=["GET"], name="plan_section",
@@ -285,9 +291,19 @@ class PlanRoutes:
             section = "household"
         card_view = (section in CARD_SECTIONS
                      and request.query_params.get("view") != "table")
+        repo = request.app.state.portfolios
+        sid = session_id(request)
+        link = None
+        if plan.portfolio_id:
+            try:
+                link = repo.get(sid, plan.portfolio_id)
+            except NotFound:
+                link = dict(id=plan.portfolio_id, name="a deleted portfolio", missing=True)
         ctx = dict(plan=plan, section=section, sections=SECTIONS,
                    context_help=CONTEXT_HELP, completeness=completeness(plan),
                    card_view=card_view, card_sections=CARD_SECTIONS,
+                   link=link, portfolios=repo.list(sid) if section in ("accounts", "debt")
+                   else [],
                    item_cards=plan_items.cards(section, plan) if card_view else [],
                    kinds=plan_items.KINDS[section](plan) if section in plan_items.KINDS else [],
                    noun=plan_items.NOUNS.get(section, "item"),
@@ -358,6 +374,31 @@ class PlanRoutes:
         return redirect_to(request, "plan_section",
                            flash_message=f"{section.title()} saved.",
                            section=section, **extra)
+
+    # -- the link to a portfolio -----------------------------------------------
+    async def link(self, request: Request):
+        sid = session_id(request)
+        form = await request.form()
+        plan = self.store.get(sid)
+        try:
+            pid = int(form.get("portfolio") or 0)
+            res = plan_link.link(plan, request.app.state.portfolios, sid, pid)
+        except (NotFound, ValueError):
+            flash(request, "Choose one of your portfolios.", "error")
+            return redirect_to(request, "plan_section", section="accounts")
+        self.store.put(sid, plan)
+        return redirect_to(request, "plan_section", section="accounts", flash_message=
+                           f"{plan.label} now takes its accounts and debts from "
+                           f"'{res['name']}'. Add what you save into each account here.")
+
+    async def unlink(self, request: Request):
+        sid = session_id(request)
+        plan = self.store.get(sid)                  # synced to today's figures first
+        plan_link.unlink(plan)
+        self.store.put(sid, plan)
+        return redirect_to(request, "plan_section", section="accounts", flash_message=
+                           "Unlinked: the accounts and debts keep today's figures and are now "
+                           "the plan's own.")
 
     # -- one item at a time: the dialog -------------------------------------
     async def dialog(self, request: Request, section: str):
@@ -483,6 +524,10 @@ class PlanRoutes:
             flash(request, "That item no longer exists.", "warning")
             return redirect_to(request, "plan_section", section=section)
         item = rows[i]
+        if action == "delete" and getattr(item, "account_id", 0):
+            flash(request, f"'{item.label}' comes from the linked portfolio. Remove it there, "
+                           "or pause it to leave it out of this plan.", "warning")
+            return redirect_to(request, "plan_section", section=section)
         if action == "delete":
             if section == "accounts":
                 problem = self._account_in_use(plan, i)
@@ -496,6 +541,8 @@ class PlanRoutes:
         elif action == "copy":
             copy = plan_items.FACTORY[section](**asdict(item))
             copy.label = f"{item.label} (copy)"
+            if hasattr(copy, "account_id"):
+                copy.account_id = 0               # a copy is the plan's own
             rows.insert(i + 1, copy)
             msg = f"Copied “{item.label}”."
         elif action == "toggle":

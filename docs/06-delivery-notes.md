@@ -9,9 +9,9 @@ does not do* and on the about page.
 | Item | Detail |
 |---|---|
 | `retplan/` | The planning engine: plan model, random numbers, markets, tax, projection, metrics, solvers, sample household |
-| `portfolio/` | Database layer, repository, Yahoo client, price collector and scheduler, FX, asset classes, checks and rebalancing, paste importer, portfolio builder, projection, stress replays |
+| `portfolio/` | Database layer, repository, account types, Yahoo client, price collector and scheduler, FX, asset classes, checks and rebalancing, paste importer, portfolio builder, net worth records, projection, stress replays |
 | `web/`, `routes/` | The FastAPI application: 13 route classes, Jinja templates, server-rendered SVG charts, the MAYA design in four themes, 28 help topics |
-| `schema/` | `sqlite.sql` and `postgres.sql`, nine tables each |
+| `schema/` | `sqlite.sql` and `postgres.sql`, eleven tables each |
 | `config/retplan.toml` | All settings, each overridable by a `RETPLAN_*` variable |
 | `tools/` | `fetch_prices.py` (one collection run, for cron), `copy_db.py` (move data between databases) |
 | `tests/` | `run_tests.py` (engine) and `test_portfolio.py` (database, portfolios, builder, administration, web) |
@@ -33,15 +33,54 @@ make test                               # both test suites, offline
   market model really produces; run the solvers (maximum spend, earliest
   retirement, extra saving), the spending sweep and the tornado; read cash-flow,
   balance-sheet and tax reports and the audit; export and import plans as JSON.
-- **Portfolios**: enter holdings by ticker search, paste, or by uploading a broker's
-  positions file to the portfolio builder; price them daily from Yahoo in any base
-  currency; see allocation, a year of value, and the checks; set a target mix and
-  get rebalancing trades; copy a portfolio into a plan account.
+- **Portfolios**: keep every account you own and owe - investments, cash, property
+  and debts - in one or more portfolios; fill investment accounts by ticker search,
+  paste, or by uploading a broker's positions file to the portfolio builder (one
+  account, or a file listing several); price them daily from Yahoo in any base
+  currency; see net worth, investable assets, allocation by class, tax treatment,
+  account and owner, a year of value, net worth over time, and the checks; set a
+  target mix and get rebalancing trades; link a plan to a portfolio so its accounts
+  and loans follow it.
 - **Project and stress**: Monte Carlo a portfolio over 1–60 years with three return
   models, cash flows, a fee and a goal; replay five historical crises on the
   current mix or open every trial with one; save, reopen and download runs.
 - **Securities**: look up any symbol; as administrator, maintain the shared list,
   including manually priced holdings.
+
+## Changes
+
+### 2026-09-29 - Portfolios as collections of accounts
+
+- A portfolio is now a collection of **accounts**, each of a type
+  (`portfolio/account_types.py`) in one of four kinds: investments (brokerage,
+  401(k), Roth 401(k), IRA, Roth IRA, HSA, 529, pension pot, tax-free savings),
+  cash, property and debts. Every account has a name, an owner (you, partner or
+  joint), an optional institution, and a type that sets its tax treatment. Accounts
+  are added and updated through a step-by-step dialog; hand-kept values show their
+  age and are flagged after 90 days; debts pay themselves down month by month.
+- Each investment account has its own page with its holdings (add one, paste, or
+  upload positions into it; move a holding to another account). The free-text
+  holding account is gone. The builder uploads into one account, or reads a
+  multi-account file and confirms a guessed type for each account found.
+- The portfolio page shows net worth, investable assets (investments plus cash
+  accounts), property, debts and the past year; accounts grouped by kind;
+  allocation by class, tax treatment, account and owner; net worth over time.
+  Projections, stress tests, checks and the target mix work on investable assets.
+- Net worth is recorded for every portfolio after each price collection, or on
+  demand from the portfolio's menu, with a breakdown by kind. Manual snapshots and
+  "to plan" from a snapshot are removed.
+- A plan can be **linked** to a portfolio (`plan.portfolio_id`,
+  `web/plan_link.py`): every time the plan is read, its accounts and loans are
+  brought in line with the portfolio's, keeping what the plan adds. "Use in your
+  retirement plan" is replaced by linking, unlinking and "Start a plan from it"; the
+  quick start can take its accounts from a portfolio and builds a linked plan.
+- Database: new `accounts` table; `holdings.account_id` (NOT NULL, cascading)
+  replaces the free-text `account` column; `snapshots` rows are written only as kind
+  `portfolio`, with a JSON breakdown. Plan JSON gains `portfolio_id`; ledgers and
+  loans gain `account_id`. `/api/portfolios/{id}` adds `net_worth`, `property`,
+  `debts` and `accounts`.
+- **No migration.** A database from before this change must be rebuilt, or have the
+  `accounts` table added and `holdings` recreated by hand.
 
 ## Verification performed
 
@@ -124,6 +163,9 @@ Timings on the development machine (sample household, 61 years, 6 accounts):
 - **Crisis replays are approximate**: rounded index paths, not a precise record of
   any fund.
 - **No tax inside portfolio projections**: flows and growth are pre-tax.
+- **Cash, property and debts are typed in.** They are only as current as their last
+  update (debts pay down on schedule between updates); property and debts count in
+  net worth and are never projected.
 
 ### Operations
 

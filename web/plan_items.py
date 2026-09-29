@@ -137,16 +137,27 @@ def _account_kinds(plan):
                "never taxed again" if w.withdrawal_taxable_fraction <= 0.01
                and not w.realises_capital_gains else
                "gains taxed when you sell" if w.realises_capital_gains else "taxed as it grows")
-        out.append(dict(key=f"w{i}", label=w.label, icon=_wrapper_icon(i),
+        out.append(dict(key=f"w{i}", label=w.label, icon=_wrapper_icon(w),
                         blurb=how.capitalize() + ("." if w.liquid else "; not drawn on."),
                         preset=dict(label=w.label, wrapper=i, withdraw_priority=len(plan.ledgers) + 1,
                                     contribute_priority=len(plan.ledgers) + 1)))
     return out
 
 
-def _wrapper_icon(i: int) -> str:
-    icons = ["wallet2", "piggy-bank", "shield-check", "cash-stack", "building", "bank"]
-    return icons[i % len(icons)]
+def _wrapper_icon(w) -> str:
+    """An icon for a wrapper from how it is taxed, not where it sits in the list."""
+    label = w.label.lower()
+    if not w.liquid:
+        return "house"
+    if "cash" in label:
+        return "cash-stack"
+    if "hsa" in label or "health" in label:
+        return "heart"
+    if w.realises_capital_gains:
+        return "graph-up-arrow"
+    if w.withdrawal_taxable_fraction >= 0.99:
+        return "building"
+    return "shield-check"
 
 
 KINDS = {"income": _income_kinds, "expenses": _expense_kinds, "debt": _debt_kinds,
@@ -230,6 +241,32 @@ def steps(section: str, plan, row: dict) -> list[dict]:
                    "Spending on travel and fun tends to fall in your late seventies and eighties.",
                    "yesno"),
                 _q("probability", "How likely is it?", "100% if certain.", "pct")]),
+        ]
+    linked_note = ("Its balance, owner and investments come from the linked portfolio - "
+                   "change them there. Here: what the plan adds.")
+    if section == "debt" and row.get("account_id"):
+        return [dict(title="Paying it off", note=linked_note.replace(
+            "Its balance, owner and investments", "What is owed, the rate and the term"),
+            fields=[_q("extra_payment", "Do you pay extra each year?",
+                       "Overpayments shorten it.", "money")])]
+    if section == "accounts" and row.get("account_id"):
+        return [
+            dict(title="Saving into it", note=linked_note, fields=[
+                _q("contribution", "Do you add a fixed amount a year?",
+                   "In today's money, until you retire. 0 if not.", "money"),
+                _q("contribution_pct_income", "Or a share of your pay?",
+                   "E.g. 8% into a 401(k).", "pct"),
+                _q("employer_match_pct", "Does an employer match what you pay in?",
+                   "100% if they add one for one; 50% if half; 0 if there is no match.", "pct"),
+                _q("employer_match_cap_pct", "…on up to what share of your pay?",
+                   "E.g. 5%: they match what you pay in, up to 5% of your pay.", "pct")]),
+            dict(title="More options", optional=True, fields=[
+                _q("withdraw_priority", "In what order is it drawn on?",
+                   "1 is spent first. The draw-order tool can work this out.", "int"),
+                _q("contribute_priority", "In what order is it paid into?", "1 first.", "int"),
+                _q("rebalance", "Rebalanced each year?", "", "select",
+                   options=[("annual", "Yes, back to its mix each year"),
+                            ("none", "No, let it drift")])]),
         ]
     if section == "debt":
         return [
@@ -371,7 +408,7 @@ def cards(section: str, plan) -> list[dict]:
                 chips.append(f"+{_money(r.extra_payment)} a year extra")
         elif section == "accounts":
             w = plan.wrappers[r.wrapper] if r.wrapper < len(plan.wrappers) else None
-            icon = _wrapper_icon(r.wrapper)
+            icon = _wrapper_icon(w) if w else "wallet2"
             amount = _money(r.opening)
             parts = [w.label if w else ""]
             if len(people) > 1:
@@ -403,8 +440,11 @@ def cards(section: str, plan) -> list[dict]:
             amount = (f"{_money(r.amount)} a year" if r.mode == "amount"
                       else f"fill income to {_money(r.amount)}")
             detail = f"{src} → {dst} · age {r.start_age:.0f} to {r.end_age:.0f}"
+        if getattr(r, "account_id", 0):
+            chips.insert(0, "from portfolio")
         out.append(dict(i=i, title=r.label, amount=amount, detail=detail, chips=chips,
-                        icon=icon, enabled=getattr(r, "enabled", True)))
+                        icon=icon, enabled=getattr(r, "enabled", True),
+                        linked=bool(getattr(r, "account_id", 0))))
     return out
 
 

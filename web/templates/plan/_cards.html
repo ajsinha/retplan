@@ -49,10 +49,12 @@
           <button class="dropdown-item" type="submit">
             {% if c.enabled %}<i class="bi bi-pause-circle" aria-hidden="true"></i> Pause - leave out for now
             {% else %}<i class="bi bi-play-circle" aria-hidden="true"></i> Include again{% endif %}</button></form></li>
+        {% if not c.linked %}
         <li><hr class="dropdown-divider"></li>
         <li><form method="post" action="{{ url_for('plan_item_action', section=section, i=c.i, action='delete') }}"
                   data-confirm="Remove “{{ c.title }}” from the plan?">
           <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Remove</button></form></li>
+        {% endif %}
       </ul>
     </div>
   </li>

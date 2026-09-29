@@ -107,7 +107,7 @@ class NoAuthRoutes:
         st = request.app.state
         db = st.db
         counts = {}
-        for table in ("plans", "portfolios", "holdings", "securities", "prices",
+        for table in ("plans", "portfolios", "accounts", "holdings", "securities", "prices",
                       "fetch_runs", "projections"):
             counts[table] = db.scalar(f"SELECT COUNT(*) FROM {table}", default=0)
         import sqlalchemy

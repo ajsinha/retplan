@@ -22,7 +22,10 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 - **DR-5.** `owner` is the workspace id from the session cookie. Every query on an
   owned table filters by it.
 - **DR-6.** The two schema files MUST declare identical tables, columns and indexes
-  (checked by `tests/test_portfolio.py`). There are no migrations.
+  (checked by `tests/test_portfolio.py`). There are no migrations. A database made
+  before portfolio accounts (holdings with a free-text `account` column and no
+  `accounts` table) must be rebuilt, or have the `accounts` table added and
+  `holdings` recreated by hand.
 
 ### 1.2 Tables
 
@@ -31,35 +34,45 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 | `plans` | `id` | One scenario: `owner`, `name`, `data` (the plan JSON, §2), `is_active` (0/1; one active per owner), `created_at`, `updated_at` |
 | `portfolios` | `id` | `owner`, `name`, `currency` (base, default USD), `description`, `settings` (JSON: `targets` by asset class, and the last `projection` settings) |
 | `securities` | `symbol` | Shared by every workspace. Descriptive fields (`name`, `quote_type`, `currency`, `exchange`, `asset_class`), latest quote (`last_price`, `prev_close`, `last_price_date`, `fetched_at`, `fetch_error`), long-run statistics (`lt_return`, `lt_vol`, `lt_years`, `lt_updated`), `dividend_yield`, `source` (`yahoo` or `manual`), `notes` |
-| `holdings` | `id` | A position: `portfolio_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `account`, `asset_class` (blank = use the security's), `notes`, `added_at` |
+| `accounts` | `id` | One account of a portfolio: `portfolio_id`, `name`, `type` (a key of `portfolio/account_types.TYPES`, which gives its kind - investments, cash, property, debt - and tax treatment), `owner_person` (0 you, 1 partner, −1 joint), `institution`, `value` (cash, property and debts), `as_of` (the date the value was set), `rate`, `payment` (monthly) and `term_months` (months left on `as_of`) for debts, `notes`, `position` (display order), `created_at`, `updated_at` |
+| `holdings` | `id` | A position in an investment account: `portfolio_id`, `account_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `asset_class` (blank = use the security's), `notes`, `added_at` |
 | `prices` | (`symbol`, `date`) | Daily `close`, `adj_close`, `volume`; `WITHOUT ROWID` on SQLite |
 | `fetch_runs` | `id` | One collection run: `reason` (schedule, startup, manual, new-symbol, admin), start/finish, counts of symbols, ok, failed, rows added and pruned, `message` |
 | `projections` | `id` | A saved portfolio projection: `portfolio_id`, `created_at`, `settings`, `summary`, `result` (all JSON) |
 | `import_drafts` | `id` | The portfolio builder's analysis of an upload: `owner`, `filename`, `created_at`, `data` (JSON) |
-| `snapshots` | `id` | Net worth over time: `owner`, `taken_on` (date), `kind` (`manual` or `portfolio`), `ref` (portfolio id), `assets`, `liabilities`, `data` (JSON items), `note`, `created_at`; one per owner, day, kind and ref |
+| `snapshots` | `id` | Net worth over time: `owner`, `taken_on` (date), `kind` (`portfolio`; `manual` is no longer written), `ref` (portfolio id), `assets`, `liabilities`, `data` (JSON breakdown by kind: investments, cash, property, debt), `note`, `created_at`; one per owner, day, kind and ref, recorded after every price run or on request, kept for good |
 | `app_settings` | `key` | Application-wide JSON values, e.g. the administrator's password hash |
 
-Indexes: `plans(owner)`, `portfolios(owner)`, `holdings(portfolio_id)`,
-`holdings(symbol)`, `prices(date)`, `projections(portfolio_id)`,
+Indexes: `plans(owner)`, `portfolios(owner)`, `accounts(portfolio_id)`,
+`holdings(portfolio_id)`, `holdings(account_id)`, `holdings(symbol)`, `prices(date)`, `projections(portfolio_id)`,
 `import_drafts(owner)`, unique `snapshots(owner, taken_on, kind, ref)`.
 
 ### 1.3 Relationships
 
 ```
 owner ─┬─< plans
-       ├─< portfolios ─┬─< holdings >── securities ─< prices
+       ├─< portfolios ─┬─< accounts ─< holdings >── securities ─< prices
        │               └─< projections
        ├─< import_drafts
        └─< snapshots
 fetch_runs, app_settings: global
 ```
 
-- `holdings.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**.
+- `accounts.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**.
+- `holdings.account_id` → `accounts.id` **ON DELETE CASCADE** (NOT NULL; only
+  investment accounts hold positions).
+- `holdings.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**, kept alongside
+  `account_id`.
 - `holdings.symbol` → `securities.symbol` (no cascade: a held security cannot be
   deleted).
 - `prices.symbol` → `securities.symbol` **ON DELETE CASCADE**.
 - `projections.portfolio_id` → `portfolios.id` **ON DELETE CASCADE**.
-- The cash balance is the reserved symbol `CASH`, priced at 1 in the base currency.
+- Cash inside an investment account is the reserved symbol `CASH`, priced at 1 in
+  the base currency. A cash account has no holdings: its `value` counts as cash in
+  the investable assets.
+- A debt's `value` is what was owed on `as_of`; it is paid down month by month from
+  then, with `payment`, or the level payment from `rate` and `term_months` when there
+  is none.
 - An FX rate is an ordinary security `<FROM><TO>=X` with its own prices.
 
 ### 1.4 Retention rules
@@ -90,6 +103,7 @@ years; money is in the plan's single, unnamed currency.
 | Field | Meaning |
 |---|---|
 | `label`, `horizon` | Name; number of annual periods after period 0 (up to 80) |
+| `portfolio_id` | The portfolio the plan is linked to (0 = none): its accounts and debts are brought in line with it every time the plan is read (`web/plan_link.py`) |
 | `persons` | list of `Person` |
 | `income`, `expenses`, `loans` | lists of `IncomeRow`, `ExpenseRow`, `Loan` |
 | `wrappers`, `ledgers` | lists of `Wrapper` and `Ledger` (accounts) |
@@ -109,7 +123,7 @@ years; money is in the plan's single, unnamed currency.
 | `Person` | `label`, `age` (at plan start), `retire_age`, `death_age` (planning age), `included` |
 | `IncomeRow` | `label`, `owner` (person index), `category`, `amount`, `basis` (real / nominal), `growth`, `grow_from_start`, `start_age`, `end_age` (owner's ages), `taxable_fraction`, `survivor_fraction` (share continuing after the owner's planning age), `probability` (expected-value scaling), `enabled` |
 | `ExpenseRow` | `label`, `amount`, `basis`, `essential`, `infl_delta` (growth above CPI), `smile`, `start_age`, `end_age`, `owner` (−1 = household, ages of person 0), `recur_years` (0 = yearly; *n* = every *n* years from the first live year), `probability`, `enabled` |
-| `Loan` | `label`, `balance`, `rate` (nominal), `term_years`, `kind` (amortising / interest_only / bullet), `extra_payment` (nominal, per year), `start_year`, `enabled` |
+| `Loan` | `label`, `balance`, `rate` (nominal), `term_years`, `kind` (amortising / interest_only / bullet), `extra_payment` (nominal, per year), `start_year`, `enabled`, `account_id` (the portfolio debt it mirrors; 0 = the plan's own) |
 
 Income categories: `employment`, `self_employment` (both "earnings": they are the
 pay base for %-of-earnings contributions and match), `rental`, `db_pension`,
@@ -120,7 +134,7 @@ pay base for %-of-earnings contributions and match), `rental`, `db_pension`,
 | Class | Fields used by the engine |
 |---|---|
 | `Wrapper` | `withdrawal_taxable_fraction`, `realises_capital_gains` (withdrawals taxed on their gain share), `cap_type` (none / absolute / pct_income) and `cap_value`, `catch_up_age`, `catch_up_amount`, `early_age`, `early_penalty`, `mrd_age`, `mrd_divisors` ([age, divisor] pairs), `lock_age`, `liquid` |
-| `Ledger` | `wrapper` (index), `owner`, `opening`, `basis`, `weights` (one per asset class), `glide_to`, `glide_start_age`, `glide_end_age`, `withdraw_priority`, `contribute_priority`, `contribution` (real, per year), `contribution_pct_income`, `employer_match_pct`, `employer_match_cap_pct`, `rebalance` (annual / none), `enabled` |
+| `Ledger` | `wrapper` (index), `owner`, `opening`, `basis`, `weights` (one per asset class), `glide_to`, `glide_start_age`, `glide_end_age`, `withdraw_priority`, `contribute_priority`, `contribution` (real, per year), `contribution_pct_income`, `employer_match_pct`, `employer_match_cap_pct`, `rebalance` (annual / none), `enabled`, `account_id` (the portfolio account it mirrors; 0 = the plan's own) |
 | `Conversion` | `label`, `from_ledger`, `to_ledger`, `mode` (amount / fill_to), `amount` (real a year, or the taxable-income target), `start_age`, `end_age` (person 1's age; end exclusive), `enabled` |
 
 `Wrapper` also carries `contribution_deductible`, `growth_taxed_annually`,

@@ -13,7 +13,7 @@ import logging
 
 from fastapi import FastAPI, Request
 
-from web import wizard
+from web import plan_link, wizard
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.store import session_id
 
@@ -48,15 +48,24 @@ class WizardRoutes:
         steps = [s[0] for s in wizard.STEPS]
         if step not in steps:
             step = "you"
+        sid = session_id(request)
+        repo = request.app.state.portfolios
+        pick = request.query_params.get("portfolio")
+        if pick and pick.isdigit():                 # "start a plan from this portfolio"
+            draft = dict(request.session.get(DRAFT) or {})
+            draft["link_portfolio"] = pick
+            request.session[DRAFT] = draft
         a = self._draft(request)
         idx = steps.index(step)
-        portfolios = request.app.state.portfolios.list(session_id(request))
+        linked = wizard.linked_accounts(repo, sid, a["link_portfolio"]) \
+            if a.get("link_portfolio") else (None, [])
         return render(request, "wizard.html", step=step, idx=idx, steps=wizard.STEPS,
                       a=a, risk=wizard.RISK, tax=wizard.TAX,
-                      account_types=wizard.ACCOUNT_TYPES,
-                      summary=wizard.summary(a),
+                      account_types=wizard.ACCOUNT_TYPES, linked_pf=linked[0],
+                      linked_accounts=linked[1], pay_types=wizard.PAY_TYPES,
+                      summary=wizard.summary(a, linked),
                       done=set(request.session.get("wizard_done") or []),
-                      portfolios=portfolios,
+                      portfolios=repo.list(sid),
                       prev=steps[idx - 1] if idx else None)
 
     async def save(self, request: Request, step: str):
@@ -72,6 +81,18 @@ class WizardRoutes:
         if step == "you":
             draft["partner"] = "1" if form.get("partner") else ""
         if step == "savings":
+            for k in form.keys():                   # what goes into each linked account
+                if k.startswith("lk_"):
+                    draft[k] = str(form.get(k))
+            if form.get("unlink"):
+                draft["link_portfolio"] = ""
+                request.session[DRAFT] = draft
+                return redirect_to(request, "wizard", step="savings")
+            if form.get("go") == "link":
+                draft["link_portfolio"] = form.get("pick_portfolio") or ""
+                request.session[DRAFT] = draft
+                return redirect_to(request, "wizard", step="savings")
+        if step == "savings" and not draft.get("link_portfolio"):
             # An account type counts when ticked. Without script every type's inputs
             # are posted, so a type with figures typed in counts too; with script an
             # unticked type's inputs are disabled, so they are absent and cleared.
@@ -83,17 +104,6 @@ class WizardRoutes:
                 if not has:
                     for k in keys:
                         draft[k] = "0"
-        # "use a portfolio's value" fills the taxable balance from the database
-        pf = form.get("use_portfolio")
-        if step == "savings" and pf:
-            try:
-                val = request.app.state.portfolios.valuation(session_id(request), int(pf))
-                draft["brokerage"] = f"{val.total:.0f}"
-                draft["has_brokerage"] = "1"
-                flash(request, f"Brokerage set to your portfolio's value, "
-                               f"{val.total:,.0f}.", "success")
-            except Exception as exc:  # noqa: BLE001
-                flash_error_and_log(request, "Could not read that portfolio", exc)
         request.session[DRAFT] = draft
         errs = wizard.validate(step, self._draft(request))
         if errs:
@@ -125,6 +135,9 @@ class WizardRoutes:
                 return redirect_to(request, "wizard", step=step)
         try:
             plan = wizard.build_plan(a)
+            if a.get("link_portfolio"):
+                plan_link.link(plan, request.app.state.portfolios, sid, int(a["link_portfolio"]))
+                wizard.apply_linked_saving(plan, a)
             if form.get("mode") == "replace":
                 self.store.put(sid, plan)
             else:

@@ -70,7 +70,18 @@ The taxable fraction of each withdrawal is then the unrealised gain share of the
 account &mdash; <code>1 &minus; basis/value</code> &mdash; multiplied by the capital
 gains inclusion rate from the tax page. Set the cost basis on the accounts page; if
 you leave it equal to the balance, early withdrawals are treated as return of
-capital and taxed lightly, which is usually the right starting assumption.</p>
+capital and taxed lightly, which is usually the right starting assumption. In a plan
+linked to a portfolio, the basis comes from the account's holdings instead: those with
+a known cost at cost, the rest at today's value.</p>
+
+{% call note('tip', 'Accounts from a portfolio') %}
+<p>When a plan is linked to a portfolio, each account's wrapper follows its type in the
+portfolio: a 401(k) or traditional IRA is taxed on the way out, with required
+withdrawals from 73 or 75; a Roth is tax-free; an HSA is tax-free, assuming it pays for
+health spending; a brokerage account taxes gains; cash accounts are cash; property is
+illiquid. A wrapper the plan lacks is added to it.
+<a href="{{ url_for('help_portfolios') }}#plan">Using a portfolio in your plan</a>.</p>
+{% endcall %}
 
 {% call note('why', 'Why the draw order matters so much here') %}
 <p>Because wrappers tax withdrawals differently, the order you empty them changes

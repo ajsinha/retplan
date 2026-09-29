@@ -70,6 +70,7 @@ class Loan:
     extra_payment: float = 0.0   # nominal, per year
     start_year: int = 0
     enabled: bool = True
+    account_id: int = 0          # the portfolio account it mirrors (0 = the plan's own)
 
 
 @dataclass
@@ -114,6 +115,7 @@ class Ledger:
     employer_match_cap_pct: float = 0.0
     rebalance: str = "annual"    # annual | none
     enabled: bool = True
+    account_id: int = 0          # the portfolio account it mirrors (0 = the plan's own)
 
 
 @dataclass
@@ -198,6 +200,7 @@ class Plan:
     adviser_fee: float = 0.0
     timing: str = "end"          # begin | mid | end
     seed: int = 20260916
+    portfolio_id: int = 0        # accounts and debts come from this portfolio (0 = none)
 
 
 # --- (de)serialisation ----------------------------------------------------
@@ -230,7 +233,8 @@ def plan_from_dict(d: dict) -> Plan:
     for key, cls in _TYPES.items():
         if key in d:
             setattr(p, key, [_build(cls, x) for x in d[key]])
-    for key in ("label", "horizon", "platform_fee", "adviser_fee", "timing", "seed"):
+    for key in ("label", "horizon", "platform_fee", "adviser_fee", "timing", "seed",
+                "portfolio_id"):
         if key in d:
             setattr(p, key, d[key])
     if "policy" in d:

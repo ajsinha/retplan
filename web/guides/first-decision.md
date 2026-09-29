@@ -52,4 +52,4 @@ a single page to print or save as a PDF.
 
 - **Plan → When to claim a pension** if a public pension is part of the picture.
 - **Plan → Conversion explorer** if you hold both taxed-on-the-way-out and tax-free accounts.
-- **Portfolio → Build from a spreadsheet** to replace rough balances with your real holdings.
+- **Portfolio → New portfolio**, add your accounts (upload each broker's file), then link the plan to it - the balances then stay current on their own.

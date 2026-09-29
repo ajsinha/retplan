@@ -78,6 +78,8 @@ ACCOUNT_TYPES = [
          limit="", draw=3, pay=5),
 ]
 ACCOUNT_BY_KEY = {t["key"]: t for t in ACCOUNT_TYPES}
+# portfolio account types saved into as a share of pay (workplace plans)
+PAY_TYPES = {"k401", "roth401k", "pension_pot"}
 
 
 def account_keys(t: dict) -> list[str]:
@@ -190,7 +192,7 @@ DEFAULTS = {
     "spend": "40000", "retire_spend_pct": "80", "essential_pct": "60",
     "mortgage": "0", "mortgage_rate": "4.5", "mortgage_years": "20",
     "risk": "balanced", "tax": "us", "flat_rate": "20", "inflation": "2.5",
-    "legacy": "0",
+    "legacy": "0", "link_portfolio": "",
 }
 for _t in ACCOUNT_TYPES:
     DEFAULTS.setdefault(f"has_{_t['key']}", "")
@@ -229,6 +231,11 @@ def validate(step: str, a: dict) -> list[str]:
                 errs.append("Your partner's retirement age can't be before their current age.")
             if e2 <= max(p2, r2):
                 errs.append("Your partner's plan-to age must be after their retirement.")
+    elif step == "savings" and a.get("link_portfolio"):
+        for k, val in a.items():
+            if k.startswith("lk_") and _f(a, k) < 0:
+                errs.append("Saving amounts can't be negative.")
+                break
     elif step == "savings":
         keys = [k for t in ACCOUNT_TYPES for k in account_keys(t)]
         if any(_f(a, k) < 0 for k in keys):
@@ -388,8 +395,37 @@ def build_plan(a: dict) -> Plan:
     return plan
 
 
-def summary(a: dict) -> list[tuple[str, list[tuple[str, str]]]]:
-    """The review step, grouped - what the plan will contain, in words."""
+def linked_accounts(repo, owner: str, pid) -> tuple[dict | None, list]:
+    """(portfolio, its investment and cash accounts) for the savings step, or
+    (None, []) when the portfolio is not this workspace's."""
+    from portfolio.repository import NotFound
+    try:
+        pf = repo.get(owner, int(pid))
+        v = repo.valuation(owner, int(pid))
+    except (NotFound, ValueError, TypeError):
+        return None, []
+    return pf, [a for a in v.accounts if a.kind in ("investments", "cash")]
+
+
+def apply_linked_saving(plan, a: dict) -> None:
+    """What the answers say goes into each linked account each year."""
+    for lg in plan.ledgers:
+        if not lg.account_id:
+            continue
+        save = _f(a, f"lk_{lg.account_id}_save")
+        match = _f(a, f"lk_{lg.account_id}_match") / 100
+        if f"lk_{lg.account_id}_match" in a:           # a workplace plan: % of pay
+            lg.contribution_pct_income = save / 100
+            lg.contribution = 0.0
+            lg.employer_match_pct = 1.0 if match else 0.0
+            lg.employer_match_cap_pct = match
+        else:
+            lg.contribution = save
+
+
+def summary(a: dict, linked: tuple | None = None) -> list[tuple[str, list[tuple[str, str]]]]:
+    """The review step, grouped - what the plan will contain, in words. ``linked``
+    is (portfolio, accounts) when the savings come from a portfolio."""
     def m(k):
         return f"{_f(a, k):,.0f}"
     two = bool(a.get("partner"))
@@ -408,7 +444,20 @@ def summary(a: dict) -> list[tuple[str, list[tuple[str, str]]]]:
     if _f(a, "other_income"):
         income.append(("Other income", f"{m('other_income')} a year"))
     sav = []
-    for t in ACCOUNT_TYPES:
+    if linked and linked[0]:
+        pf, accts = linked
+        sav.append(("From portfolio", pf["name"]))
+        for acct in accts:
+            text = f"{acct.value:,.0f}"
+            save = _f(a, f"lk_{acct.id}_save")
+            if save and acct.type in PAY_TYPES:
+                text += f", saving {save:g}% of pay"
+                if _f(a, f"lk_{acct.id}_match"):
+                    text += f" (+ match to {_f(a, f'lk_{acct.id}_match'):g}%)"
+            elif save:
+                text += f", adding {save:,.0f} a year"
+            sav.append((acct.name, text))
+    for t in ([] if linked and linked[0] else ACCOUNT_TYPES):
         k = t["key"]
         for sfx, who in [("", "")] + ([("_p2", "partner's ")] if two and t["per_person"] else []):
             bal, save = _f(a, f"{k}{sfx}"), _f(a, f"{k}_save{sfx}")
@@ -426,7 +475,7 @@ def summary(a: dict) -> list[tuple[str, list[tuple[str, str]]]]:
         sav = [("Savings", "none yet")]
     sp = [("Spending now", f"{m('spend')} a year, {a.get('essential_pct') or 0}% essential"),
           ("In retirement", f"{a.get('retire_spend_pct') or 0}% of today's level")]
-    if _f(a, "mortgage"):
+    if _f(a, "mortgage") and not (linked and linked[0]):
         sp.append(("Mortgage", f"{m('mortgage')} at {a.get('mortgage_rate')}% over "
                                f"{a.get('mortgage_years')} years"))
     asm = [("Investment mix", RISK.get(a.get("risk"), RISK["balanced"])["label"]),

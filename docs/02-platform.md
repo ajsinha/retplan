@@ -20,10 +20,11 @@
 
 ```
 retplan/        the planning engine: plan, rng, markets, tax, engine, metrics, solvers, samples
-portfolio/      db, repository, yahoo, prices, fx, assets, checks, importer, builder,
-                projection, stress
+portfolio/      db, repository, account_types, yahoo, prices, fx, assets, checks,
+                importer, builder, networth, projection, stress
 web/            app singleton, config, templating helpers, charts, view models,
-                wizard, plan store, admin, help catalogue
+                wizard, plan store, plan_link (plans linked to a portfolio), admin,
+                help catalogue
 web/templates/  base, _nav (mega menu), shared UI components; one folder per area
 web/static/     css/tokens.css, css/theme.css, js/, img/, vendor/
 routes/         one handler class per area
@@ -69,17 +70,17 @@ else a handler needs is read from `request.app.state`.
 | `NoAuthRoutes` | landing, about, method, search, system, `/healthz` |
 | `WizardRoutes` | `/start` |
 | `ScenarioRoutes` | `/scenarios`, `/compare`, `/api/compare/run` |
-| `PlanRoutes` | `/plan/{section}` |
+| `PlanRoutes` | `/plan/{section}`, `/plan/link`, `/plan/unlink` |
 | `DashboardRoutes` | `/dashboard`, `/audit`, `/report/plan` |
 | `SimulationRoutes` | `/api/simulate`, `/api/analysis`, `/api/results`, `/api/clear` |
 | `ReportRoutes` | `/reports/{name}` |
 | `ExportRoutes` | plan JSON export and import, reset, clear |
 | `BuilderRoutes` | `/portfolios/build` |
-| `PortfolioRoutes` | `/portfolios/*`, `/prices`, `/api/tickers`, `/api/portfolios/{pid}` |
+| `PortfolioRoutes` | `/portfolios/*` (portfolios, their accounts at `/portfolios/{pid}/accounts/*`, holdings, net worth on demand), `/prices`, `/api/tickers`, `/api/portfolios/{pid}` |
 | `SecurityRoutes` | `/securities/*` |
 | `AdminRoutes` | `/admin/login`, `/admin/logout`, `/admin/password` |
 | `ToolsRoutes` | `/api/whatif`, `/api/whatif/save`, `/api/levers`, `/tools/claiming`, `/tools/conversions`, `/tools/spending`, `/tools/draw-order`, `/tools/health` |
-| `NetWorthRoutes` | `/networth` - snapshots, portfolio value history, update the plan |
+| `NetWorthRoutes` | `/networth` - each portfolio's net worth today, split by kind, and its recorded history |
 | `HelpRoutes` | `/help`, one route per help topic, `/help/guides/*` (Markdown in `web/guides/`, rendered by `web/guide_render.py`), `/help/case-studies/*` (`web/cases.py`) |
 
 Long computations (Monte Carlo, solvers, scenario comparison) are JSON endpoints
@@ -134,7 +135,8 @@ follows the theme — including a saved projection re-rendered later.
   empty database is built from the file for its dialect; a populated one is checked
   for every declared table and column, and a gap stops start-up with a message
   naming it. Schema changes are made by editing both files and altering or
-  rebuilding the database by hand.
+  rebuilding the database by hand. (A database from before portfolio accounts must be
+  rebuilt: `holdings` now needs `account_id`, and the `accounts` table is new.)
 - Queries are SQLAlchemy Core `text()` with named parameters, in the SQL subset
   both engines accept (`ON CONFLICT … DO UPDATE`, `RETURNING`), so the repository
   never branches on dialect.
@@ -157,7 +159,8 @@ named `price-scheduler`:
 
 The collector holds a lock so only one run proceeds at a time, pauses 0.4 s between
 symbols, records each run in `fetch_runs`, prunes closes older than
-`prices.retention_days`, and refreshes long-run statistics every 30 days. A new
+`prices.retention_days`, refreshes long-run statistics every 30 days, and records
+every portfolio's net worth for the day (`portfolio/networth.py`). A new
 symbol added to a portfolio is collected at once on a short-lived background
 thread. `tools/fetch_prices.py` runs the same collector from cron.
 

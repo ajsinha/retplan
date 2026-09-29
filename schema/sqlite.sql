@@ -65,19 +65,46 @@ CREATE TABLE IF NOT EXISTS securities (
     notes           TEXT NOT NULL DEFAULT ''
 );
 
--- A position in a portfolio. The symbol CASH is a cash balance priced at 1.
+-- An account in a portfolio: investments (holding positions), cash, property or
+-- a debt. The type (portfolio/account_types.py) says which, and how it is taxed.
+-- Investment accounts are valued from their holdings; the others carry a value
+-- set by hand on as_of. A debt's value is what is owed on as_of; with a rate and
+-- a monthly payment it is paid down month by month from then.
+CREATE TABLE IF NOT EXISTS accounts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    name         TEXT    NOT NULL,
+    type         TEXT    NOT NULL,                   -- account_types.TYPES key
+    owner_person INTEGER NOT NULL DEFAULT 0,         -- 0 you, 1 partner, -1 joint
+    institution  TEXT    NOT NULL DEFAULT '',
+    value        REAL    NOT NULL DEFAULT 0,         -- cash, property, debt
+    as_of        TEXT,                               -- the date value was set
+    rate         REAL,                               -- debts: annual interest
+    payment      REAL,                               -- debts: monthly payment
+    term_months  INTEGER,                            -- debts: months left on as_of
+    notes        TEXT    NOT NULL DEFAULT '',
+    position     INTEGER NOT NULL DEFAULT 0,         -- display order
+    created_at   TEXT    NOT NULL,
+    updated_at   TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_accounts_portfolio ON accounts (portfolio_id);
+
+-- A position in an investment account. The symbol CASH is a cash balance priced
+-- at 1. portfolio_id repeats the account's, so a portfolio's holdings are one
+-- indexed read.
 CREATE TABLE IF NOT EXISTS holdings (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     portfolio_id INTEGER NOT NULL REFERENCES portfolios (id) ON DELETE CASCADE,
+    account_id   INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     symbol       TEXT    NOT NULL REFERENCES securities (symbol),
     quantity     REAL    NOT NULL DEFAULT 0,
     cost_basis   REAL,                               -- total, not per unit
-    account      TEXT    NOT NULL DEFAULT '',
     asset_class  TEXT    NOT NULL DEFAULT '',
     notes        TEXT    NOT NULL DEFAULT '',
     added_at     TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_holdings_portfolio ON holdings (portfolio_id);
+CREATE INDEX IF NOT EXISTS ix_holdings_account ON holdings (account_id);
 CREATE INDEX IF NOT EXISTS ix_holdings_symbol ON holdings (symbol);
 
 -- Daily closes. Rows older than the retention window (365 days) are deleted
@@ -129,9 +156,8 @@ CREATE TABLE IF NOT EXISTS import_drafts (
 );
 CREATE INDEX IF NOT EXISTS ix_import_drafts_owner ON import_drafts (owner);
 
--- Net worth over time. 'manual' snapshots are what someone recorded on a day
--- (every account, other assets, debts); 'portfolio' rows are each portfolio's
--- value, recorded automatically after each price collection - kept for good,
+-- Net worth over time: each portfolio's assets and debts, recorded after every
+-- price collection (kind 'portfolio', ref = portfolio id) and kept for good,
 -- unlike the daily prices, which are pruned after a year.
 CREATE TABLE IF NOT EXISTS snapshots (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

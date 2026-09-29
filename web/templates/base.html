@@ -41,6 +41,12 @@
       {{ copyright }} · Educational model, not financial advice.</p>
   </footer>
 </div>
+{# the one dialog every page can open: links marked data-dialog load into it #}
+<div class="modal fade" id="rp-dialog" tabindex="-1" aria-labelledby="rp-dialog-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" data-dialog-body></div>
+  </div>
+</div>
 <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/retplan.js', v=asset_v) }}"></script>
 {% block scripts %}{% endblock %}{% block extra_js %}{% endblock %}

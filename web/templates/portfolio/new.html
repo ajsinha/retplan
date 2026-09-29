@@ -2,32 +2,24 @@
 {% import "_macros/ui.html" as ui %}
 {% block title %}New portfolio{% endblock %}
 {% block content %}
-{% call ui.page_head('New portfolio', 'Name it, choose the currency you think in, and optionally paste your holdings. You can add more one at a time afterwards.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Have a spreadsheet? Upload it instead</a>
+{% call ui.page_head('New portfolio', 'Name it and choose the currency you think in. Then add its accounts - each with a few questions.', eyebrow='Portfolio', help=url_for('help_portfolios')) %}
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('builder') }}"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Have a file listing several accounts? Start from it</a>
 {% endcall %}
 <form class="card wizard-card" method="post" action="{{ url_for('portfolio_create') }}" data-busy="Creating…">
   <div class="card-body">
     <div class="row g-3">
       <div class="col-md-7"><label class="form-label" for="p-name">Name</label>
-        <input class="form-control" id="p-name" name="name" placeholder="e.g. Retirement accounts" required maxlength="80"></div>
+        <input class="form-control" id="p-name" name="name" placeholder="e.g. Our household" required maxlength="80"></div>
       <div class="col-md-5"><label class="form-label" for="p-cur">Base currency</label>
         <select class="form-select" id="p-cur" name="currency">{% for c in currencies %}<option {% if c == 'USD' %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-        <div class="form-hint mt-1">Holdings quoted in other currencies are converted daily.</div></div>
+        <div class="form-hint mt-1">Holdings quoted in other currencies are converted daily; cash, property and debts are in this currency.</div></div>
       <div class="col-12"><label class="form-label" for="p-desc">Notes <span class="small-muted">(optional)</span></label>
         <input class="form-control" id="p-desc" name="description" maxlength="300"></div>
-      <div class="col-12">
-        <label class="form-label" for="p-hold">Holdings <span class="small-muted">(optional - paste from a spreadsheet)</span></label>
-        <textarea class="form-control mono" id="p-hold" name="holdings" rows="8" placeholder="symbol, quantity, cost basis, account
-VTI, 120, 21000, Roth IRA
-BND, 300, 22500, 401(k)
-VXUS, 150, 8200, Brokerage
-CASH, 5000"></textarea>
-        <div class="form-hint mt-1">One holding per line: <code>symbol, quantity</code>, optionally followed by <code>cost basis</code> (total paid), <code>account</code> and <code>asset class</code>. Commas, semicolons or tabs; a header row is recognised. <code>CASH</code> with an amount is a cash balance. Use Yahoo symbols: <code>VOD.L</code> for London, <code>SHOP.TO</code> for Toronto, <code>BTC-USD</code> for bitcoin.</div>
-      </div>
     </div>
+    <p class="form-hint mt-3 mb-0">Most people keep one portfolio for the whole household. Others are useful for what-ifs: a model portfolio, a parent's money you look after.</p>
     <div class="d-flex gap-2 mt-4">
       <a class="btn btn-outline-secondary" href="{{ url_for('portfolios') }}">Cancel</a>
-      <button class="btn btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Create portfolio</button>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Create and add accounts</button>
     </div>
   </div>
 </form>

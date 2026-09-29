@@ -2,15 +2,23 @@
 {% import "_macros/ui.html" as ui %}
 {% block title %}Build a portfolio{% endblock %}
 {% block content %}
-{% call ui.page_head('Build a portfolio from a spreadsheet', 'Upload the positions export from your broker or bank - or any spreadsheet listing what you hold. RetPlan finds the table, works out what each column means, identifies every security on Yahoo Finance, and shows you everything before anything is saved.', eyebrow='Portfolio', help=url_for('help_portfolios') ~ '#builder') %}{% endcall %}
+{% if acct %}{% set title = 'Upload positions into ' ~ acct.name %}{% set lead = 'Upload the positions export for this account from your broker - or any spreadsheet listing what it holds.' %}
+{% elif pf %}{% set title = 'Import a file into ' ~ pf.name %}{% set lead = 'A file listing several accounts - an account column, or one sheet per account. Each account in it is added to ' ~ pf.name ~ ', or matched to one already there by name.' %}
+{% else %}{% set title = 'Start a portfolio from a file' %}{% set lead = 'A file listing several accounts - an account column, or one sheet per account - becomes a portfolio with one account per name. For a single account, create the portfolio and upload into the account instead.' %}{% endif %}
+{% call ui.page_head(title, lead ~ ' RetPlan finds the table, works out what each column means, identifies every security on Yahoo Finance, and shows you everything before anything is saved.', eyebrow=(pf.name if pf else 'Portfolio'), help=url_for('help_portfolios') ~ '#builder') %}
+  {% if acct %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('account_view', pid=pf.id, aid=acct.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ acct.name }}</a>
+  {% elif pf %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portfolio_view', pid=pf.id) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to {{ pf.name }}</a>{% endif %}
+{% endcall %}
 <div class="row g-3">
   <div class="col-xl-7">
     <form class="card" method="post" action="{{ url_for('builder_upload') }}" enctype="multipart/form-data" data-busy="Reading and identifying securities…">
       <div class="card-header"><i class="bi bi-upload" aria-hidden="true"></i> Upload</div>
       <div class="card-body">
+        {% if pf %}<input type="hidden" name="pid" value="{{ pf.id }}">{% endif %}
+        {% if acct %}<input type="hidden" name="aid" value="{{ acct.id }}">{% endif %}
         <label class="form-label" for="bf">Spreadsheet</label>
         <input class="form-control form-control-lg" id="bf" type="file" name="file" required accept=".xlsx,.xlsm,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
-        <div class="form-hint mt-1">Excel (.xlsx, .xlsm) or CSV, up to 10 MB. Every sheet is read; with several sheets and no account column, each sheet becomes an account.</div>
+        <div class="form-hint mt-1">Excel (.xlsx, .xlsm) or CSV, up to 10 MB. Every sheet is read{% if not acct %}; with several sheets and no account column, each sheet becomes an account{% endif %}.</div>
         <button class="btn btn-primary mt-3" type="submit"><i class="bi bi-magic" aria-hidden="true"></i> Analyse</button>
         <p class="small-muted mt-2 mb-0">Identifying securities asks Yahoo about each one, so a long list takes a few seconds.</p>
       </div>

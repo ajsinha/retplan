@@ -56,6 +56,23 @@ class PlanStore:
         self.legacy_dir = legacy_dir
         self._results: dict[int, dict] = {}
         self._lock = threading.RLock()
+        # set by the app: brings a plan linked to a portfolio up to date on read
+        self.linker = None
+
+    def _linked(self, sid: str, plan_id: int, data: dict) -> Plan:
+        """The stored plan, brought up to date with its portfolio if it is linked.
+        When that changes anything, the plan is saved - which also drops simulation
+        results that describe the old balances."""
+        plan = plan_from_dict(data)
+        if self.linker and plan.portfolio_id:
+            try:
+                self.linker(sid, plan)
+            except Exception:  # noqa: BLE001 - a broken link must not lose the plan
+                logger.exception("syncing plan with portfolio %s failed", plan.portfolio_id)
+                return plan
+            if to_dict(plan) != data:
+                self._write(sid, plan_id, plan)
+        return plan
 
     # -- scenarios ---------------------------------------------------------
     def scenarios(self, sid: str) -> list[dict]:
@@ -146,7 +163,7 @@ class PlanStore:
                           {"id": plan_id, "o": sid})
         if row is None:
             raise LookupError(f"plan {plan_id}")
-        return plan_from_dict(json.loads(row["data"]))
+        return self._linked(sid, plan_id, json.loads(row["data"]))
 
     def _write(self, sid: str, plan_id: int, plan: Plan) -> None:
         with self.db.tx() as c:
@@ -161,7 +178,7 @@ class PlanStore:
     def get(self, sid: str) -> Plan:
         row = self._active_row(sid)
         try:
-            return plan_from_dict(json.loads(row["data"]))
+            return self._linked(sid, row["id"], json.loads(row["data"]))
         except Exception as exc:  # noqa: BLE001 - never lose the session
             logger.error("plan %s unreadable, showing the sample: %s", row["id"], exc)
             return sample_plan()

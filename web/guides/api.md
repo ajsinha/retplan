@@ -75,9 +75,12 @@ Simulates every scenario of the workspace with the same trials and seed.
 
 ### `GET /api/portfolios/{id}`
 
-A portfolio valued at the latest closes: `name`, `currency`, `as_of`, `total`, `cost`,
-`day_change`, `unpriced` and `holdings` (symbol, name, quantity, price, currency, fx,
-value, weight, account, asset class, cost basis).
+A portfolio valued at the latest closes: `name`, `currency`, `as_of`, `total` (the
+investable assets - investment accounts plus cash accounts), `cost`, `day_change`,
+`unpriced`, `net_worth`, `property`, `debts`, `accounts` (id, name, type, kind, owner,
+institution, value, as_of, rate, months_left) and `holdings` (symbol, name, quantity,
+price, currency, fx, value, weight, account - the account's name - account_id, asset
+class, cost basis).
 
 ### `GET /api/tickers?q=`
 

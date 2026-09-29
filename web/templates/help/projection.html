@@ -2,7 +2,9 @@
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
 <p>{{ goto('portfolios', 'Open portfolios') }}, pick one, then <em>Project</em>.</p>
-<p>A projection runs your current holdings forward thousands of times, each time with
+<p>A projection runs your current investable assets &mdash; the holdings of every
+investment account in the portfolio, plus its cash accounts as cash &mdash; forward
+thousands of times, each time with
 a different random sequence of returns, and reports the spread of where they end up.
 It is separate from the retirement plan's simulation: it works holding by holding,
 from real price data, over a horizon you choose (ten years by default), with your own
@@ -28,7 +30,8 @@ contributions and withdrawals.</p>
     exactly as it was from the stored numbers.</li>
 {% endcall %}
 <p>Only priced holdings take part; an unpriced one counts as zero. A symbol held in
-two accounts is one asset. The weights are today's values, and they are the target
+two accounts is one asset, and the cash accounts join any <code>CASH</code> held inside
+investment accounts. Property and debts are not projected. The weights are today's values, and they are the target
 mix that contributions buy and rebalancing restores.</p>
 
 <h2 id="assumptions">Where the assumptions come from</h2>

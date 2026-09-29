@@ -45,6 +45,9 @@ class RetPlanWebApp:
         self.store = PlanStore(self.db, legacy_dir=os.path.join(self.data_dir, "plans"))
         self.portfolios = PortfolioRepo(self.db)
         self.networth = NetWorthRepo(self.db)
+        # a plan linked to a portfolio takes its accounts and debts from it on every read
+        from web import plan_link
+        self.store.linker = lambda sid, plan: plan_link.sync(plan, self.portfolios, sid)
         self.collector = PriceCollector(self.portfolios,
                                         retention_days=self.config.prices_retention_days)
         self.scheduler = PriceScheduler(self.collector, run_at=self.config.prices_run_at,

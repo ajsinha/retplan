@@ -99,7 +99,7 @@ CATEGORIES = [
                  keywords="what if slider lever coach recommendation social security claiming "
                           "state pension delay roth conversion fill bracket decide guardrails "
                           "spending check withdrawal order draw order health medicare long "
-                          "term care net worth snapshot history"),
+                          "term care net worth history"),
             dict(slug="scenarios", title="Scenarios and comparison", icon="bi-layers",
                  summary="Keep several versions of the plan, switch between them, and "
                          "compare their odds and wealth side by side.",
@@ -110,14 +110,18 @@ CATEGORIES = [
         "id": "portfolio",
         "name": "Portfolios",
         "icon": "bi-briefcase",
-        "blurb": "Real holdings, priced daily, projected ten or more years ahead.",
+        "blurb": "Every account you own and owe, real holdings priced daily, projected "
+                 "ten or more years ahead.",
         "topics": [
             dict(slug="portfolios", title="Building a portfolio", icon="bi-briefcase",
-                 summary="Holdings, symbols, cost basis, accounts and asset classes; "
-                         "pasting from a spreadsheet; currencies; the risk checks.",
+                 summary="Accounts - investments, cash, property, debts; holdings, "
+                         "symbols, cost basis and asset classes; uploading and pasting; "
+                         "currencies; the risk checks; linking a plan.",
                  keywords="holdings ticker symbol import csv paste allocation rebalance "
                           "xray concentration currency fx target excel xlsx upload "
-                          "builder spreadsheet broker export isin"),
+                          "builder spreadsheet broker export isin account 401k ira roth "
+                          "hsa brokerage checking savings home mortgage loan debt "
+                          "property net worth link plan owner tax treatment"),
             dict(slug="prices", title="Daily prices", icon="bi-cloud-download",
                  summary="Where prices come from, when they are collected, why only a "
                          "year is kept, and what to do when a symbol will not price.",
@@ -243,8 +247,8 @@ GUIDES = [
                  "combine them and keep the change worth making."),
     dict(slug="portfolio-tutorial", kind="tutorial", icon="file-earmark-arrow-up",
          title="From a broker export to a ten-year projection",
-         summary="Upload positions, review the matches, check the portfolio, project it, "
-                 "stress it and use it in your plan."),
+         summary="Upload positions, review the matches and accounts, add the rest, check "
+                 "the portfolio, project it, stress it and link your plan to it."),
     dict(slug="configuration", kind="catalogue", icon="sliders",
          title="Configuration reference",
          summary="Every setting in config/retplan.toml and every environment variable, "

@@ -3,7 +3,13 @@
 Everything the web layer reads or writes about portfolios goes through
 :class:`PortfolioRepo`, so SQL lives in one module and every query that touches a
 portfolio is scoped by its owner - one workspace can never read another's
-portfolios or holdings. Securities and prices are deliberately shared (a price is
+portfolios, accounts or holdings.
+
+A portfolio is a collection of accounts (portfolio/account_types.py). Investment
+accounts hold positions; cash, property and debt accounts carry a value set by
+hand, and a debt pays itself down from the day it was set. The valuation covers
+all of it: investable assets (positions, plus cash accounts as cash), property,
+debts and net worth. Securities and prices are deliberately shared (a price is
 a fact about a symbol); the pages only show a workspace the symbols it holds.
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
@@ -16,6 +22,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from . import account_types as at
 from .assets import CASH_SYMBOL, CLASSES, classify
 from .fx import is_fx, pair
 from .db import PRICE_RETENTION_DAYS, Database, utcnow
@@ -35,7 +42,7 @@ class Position:
     name: str
     quantity: float
     cost_basis: float | None
-    account: str
+    account: str                    # the account's name
     asset_class: str
     notes: str
     price: float | None
@@ -48,6 +55,9 @@ class Position:
     fx_missing: bool = False
     value: float = 0.0
     weight: float = 0.0
+    account_id: int = 0
+    account_type: str = ""
+    synthetic: bool = False         # a cash account shown as a cash position
 
     @property
     def gain(self):
@@ -83,9 +93,74 @@ class Position:
 
 
 @dataclass
+class AccountValue:
+    """One account and what it is worth today."""
+    id: int
+    name: str
+    type: str
+    owner_person: int
+    institution: str
+    notes: str
+    value: float = 0.0              # today's value; for a debt, what is owed today
+    set_value: float = 0.0          # the value typed in on as_of
+    as_of: str | None = None
+    rate: float | None = None
+    payment: float | None = None
+    term_months: int | None = None
+    months_left: int | None = None
+    n_holdings: int = 0
+    cost: float = 0.0
+    cost_value: float = 0.0
+    day_change: float = 0.0
+    unpriced: int = 0
+    position: int = 0
+
+    @property
+    def info(self) -> dict:
+        return at.get(self.type)
+
+    @property
+    def kind(self) -> str:
+        return self.info["kind"]
+
+    @property
+    def label(self) -> str:
+        return self.info["label"]
+
+    @property
+    def icon(self) -> str:
+        return self.info["icon"]
+
+    @property
+    def tax(self) -> str:
+        return self.info["tax"]
+
+    @property
+    def owner_label(self) -> str:
+        return at.OWNER_LABEL.get(self.owner_person, "You")
+
+    @property
+    def gain(self):
+        return self.cost_value - self.cost if self.cost else None
+
+    @property
+    def age_days(self) -> int | None:
+        """Days since a hand-set value was last updated."""
+        if not self.as_of or self.kind == "investments":
+            return None
+        try:
+            return (date.today() - date.fromisoformat(self.as_of[:10])).days
+        except ValueError:
+            return None
+
+
+@dataclass
 class Valuation:
     positions: list[Position] = field(default_factory=list)
-    total: float = 0.0
+    accounts: list[AccountValue] = field(default_factory=list)
+    total: float = 0.0              # investable: positions plus cash accounts
+    property_total: float = 0.0
+    debts: float = 0.0
     cost: float = 0.0
     day_change: float = 0.0
     priced: int = 0
@@ -98,6 +173,38 @@ class Valuation:
         return sorted({p.currency for p in self.positions if p.fx_missing})
 
     cost_value: float = 0.0          # value of the holdings that have a cost basis
+
+    @property
+    def assets(self) -> float:
+        return self.total + self.property_total
+
+    @property
+    def net_worth(self) -> float:
+        return self.assets - self.debts
+
+    def kind_total(self, kind: str) -> float:
+        return sum(a.value for a in self.accounts if a.kind == kind)
+
+    def of_kind(self, kind: str) -> list[AccountValue]:
+        return [a for a in self.accounts if a.kind == kind]
+
+    def by_tax(self) -> list[tuple[str, float, float]]:
+        """Investable assets by how they are taxed."""
+        out: dict[str, float] = {}
+        for a in self.accounts:
+            if a.kind in ("investments", "cash"):
+                k = at.TAX_LABEL[a.tax]
+                out[k] = out.get(k, 0.0) + a.value
+        return sorted(((k, v, v / self.total if self.total else 0.0)
+                       for k, v in out.items() if v), key=lambda r: -r[1])
+
+    def by_owner(self) -> list[tuple[str, float, float]]:
+        out: dict[str, float] = {}
+        for a in self.accounts:
+            if a.kind in ("investments", "cash"):
+                out[a.owner_label] = out.get(a.owner_label, 0.0) + a.value
+        return sorted(((k, v, v / self.total if self.total else 0.0)
+                       for k, v in out.items() if v), key=lambda r: -r[1])
 
     @property
     def gain(self):
@@ -134,7 +241,8 @@ class PortfolioRepo:
     def list(self, owner: str) -> list[dict]:
         return self.db.query(
             "SELECT p.*, (SELECT COUNT(*) FROM holdings h WHERE h.portfolio_id = p.id)"
-            " AS n_holdings FROM portfolios p WHERE p.owner = :o ORDER BY p.name",
+            " AS n_holdings, (SELECT COUNT(*) FROM accounts a WHERE a.portfolio_id = p.id)"
+            " AS n_accounts FROM portfolios p WHERE p.owner = :o ORDER BY p.name",
             {"o": owner})
 
     def get(self, owner: str, pid: int) -> dict:
@@ -177,6 +285,9 @@ class PortfolioRepo:
             self.db.run(c, "DELETE FROM holdings WHERE portfolio_id IN (SELECT id FROM"
                            " portfolios WHERE id = :id AND owner = :o)",
                         {"id": pid, "o": owner})
+            self.db.run(c, "DELETE FROM accounts WHERE portfolio_id IN (SELECT id FROM"
+                           " portfolios WHERE id = :id AND owner = :o)",
+                        {"id": pid, "o": owner})
             self.db.run(c, "DELETE FROM projections WHERE portfolio_id IN (SELECT id FROM"
                            " portfolios WHERE id = :id AND owner = :o)",
                         {"id": pid, "o": owner})
@@ -187,20 +298,118 @@ class PortfolioRepo:
         src = self.get(owner, pid)
         new = self.create(owner, f"{src['name']} (copy)", src["currency"],
                           src["description"], src["settings"])
-        for h in self.holdings(owner, pid):
-            self.add_holding(owner, new, h["symbol"], h["quantity"], h["cost_basis"],
-                             h["account"], h["asset_class"], h["notes"])
+        for a in self.accounts(owner, pid):
+            aid = self.create_account(owner, new, a["name"], a["type"], a["owner_person"],
+                                      a["institution"], a["value"], a["as_of"], a["rate"],
+                                      a["payment"], a["term_months"], a["notes"])
+            for h in self.holdings(owner, pid, a["id"]):
+                self.add_holding(owner, new, aid, h["symbol"], h["quantity"],
+                                 h["cost_basis"], h["asset_class"], h["notes"])
         return new
 
     def _touch(self, c, pid: int) -> None:
         self.db.run(c, "UPDATE portfolios SET updated_at = :t WHERE id = :id",
                     {"t": utcnow(), "id": pid})
 
-    # -- holdings ----------------------------------------------------------
-    def holdings(self, owner: str, pid: int) -> list[dict]:
+    # -- accounts ----------------------------------------------------------
+    ACCOUNT_FIELDS = ("name", "type", "owner_person", "institution", "value", "as_of",
+                      "rate", "payment", "term_months", "notes", "position")
+
+    def accounts(self, owner: str, pid: int) -> list[dict]:
         self.get(owner, pid)
-        return self.db.query("SELECT * FROM holdings WHERE portfolio_id = :p"
-                             " ORDER BY account, symbol", {"p": pid})
+        return self.db.query("SELECT * FROM accounts WHERE portfolio_id = :p"
+                             " ORDER BY position, id", {"p": pid})
+
+    def account(self, owner: str, pid: int, aid: int) -> dict:
+        self.get(owner, pid)
+        row = self.db.one("SELECT * FROM accounts WHERE id = :a AND portfolio_id = :p",
+                          {"a": aid, "p": pid})
+        if row is None:
+            raise NotFound(f"account {aid}")
+        return row
+
+    def create_account(self, owner: str, pid: int, name: str, type: str,
+                       owner_person: int = 0, institution: str = "", value: float = 0.0,
+                       as_of: str | None = None, rate: float | None = None,
+                       payment: float | None = None, term_months: int | None = None,
+                       notes: str = "") -> int:
+        self.get(owner, pid)
+        if type not in at.BY_KEY:
+            raise ValueError(f"unknown account type {type!r}")
+        info = at.BY_KEY[type]
+        if info["kind"] == "debt" and payment is None and term_months:
+            payment = at.monthly_payment(value, rate or 0.0, term_months / 12)
+        now = utcnow()
+        with self.db.tx() as c:
+            pos = self.db.run(c, "SELECT COALESCE(MAX(position), 0) FROM accounts"
+                                 " WHERE portfolio_id = :p", {"p": pid}).scalar() or 0
+            aid = self.db.insert(
+                c, "INSERT INTO accounts (portfolio_id, name, type, owner_person,"
+                   " institution, value, as_of, rate, payment, term_months, notes,"
+                   " position, created_at, updated_at) VALUES (:p, :n, :t, :o, :i, :v,"
+                   " :d, :r, :pay, :tm, :nt, :pos, :now, :now)",
+                {"p": pid, "n": (name or "").strip() or info["label"], "t": type,
+                 "o": int(owner_person), "i": (institution or "").strip(),
+                 "v": float(value or 0.0),
+                 "d": as_of or (None if info["kind"] == "investments"
+                                else date.today().isoformat()),
+                 "r": rate, "pay": payment, "tm": term_months, "nt": (notes or "").strip(),
+                 "pos": int(pos) + 1, "now": now})
+            self._touch(c, pid)
+            return aid
+
+    def update_account(self, owner: str, pid: int, aid: int, **fields) -> None:
+        old = self.account(owner, pid, aid)
+        sets = {k: v for k, v in fields.items() if k in self.ACCOUNT_FIELDS}
+        if "type" in sets and sets["type"] not in at.BY_KEY:
+            raise ValueError(f"unknown account type {sets['type']!r}")
+        # a new value is a new starting point for pay-down and for staleness
+        if "value" in sets and "as_of" not in sets and \
+                float(sets["value"] or 0) != float(old["value"] or 0):
+            sets["as_of"] = date.today().isoformat()
+        if not sets:
+            return
+        sets["updated_at"] = utcnow()
+        cols = ", ".join(f"{k} = :{k}" for k in sets)
+        with self.db.tx() as c:
+            self.db.run(c, f"UPDATE accounts SET {cols} WHERE id = :_a AND portfolio_id = :_p",
+                        {**sets, "_a": aid, "_p": pid})
+            self._touch(c, pid)
+
+    def delete_account(self, owner: str, pid: int, aid: int) -> None:
+        self.account(owner, pid, aid)
+        with self.db.tx() as c:
+            self.db.run(c, "DELETE FROM holdings WHERE account_id = :a AND portfolio_id = :p",
+                        {"a": aid, "p": pid})
+            self.db.run(c, "DELETE FROM accounts WHERE id = :a AND portfolio_id = :p",
+                        {"a": aid, "p": pid})
+            self._touch(c, pid)
+
+    def find_or_create_account(self, owner: str, pid: int, name: str,
+                               type: str | None = None) -> int:
+        """The account called ``name`` in the portfolio, made (type guessed from the
+        name) if there is none - for imports that name accounts by label."""
+        name = (name or "").strip() or "Brokerage"
+        for a in self.accounts(owner, pid):
+            if a["name"].strip().lower() == name.lower():
+                return a["id"]
+        kind = type or at.guess(name)
+        if at.get(kind)["kind"] != "investments":
+            kind = "brokerage"
+        return self.create_account(owner, pid, name, kind)
+
+    # -- holdings ----------------------------------------------------------
+    def holdings(self, owner: str, pid: int, aid: int | None = None) -> list[dict]:
+        self.get(owner, pid)
+        if aid is None:
+            return self.db.query(
+                "SELECT h.*, a.name AS account FROM holdings h JOIN accounts a"
+                " ON a.id = h.account_id WHERE h.portfolio_id = :p"
+                " ORDER BY a.position, a.id, h.symbol", {"p": pid})
+        return self.db.query(
+            "SELECT h.*, a.name AS account FROM holdings h JOIN accounts a"
+            " ON a.id = h.account_id WHERE h.portfolio_id = :p AND h.account_id = :a"
+            " ORDER BY h.symbol", {"p": pid, "a": aid})
 
     def holding(self, owner: str, pid: int, hid: int) -> dict:
         self.get(owner, pid)
@@ -210,14 +419,16 @@ class PortfolioRepo:
             raise NotFound(f"holding {hid}")
         return row
 
-    def add_holding(self, owner: str, pid: int, symbol: str, quantity: float,
-                    cost_basis: float | None = None, account: str = "",
-                    asset_class: str = "", notes: str = "") -> int:
-        self.get(owner, pid)
+    def add_holding(self, owner: str, pid: int, aid: int, symbol: str, quantity: float,
+                    cost_basis: float | None = None, asset_class: str = "",
+                    notes: str = "") -> int:
+        acct = self.account(owner, pid, aid)
+        if at.get(acct["type"])["kind"] != "investments":
+            raise ValueError(f"'{acct['name']}' is not an investment account")
         symbol = normalise_symbol(symbol)
         if not symbol:
             raise ValueError("a holding needs a symbol")
-        sec = self.ensure_security(symbol)
+        self.ensure_security(symbol)
         if symbol == CASH_SYMBOL and cost_basis is None:
             cost_basis = quantity
         # blank = follow the security's class, which the first fetch fills in
@@ -225,21 +436,24 @@ class PortfolioRepo:
             asset_class = ""
         with self.db.tx() as c:
             hid = self.db.insert(
-                c, "INSERT INTO holdings (portfolio_id, symbol, quantity, cost_basis,"
-                   " account, asset_class, notes, added_at)"
-                   " VALUES (:p, :s, :q, :cb, :a, :ac, :n, :t)",
-                {"p": pid, "s": symbol, "q": float(quantity), "cb": cost_basis,
-                 "a": (account or "").strip(), "ac": asset_class,
-                 "n": (notes or "").strip(), "t": utcnow()})
+                c, "INSERT INTO holdings (portfolio_id, account_id, symbol, quantity,"
+                   " cost_basis, asset_class, notes, added_at)"
+                   " VALUES (:p, :a, :s, :q, :cb, :ac, :n, :t)",
+                {"p": pid, "a": aid, "s": symbol, "q": float(quantity), "cb": cost_basis,
+                 "ac": asset_class, "n": (notes or "").strip(), "t": utcnow()})
             self._touch(c, pid)
             return hid
 
     def update_holding(self, owner: str, pid: int, hid: int, **fields) -> None:
         self.holding(owner, pid, hid)
         sets = {k: v for k, v in fields.items()
-                if k in ("quantity", "cost_basis", "account", "asset_class", "notes")}
+                if k in ("quantity", "cost_basis", "account_id", "asset_class", "notes")}
         if "asset_class" in sets and sets["asset_class"] not in CLASSES:
             sets["asset_class"] = ""
+        if "account_id" in sets:
+            acct = self.account(owner, pid, int(sets["account_id"]))
+            if at.get(acct["type"])["kind"] != "investments":
+                raise ValueError(f"'{acct['name']}' is not an investment account")
         if not sets:
             return
         cols = ", ".join(f"{k} = :{k}" for k in sets)
@@ -531,19 +745,27 @@ class PortfolioRepo:
                     last=r["last"])
 
     # -- valuation ---------------------------------------------------------
-    def valuation(self, owner: str, pid: int) -> Valuation:
+    def valuation(self, owner: str, pid: int, aid: int | None = None) -> Valuation:
+        """Today's value of everything in the portfolio (or of one account)."""
         base = self.get(owner, pid)["currency"]
+        accts = [a for a in self.accounts(owner, pid) if aid is None or a["id"] == aid]
+        if aid is not None and not accts:
+            raise NotFound(f"account {aid}")
+        by_id = {a["id"]: _account_value(a) for a in accts}
         rows = self.db.query(
             "SELECT h.*, s.name, s.last_price, s.prev_close, s.last_price_date,"
             " s.currency, s.fetch_error, s.asset_class AS sec_class FROM holdings h"
             " LEFT JOIN securities s ON s.symbol = h.symbol"
-            " WHERE h.portfolio_id = :p ORDER BY h.account, h.symbol", {"p": pid})
+            " WHERE h.portfolio_id = :p ORDER BY h.account_id, h.symbol", {"p": pid})
         v = Valuation()
         dates = []
         for r in rows:
+            acct = by_id.get(r["account_id"])
+            if acct is None:
+                continue
             p = Position(id=r["id"], symbol=r["symbol"], name=r["name"] or "",
                          quantity=r["quantity"], cost_basis=r["cost_basis"],
-                         account=r["account"],
+                         account=acct.name, account_id=acct.id, account_type=acct.type,
                          asset_class=r["asset_class"] or r["sec_class"] or "other",
                          notes=r["notes"], price=r["last_price"],
                          prev_close=r["prev_close"], price_date=r["last_price_date"],
@@ -551,21 +773,43 @@ class PortfolioRepo:
                          class_inherited=not r["asset_class"])
             if not p.is_cash:
                 p.fx, p.fx_missing = self.fx_rate(p.currency, base)
+            acct.n_holdings += 1
             if p.price is not None:
                 p.value = p.quantity * p.price * p.fx
                 v.priced += 1
                 if p.price_date and not p.is_cash:
                     dates.append(p.price_date)
                 v.day_change += p.day_change or 0.0
+                acct.day_change += p.day_change or 0.0
             else:
                 v.unpriced.append(p.symbol)
-            v.total += p.value
+                acct.unpriced += 1
+            acct.value += p.value
             if p.cost_basis is not None:
                 v.cost += p.cost_basis
                 v.cost_value += p.value
+                acct.cost += p.cost_basis
+                acct.cost_value += p.value
             v.positions.append(p)
+        for a in by_id.values():
+            if a.kind == "cash":
+                # a cash account counts as a cash position in every analysis
+                v.positions.append(Position(
+                    id=-a.id, symbol=CASH_SYMBOL, name=a.name, quantity=a.value,
+                    cost_basis=a.value, account=a.name, account_id=a.id,
+                    account_type=a.type, asset_class="cash", notes="", price=1.0,
+                    prev_close=1.0, price_date=a.as_of, currency=base, fetch_error=None,
+                    value=a.value, synthetic=True))
+                v.cost += a.value
+                v.cost_value += a.value
+            elif a.kind == "property":
+                v.property_total += a.value
+            elif a.kind == "debt":
+                v.debts += a.value
+        v.total = sum(p.value for p in v.positions)
         for p in v.positions:
             p.weight = p.value / v.total if v.total else 0.0
+        v.accounts = sorted(by_id.values(), key=lambda a: (a.position, a.id))
         v.as_of = max(dates) if dates else None
         v.currency = base
         return v
@@ -580,6 +824,8 @@ class PortfolioRepo:
         holdings = self.holdings(owner, pid)
         syms = sorted({h["symbol"] for h in holdings if h["symbol"] != CASH_SYMBOL})
         cash = sum(h["quantity"] for h in holdings if h["symbol"] == CASH_SYMBOL)
+        cash += sum(a["value"] or 0.0 for a in self.accounts(owner, pid)
+                    if at.get(a["type"])["kind"] == "cash")
         series = {s: self.series_in(s, base) for s in syms}
         # a symbol with no prices at all counts as zero, exactly as the valuation
         # does - otherwise one bad ticker would blank the whole chart
@@ -717,6 +963,35 @@ class PortfolioRepo:
         with self.db.tx() as c:
             self.db.run(c, "DELETE FROM projections WHERE id = :id AND portfolio_id = :p",
                         {"id": proj_id, "p": pid})
+
+
+def _account_value(row: dict) -> AccountValue:
+    """An account row as an AccountValue; a debt is paid down to today."""
+    a = AccountValue(id=row["id"], name=row["name"], type=row["type"],
+                     owner_person=int(row["owner_person"] or 0),
+                     institution=row["institution"] or "", notes=row["notes"] or "",
+                     set_value=float(row["value"] or 0.0), as_of=row["as_of"],
+                     rate=row["rate"], payment=row["payment"],
+                     term_months=row["term_months"], position=int(row["position"] or 0))
+    if a.kind in ("cash", "property"):
+        a.value = a.set_value
+    elif a.kind == "debt":
+        months = 0
+        if a.as_of:
+            try:
+                d0, d1 = date.fromisoformat(a.as_of[:10]), date.today()
+                months = max(0, (d1.year - d0.year) * 12 + d1.month - d0.month
+                             - (1 if d1.day < d0.day else 0))
+            except ValueError:
+                months = 0
+        pay = a.payment
+        if pay is None and a.term_months:
+            pay = at.monthly_payment(a.set_value, a.rate or 0.0, a.term_months / 12)
+        a.payment = pay
+        a.value = at.amortised(a.set_value, a.rate or 0.0, pay or 0.0, months)
+        if a.term_months:
+            a.months_left = max(0, int(a.term_months) - months)
+    return a
 
 
 def normalise_symbol(symbol: str) -> str:

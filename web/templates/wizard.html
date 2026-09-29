@@ -79,6 +79,38 @@
   </details>
 
 {% elif step == 'savings' %}
+  {% if linked_pf %}
+  <div class="link-box linked">
+    <i class="bi bi-link-45deg" aria-hidden="true"></i>
+    <div class="grow">Your accounts come from <a href="{{ url_for('portfolio_view', pid=linked_pf.id) }}">{{ linked_pf.name }}</a> - balances, holdings, property and debts, kept current every time the plan runs.</div>
+    <button class="btn btn-sm btn-outline-secondary" type="submit" name="unlink" value="1" formnovalidate>Enter them by hand instead</button>
+  </div>
+  {% if linked_accounts %}
+  <p class="lead-slate">What goes into each account every year until you retire?</p>
+  <div class="acct-panels">
+  {% for acct in linked_accounts if acct.type != 'edu529' %}
+    <fieldset class="acct-panel">
+      <legend><i class="bi bi-{{ acct.icon }}" aria-hidden="true"></i> {{ acct.name }}
+        <span class="small-muted fw-normal">· {{ acct.label }} · {{ acct.owner_label }} · {{ acct.value|money }}</span></legend>
+      <div class="row g-3">
+      {% if acct.type in pay_types %}
+        <div class="col-md-4"><label class="form-label" for="lk-{{ acct.id }}-s">{{ 'Its owner puts in' if acct.owner_person == 1 else 'You put in' }}</label>
+          <div class="input-group"><input class="form-control num" id="lk-{{ acct.id }}-s" name="lk_{{ acct.id }}_save" type="number" step="any" min="0" max="100" inputmode="decimal" value="{{ a.get('lk_' ~ acct.id ~ '_save', '0') }}"><span class="input-group-text">% of pay</span></div></div>
+        <div class="col-md-4"><label class="form-label" for="lk-{{ acct.id }}-m">Employer matches up to</label>
+          <div class="input-group"><input class="form-control num" id="lk-{{ acct.id }}-m" name="lk_{{ acct.id }}_match" type="number" step="any" min="0" max="100" inputmode="decimal" value="{{ a.get('lk_' ~ acct.id ~ '_match', '0') }}"><span class="input-group-text">% of pay</span></div></div>
+      {% else %}
+        <div class="col-md-4"><label class="form-label" for="lk-{{ acct.id }}-s">Added each year</label>
+          <input class="form-control num" id="lk-{{ acct.id }}-s" name="lk_{{ acct.id }}_save" type="number" step="any" min="0" inputmode="decimal" value="{{ a.get('lk_' ~ acct.id ~ '_save', '0') }}"></div>
+      {% endif %}
+      </div>
+    </fieldset>
+  {% endfor %}
+  </div>
+  <p class="form-hint mt-2">Money you earn but do not spend is saved too - into a taxable account. Accounts added to the portfolio later join the plan by themselves.</p>
+  {% else %}
+  <p class="lead-slate">That portfolio has no investment or cash accounts yet. <a href="{{ url_for('portfolio_view', pid=linked_pf.id) }}">Add them there</a>, or carry on - they join the plan when you do.</p>
+  {% endif %}
+  {% else %}
   <p class="lead-slate">Which of these do you have? Tick each one: they are taxed differently, and
     that changes how long your money lasts and which to spend first. Rough figures are fine.</p>
   {% set two = a.partner %}
@@ -121,11 +153,14 @@
   {% endfor %}
   </div>
   {% if portfolios %}
-  <div class="mt-3 p-3 rounded-3" style="background: var(--rp-crimson-tint)">
-    <label class="form-label" for="f-usepf"><i class="bi bi-briefcase" aria-hidden="true"></i> Or take the brokerage balance from a portfolio you track here</label>
-    <select class="form-select" id="f-usepf" name="use_portfolio"><option value="">- keep the number above -</option>
-      {% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }} ({{ p.n_holdings }} holdings)</option>{% endfor %}</select>
+  <div class="link-box mt-4">
+    <i class="bi bi-briefcase" aria-hidden="true"></i>
+    <div class="grow">Tracking your accounts in a portfolio? Take them from there instead - balances, holdings, property and debts, always current.</div>
+    <label class="visually-hidden" for="f-linkpf">Portfolio</label>
+    <select class="form-select form-select-sm w-auto" id="f-linkpf" name="pick_portfolio">{% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }} ({{ p.n_accounts }} accounts)</option>{% endfor %}</select>
+    <button class="btn btn-sm btn-primary" type="submit" name="go" value="link" formnovalidate>Use it</button>
   </div>
+  {% endif %}
   {% endif %}
 {% elif step == 'spending' %}
   <div class="row g-3">
@@ -134,6 +169,9 @@
     {{ money_in('essential_pct', 'Essential share', "Housing, food, bills - the part you couldn't cut in a bad year.", suffix='%', col='col-md-6') }}
     {{ money_in('legacy', 'Leave at least', 'Money you want left at the end, in today\'s money. 0 = none.', col='col-md-6') }}
   </div>
+  {% if linked_pf %}
+  <p class="form-hint mt-3"><i class="bi bi-link-45deg" aria-hidden="true"></i> Mortgages and loans come from {{ linked_pf.name }}.</p>
+  {% else %}
   <details class="advanced" {% if a.mortgage|float > 0 %}open{% endif %}><summary>A mortgage or loan</summary>
     <div class="row g-3">
       {{ money_in('mortgage', 'Balance') }}
@@ -141,6 +179,7 @@
       {{ money_in('mortgage_years', 'Years left', step='1', suffix='years') }}
     </div>
   </details>
+  {% endif %}
 
 {% elif step == 'assumptions' %}
   <h3 class="h6">How your savings are invested</h3>

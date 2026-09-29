@@ -3,7 +3,7 @@
 {% set v = row.get(q.name) %}
 {% set id = 'q-' ~ q.name %}
 <div class="question">
-  {% if q.widget in ('basis', 'essential', 'yesno', 'mix', 'choice') %}
+  {% if q.widget in ('basis', 'essential', 'yesno', 'mix', 'choice', 'radio') %}
     <div class="q-label" id="{{ id }}-l">{{ q.question }}</div>
   {% else %}
     <label class="q-label" for="{{ id }}">{{ q.question }}</label>
@@ -65,6 +65,14 @@
       {% for val, label in opts %}
       <input type="radio" class="btn-check" name="{{ q.name }}" id="{{ id }}-{{ loop.index }}" value="{{ val }}"
              {% if cur == val %}checked{% endif %}>
+      <label class="btn btn-outline-primary" for="{{ id }}-{{ loop.index }}">{{ label }}</label>
+      {% endfor %}
+    </div>
+  {% elif q.widget == 'radio' %}
+    <div class="choice-row" role="radiogroup" aria-labelledby="{{ id }}-l">
+      {% for val, label in q.options %}
+      <input type="radio" class="btn-check" name="{{ q.name }}" id="{{ id }}-{{ loop.index }}" value="{{ val }}"
+             {% if (v|string) == (val|string) %}checked{% endif %}>
       <label class="btn btn-outline-primary" for="{{ id }}-{{ loop.index }}">{{ label }}</label>
       {% endfor %}
     </div>

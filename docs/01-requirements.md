@@ -69,6 +69,10 @@ portfolio projections, and financial advice.
 - **FR-WZ-2 (M).** The draft MUST survive moving between steps and MAY be reset.
 - **FR-WZ-3 (M).** Finishing MUST either replace the active plan or add a new
   scenario, as the user chooses.
+- **FR-WZ-4 (M).** When the Savings step takes its accounts from a portfolio, the
+  plan built MUST be linked to that portfolio, MUST ask only what goes into each
+  investment and cash account (529 plans skipped), and MUST NOT ask about a
+  mortgage: the portfolio's debts are used.
 
 ## 5. Scenarios (F-SCN)
 
@@ -147,9 +151,25 @@ portfolio projections, and financial advice.
   saved.
 - **FR-PF-4 (M).** Rebalancing MUST produce per-class trades that sum to the new
   money, and a new-money-only alternative that never sells.
-- **FR-PF-5 (M).** Copying a portfolio into the plan MUST set the chosen account's
-  balance, cost basis (holdings without a cost assumed bought at today's value) and
-  asset mix.
+- **FR-PF-5 (M).** A plan linked to a portfolio MUST be brought in line with it
+  every time it is read: each investment, cash and property account a plan account
+  (name, owner - joint as you - today's value, cost basis with holdings without a cost
+  at today's value and none for tax-deferred accounts, and for investments the asset
+  mix; a wrapper from its type), each debt a loan (owed today, rate, years left);
+  accounts removed from the portfolio MUST leave the plan and new ones join it. What
+  the plan adds to a linked account (contributions, match, order, glide path,
+  rebalancing, paused) MUST be kept, and plan accounts with no link MUST be left
+  alone. Unlinking MUST keep today's figures as the plan's own.
+- **FR-PF-6 (M).** Every holding MUST belong to an investment account of its
+  portfolio; removing an account MUST remove its holdings.
+- **FR-PF-7 (M).** A debt MUST be paid down month by month from the date its balance
+  was set, using the level payment from rate and term when no payment is given.
+- **FR-PF-8 (M).** Projections, stress tests, checks and the target mix MUST work on
+  investable assets only - investment accounts' holdings plus cash accounts as cash;
+  property and debts MUST count in net worth and nowhere else.
+- **FR-PF-9 (M).** After every price collection, and on request, each portfolio's
+  assets, debts and breakdown by kind MUST be recorded, one row per portfolio a day,
+  and kept after the daily prices are pruned.
 - **FR-PX-1 (M).** The collector MUST price every held symbol and every FX pair a
   portfolio needs, and MUST report a failure for one symbol without aborting the run.
 - **FR-PX-2 (M).** Closes older than `prices.retention_days` MUST be deleted after
@@ -166,6 +186,11 @@ portfolio projections, and financial advice.
 - **FR-BL-2 (M).** Every proposed holding MUST carry a confidence and the way it was
   identified; doubtful matches and value mismatches MUST be flagged.
 - **FR-BL-3 (M).** Nothing MUST reach a portfolio until the review is confirmed.
+- **FR-BL-5 (M).** Uploaded into one account, every position MUST go into that
+  account. From a multi-account file, each account name MUST be offered with a
+  guessed type for the user to confirm; each MUST become an account or join an
+  existing one of the same name, and positions without an account MUST go to
+  "Brokerage".
 - **FR-BL-4 (M).** At most 2,000 positions are read from one file.
 
 ## 11. Securities and administration (F-SEC)
