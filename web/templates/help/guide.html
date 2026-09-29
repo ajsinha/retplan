@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ guide.title }} · Help{% endblock %}
+{% block content %}
+<nav class="help-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <a href="{{ url_for('help_guides') }}">{{ 'Tutorials' if guide.kind == 'tutorial' else 'Catalogues' }}</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <span aria-current="page">{{ guide.title }}</span>
+</nav>
+<header class="help-topic-hero">
+  <span class="ico"><i class="bi bi-{{ guide.icon }}" aria-hidden="true"></i></span>
+  <div><h1>{{ guide.title }} <span class="badge">{{ guide.kind }}</span></h1><p>{{ guide.summary }}</p></div>
+</header>
+<div class="guide-layout">
+  {% if doc.toc %}
+  <nav class="guide-toc" aria-label="On this page">
+    <div class="head">On this page</div>
+    <ol>{% for t in doc.toc %}<li><a href="#{{ t.id }}">{{ t.name }}</a>{% if t.children %}<ol>{% for c in t.children %}<li><a href="#{{ c.id }}">{{ c.name }}</a></li>{% endfor %}</ol>{% endif %}</li>{% endfor %}</ol>
+  </nav>
+  {% endif %}
+  <article class="help-article guide-body card card-body">{{ doc.html|safe }}</article>
+</div>
+<div class="help-pager">
+  {% if guide.prev %}<a class="btn btn-outline-secondary" href="{{ url_for('help_guide', slug=guide.prev.slug) }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> {{ guide.prev.title }}</a>{% else %}<span></span>{% endif %}
+  {% if guide.next %}<a class="btn btn-primary" href="{{ url_for('help_guide', slug=guide.next.slug) }}">{{ guide.next.title }} <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
+</div>
+<div class="help-related"><div class="chips">
+  <a class="chip all" href="{{ url_for('help_guides') }}"><i class="bi bi-journal-richtext" aria-hidden="true"></i> Tutorials and catalogues</a>
+  <a class="chip all" href="{{ url_for('help') }}"><i class="bi bi-grid" aria-hidden="true"></i> All help</a>
+</div></div>
+{% endblock %}

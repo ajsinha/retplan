@@ -230,3 +230,33 @@ def search(q: str) -> list:
         if words and all(w in hay for w in words):
             out.append(t)
     return out
+
+
+# Long-form guides, rendered from web/guides/<slug>.md (web/guide_render.py):
+# tutorials that build on each other, and catalogues that list everything.
+GUIDES = [
+    dict(slug="first-decision", kind="tutorial", icon="signpost-split",
+         title="From nothing to a decision in twenty minutes",
+         summary="Build a plan with the wizard, read the answer, find your biggest levers, "
+                 "combine them and keep the change worth making."),
+    dict(slug="portfolio-tutorial", kind="tutorial", icon="file-earmark-arrow-up",
+         title="From a broker export to a ten-year projection",
+         summary="Upload positions, review the matches, check the portfolio, project it, "
+                 "stress it and use it in your plan."),
+    dict(slug="configuration", kind="catalogue", icon="sliders",
+         title="Configuration reference",
+         summary="Every setting in config/retplan.toml and every environment variable, "
+                 "with its default and what it does."),
+    dict(slug="api", kind="catalogue", icon="braces",
+         title="HTTP API reference",
+         summary="The JSON endpoints behind the pages: simulation, what-if, levers, "
+                 "portfolios, symbol search, plans as files, health."),
+]
+
+
+def guide(slug: str) -> dict | None:
+    for i, g in enumerate(GUIDES):
+        if g["slug"] == slug:
+            return dict(g, prev=GUIDES[i - 1] if i else None,
+                        next=GUIDES[i + 1] if i < len(GUIDES) - 1 else None)
+    return None

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Case studies · Help{% endblock %}
+{% block content %}
+<nav class="help-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <span aria-current="page">Case studies</span>
+</nav>
+<header class="help-topic-hero">
+  <span class="ico"><i class="bi bi-journal-code" aria-hidden="true"></i></span>
+  <div><h1>Case studies</h1>
+    <p>Worked households, carried through RetPlan end to end. Each can be opened as a scenario in your own workspace and changed from there.</p></div>
+</header>
+<div class="row g-3">
+  {% for c in studies %}
+  <div class="col-md-6 col-xl-4"><a class="card help-card h-100" href="{{ url_for('help_case', slug=c.slug) }}"><div class="card-body">
+    <div class="hc-title"><span class="hc-ico"><i class="bi {{ c.icon }}" aria-hidden="true"></i></span><span>{{ c.title }}</span></div>
+    <p>{{ c.summary }}</p><span class="more">Read the case <i class="bi bi-arrow-right" aria-hidden="true"></i></span></div></a></div>
+  {% endfor %}
+</div>
+{% endblock %}

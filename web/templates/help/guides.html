@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Tutorials and catalogues · Help{% endblock %}
+{% block content %}
+<nav class="help-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <span aria-current="page">Tutorials and catalogues</span>
+</nav>
+<header class="help-topic-hero">
+  <span class="ico"><i class="bi bi-journal-richtext" aria-hidden="true"></i></span>
+  <div><h1>Tutorials and catalogues</h1>
+    <p>Tutorials walk through a task from start to finish; catalogues list everything of one kind.</p></div>
+</header>
+{% for kind, label in [('tutorial', 'Tutorials'), ('catalogue', 'Catalogues')] %}
+<h2 class="h5 mt-3 mb-3">{{ label }}</h2>
+<div class="row g-3 mb-3">
+  {% for g in guides if g.kind == kind %}
+  <div class="col-md-6"><a class="card help-card h-100" href="{{ url_for('help_guide', slug=g.slug) }}"><div class="card-body">
+    <div class="hc-title"><span class="hc-ico"><i class="bi bi-{{ g.icon }}" aria-hidden="true"></i></span><span>{{ g.title }} <span class="badge">{{ g.kind }}</span></span></div>
+    <p>{{ g.summary }}</p><span class="more">Open <i class="bi bi-arrow-right" aria-hidden="true"></i></span></div></a></div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

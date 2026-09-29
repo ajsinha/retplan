@@ -76,6 +76,17 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-SOL-5 | Tornado of eight drivers ranked by their effect on success | `solvers.tornado` |
 | F-SOL-6 | All of the above in one "full analysis" run | `/api/analysis` |
 
+## 6a. Deciding — `F-DEC-*`
+
+| ID | Feature | Where |
+|---|---|---|
+| F-DEC-1 | What-if sliders on the dashboard: retirement age, spending, extra saving until retiring, share of shares, fees, public-pension start; 800 trials on one seed per move, with a "within noise" flag | `web/levers.py`, `/api/whatif` |
+| F-DEC-2 | Keep any what-if combination as a new scenario | `/api/whatif/save` |
+| F-DEC-3 | Your biggest levers: each common change tried alone with 1,500 trials and ranked by its effect on the odds; a click loads it into the sliders | `/api/levers` |
+| F-DEC-4 | Public-pension claiming-age explorer: every age with user-set early and late adjustment rates, on the whole plan, with break-even ages | `/tools/claiming` |
+| F-DEC-5 | Conversion explorer: fixed amounts or fill-to levels between two accounts and two ages, compared on after-tax final wealth; "try it" saves a scenario | `/tools/conversions` |
+| F-DEC-6 | Life timeline: people, retirements, income streams, time-limited costs, loans, conversions by age | `charts.life_timeline` |
+
 ## 7. Reports and audit — `F-RPT-*`
 
 | ID | Feature | Where |
@@ -85,6 +96,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-RPT-3 | Year-by-year tax: taxable income and tax | `/reports/tax` |
 | F-RPT-4 | Audit: balance roll-forward reconciliation plus input sanity checks, each PASS / FAIL / REVIEW | `/audit`, `viewmodel.audit_checks` |
 | F-RPT-5 | Method page describing the model | `/method` |
+| F-RPT-6 | One-page plan report to print or save as PDF | `/report/plan` |
 
 ## 8. Portfolios — `F-PF-*`
 
@@ -161,7 +173,10 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 
 | ID | Feature | Where |
 |---|---|---|
-| F-UI-1 | Help centre: 28 topics in five categories, searchable, with siblings and next/previous links | `/help`, `web/help_catalog.py` |
+| F-UI-1 | Help centre: 29 topics in five categories, searchable, with siblings and next/previous links | `/help`, `web/help_catalog.py` |
+| F-UI-7 | Guides: two tutorials and two catalogues (configuration, HTTP API) in Markdown with a contents rail | `/help/guides`, `web/guides/` |
+| F-UI-8 | Case studies: three worked households, figures computed live, each openable as a scenario | `/help/case-studies`, `web/cases.py` |
+| F-UI-9 | Landing page with three drawn figures (futures, sequence risk, audit ledger) and an SVG chain; comparison page by product category | `landing.html`, `landing.js`, `/about/compare` |
 | F-UI-2 | Site search (`Ctrl-K`) over pages, help topics, scenarios, portfolios and holdings | `/search` |
 | F-UI-3 | Four themes (Crimson, Dark, Blue, Green) over one design, remembered per browser | `web/static/css/tokens.css` |
 | F-UI-4 | Mega-menu navigation, gradient page heroes, about page | `_nav.html`, `about.html` |

@@ -9,6 +9,7 @@
     <a class="btn btn-light" href="{{ url_for('help_getting_started') }}"><i class="bi bi-flag" aria-hidden="true"></i> Getting started</a>
     <a class="btn btn-outline-light" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Quick start a plan</a>
     <a class="btn btn-outline-light" href="{{ url_for('method') }}"><i class="bi bi-braces" aria-hidden="true"></i> The method</a>
+    <a class="btn btn-outline-light" href="{{ url_for('help_cases') }}"><i class="bi bi-journal-code" aria-hidden="true"></i> Case studies</a>
     <a class="btn btn-outline-light" href="{{ url_for('about') }}"><i class="bi bi-info-circle" aria-hidden="true"></i> About RetPlan</a>
   </div>
 </section>
@@ -21,6 +22,8 @@
   </div>
   <div class="cat-chips">
     {% for c in categories %}<a class="chip" href="#cat-{{ c.id }}"><i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }} <span>{{ c.topics|length }}</span></a>{% endfor %}
+    <a class="chip" href="#cat-guides"><i class="bi bi-journal-richtext" aria-hidden="true"></i> Tutorials and catalogues <span>{{ guides|length }}</span></a>
+    <a class="chip" href="#cat-studies"><i class="bi bi-journal-code" aria-hidden="true"></i> Case studies <span>{{ studies|length }}</span></a>
   </div>
 </div>
 
@@ -45,6 +48,34 @@
   </div>
 </details>
 {% endfor %}
+<details class="help-cat" id="cat-guides" open>
+  <summary><span class="cat-name"><span class="cat-ico"><i class="bi bi-journal-richtext" aria-hidden="true"></i></span> Tutorials and catalogues</span>
+    <span class="cat-count">{{ guides|length }}</span></summary>
+  <p class="cat-blurb">Two tutorials that take a task from start to finish, and two catalogues: every setting and every HTTP endpoint. <a href="{{ url_for('help_guides') }}">Open the library</a>.</p>
+  <div class="row g-3 cat-body">
+    {% for g in guides %}
+    <div class="col-md-6 col-xl-4 help-item" data-search="{{ (g.title ~ ' ' ~ g.summary ~ ' ' ~ g.kind)|lower }}">
+      <a class="card help-card h-100" href="{{ url_for('help_guide', slug=g.slug) }}"><div class="card-body">
+        <div class="hc-title"><span class="hc-ico"><i class="bi bi-{{ g.icon }}" aria-hidden="true"></i></span><span>{{ g.title }} <span class="badge">{{ g.kind }}</span></span></div>
+        <p>{{ g.summary }}</p><span class="more">Open <i class="bi bi-arrow-right" aria-hidden="true"></i></span></div></a>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+<details class="help-cat" id="cat-studies" open>
+  <summary><span class="cat-name"><span class="cat-ico"><i class="bi bi-journal-code" aria-hidden="true"></i></span> Case studies</span>
+    <span class="cat-count">{{ studies|length }}</span></summary>
+  <p class="cat-blurb">Worked households, carried end to end - each one can be opened as a scenario in your own workspace. <a href="{{ url_for('help_cases') }}">Open the case studies</a>.</p>
+  <div class="row g-3 cat-body">
+    {% for c in studies %}
+    <div class="col-md-6 col-xl-4 help-item" data-search="{{ (c.title ~ ' ' ~ c.summary ~ ' case study')|lower }}">
+      <a class="card help-card h-100" href="{{ url_for('help_case', slug=c.slug) }}"><div class="card-body">
+        <div class="hc-title"><span class="hc-ico"><i class="bi {{ c.icon }}" aria-hidden="true"></i></span><span>{{ c.title }}</span></div>
+        <p>{{ c.summary }}</p><span class="more">Read the case <i class="bi bi-arrow-right" aria-hidden="true"></i></span></div></a>
+    </div>
+    {% endfor %}
+  </div>
+</details>
 <div id="help-none" class="help-none" hidden><i class="bi bi-search" aria-hidden="true"></i> No help topic matches that search.</div>
 
 <section class="card mt-2">

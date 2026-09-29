@@ -19,6 +19,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from retplan import __version__ as VERSION
+from retplan.version import BUILD_DATE, HIGHLIGHTS
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,8 @@ APP_TEMPLATE_PROPS: dict = {
     "app_tagline": "Retirement planning you can audit",
     "app_slogan": "Every number traceable, every assumption yours.",
     "app_version": VERSION,
+    "build_date": BUILD_DATE,
+    "highlights": HIGHLIGHTS,
     "copyright": "© 2026 Ashutosh Sinha",
 }
 

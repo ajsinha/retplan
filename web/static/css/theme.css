@@ -846,3 +846,6 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .levers .bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--rp-slate); }
 .levers .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .levers .noise { opacity: .55; }
+
+.guide-body { max-width: 980px; }
+.guide-body td code { word-break: break-all; }

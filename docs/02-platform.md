@@ -70,7 +70,7 @@ else a handler needs is read from `request.app.state`.
 | `WizardRoutes` | `/start` |
 | `ScenarioRoutes` | `/scenarios`, `/compare`, `/api/compare/run` |
 | `PlanRoutes` | `/plan/{section}` |
-| `DashboardRoutes` | `/dashboard`, `/audit` |
+| `DashboardRoutes` | `/dashboard`, `/audit`, `/report/plan` |
 | `SimulationRoutes` | `/api/simulate`, `/api/analysis`, `/api/results`, `/api/clear` |
 | `ReportRoutes` | `/reports/{name}` |
 | `ExportRoutes` | plan JSON export and import, reset, clear |
@@ -78,7 +78,8 @@ else a handler needs is read from `request.app.state`.
 | `PortfolioRoutes` | `/portfolios/*`, `/prices`, `/api/tickers`, `/api/portfolios/{pid}` |
 | `SecurityRoutes` | `/securities/*` |
 | `AdminRoutes` | `/admin/login`, `/admin/logout`, `/admin/password` |
-| `HelpRoutes` | `/help`, one route per help topic |
+| `ToolsRoutes` | `/api/whatif`, `/api/whatif/save`, `/api/levers`, `/tools/claiming`, `/tools/conversions` |
+| `HelpRoutes` | `/help`, one route per help topic, `/help/guides/*` (Markdown in `web/guides/`, rendered by `web/guide_render.py`), `/help/case-studies/*` (`web/cases.py`) |
 
 Long computations (Monte Carlo, solvers, scenario comparison) are JSON endpoints
 the page calls and then swaps the results in, rather than long form posts.

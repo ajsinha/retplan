@@ -4,110 +4,148 @@
 <section class="about-hero">
   <img src="{{ url_for('static', filename='img/rp-mark-white.svg') }}" alt="">
   <h1>RETPLAN</h1>
-  <p>{{ app_tagline }}</p>
-  <p class="fst-italic mt-1">{{ app_slogan }}</p>
-  <span class="version-badge">Version {{ app_version }}</span>
-  <div class="d-flex flex-wrap gap-2 justify-content-center mt-3 position-relative">
-    <a class="btn btn-light" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start a plan</a>
-    <a class="btn btn-outline-light" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a>
-    <a class="btn btn-outline-light" href="{{ url_for('method') }}"><i class="bi bi-braces" aria-hidden="true"></i> The method</a>
+  <p class="fs-5">{{ app_tagline }}</p>
+  <p><em>{{ app_slogan }}</em></p>
+  <span class="version-badge">Version {{ app_version }} · built {{ build_date }}</span>
+  <div class="d-flex flex-wrap gap-2 justify-content-center mt-4 position-relative">
+    <a class="btn btn-light btn-lg" href="{{ url_for('wizard') }}"><i class="bi bi-magic" aria-hidden="true"></i> Start a plan</a>
+    <a class="btn btn-outline-light btn-lg" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Documentation</a>
   </div>
 </section>
 
-<section class="card mb-4"><div class="card-body p-4">
-  <h2>What is RetPlan?</h2>
-  <p class="mb-2">A retirement planner and portfolio tracker you run yourself. It projects income, spending,
-    debt, tax and investments year by year, then tests the plan against thousands of simulated market
-    histories. Alongside the plan, it tracks real portfolios - priced every day from Yahoo Finance - and
-    projects them ten or more years ahead with correlated Monte Carlo, bootstrap and fat-tailed models.</p>
-  <p class="mb-0">It assumes no country. Tax is a table of bands you type; account types are <em>wrappers</em>
-    that say when money is taxed - in, while it grows, or on the way out. Every plan carries a reconciliation
-    audit that proves money in equals money out in every year of the projection.</p>
-</div></section>
-
-<section class="card mb-4 about-problem"><div class="card-body p-4">
-  <h2>Why it exists</h2>
-  <div class="row g-4">
-    {% for bad, fix in [
-      ("Planners give one number and hide how they got it.", "Every figure traces to a visible row; an audit proves sources equal uses every year."),
-      ("Tax rules are hard-coded for one country.", "Bands and wrappers are data: EET, TEE, TTE and ETT are all special cases of one model."),
-      ("A single average return hides sequence risk.", "Regimes, crashes and crisis replays show what a bad decade does to the same plan."),
-      ("Portfolio tools stop at today's value.", "Holdings flow into a projection and into the plan, with currencies converted and risk measured."),
-      ("Your finances end up on someone else's server.", "Self-hosted: SQLite by default, PostgreSQL if you want it; nothing leaves your machine except price requests."),
-      ("Data entry takes an evening.", "A six-step wizard gives a first answer in two minutes; paste holdings straight from a spreadsheet.")] %}
-    <div class="col-md-6"><div><i class="bi bi-x-circle bad" aria-hidden="true"></i> {{ bad }}</div><div class="fix"><i class="bi bi-arrow-return-right" aria-hidden="true"></i> {{ fix }}</div></div>
-    {% endfor %}
+<section class="card mb-4">
+  <div class="card-header"><i class="bi bi-info-circle" aria-hidden="true"></i> What is RetPlan?</div>
+  <div class="card-body">
+    <p class="lead">RetPlan is a retirement planner and portfolio tracker you run yourself. It projects a
+      household's <strong>income</strong>, <strong>spending</strong>, <strong>debt</strong>, <strong>tax</strong> and
+      <strong>investments</strong> year by year, tests the plan against thousands of market histories, and tracks
+      real <strong>portfolios</strong>, priced every day, projected ten or more years ahead.</p>
+    <p>It assumes no country. Tax is a table of bands you type; accounts are <em>wrappers</em> that say when money is
+      taxed - on the way in, while it grows, or on the way out - so a 401(k), an ISA, a TFSA and a Roth are all one
+      model. And it keeps its own books: every plan carries a reconciliation proving that money in equals money out,
+      in every year of every simulated future.</p>
+    <p class="mb-0 small-muted">Built for people who want to understand their retirement, not be sold one: the
+      careful do-it-yourself planner, the family member everyone asks, the adviser who wants to show the working.</p>
   </div>
-</div></section>
+</section>
 
-<h2 class="mb-3">What makes it different</h2>
+<section class="card mb-4 about-problem">
+  <div class="card-header"><i class="bi bi-bullseye" aria-hidden="true"></i> The problems it solves</div>
+  <div class="card-body"><div class="row g-3">
+    {% for bad, fix in [
+      ("A planner gives one number - “87%” - and hides how it got there.",
+       "Every figure traces to a row you can open; the odds come with their error bar; an audit checks the books every year."),
+      ("An average return makes a bad first decade invisible.",
+       "Regimes, crashes, fat tails and five historical crises show what the order of returns does to the same plan."),
+      ("Tax and account rules are built for one country.",
+       "Bands and wrappers are data. Any country's income tax and any account type, inverted exactly."),
+      ("A number says how you are doing, not what to do.",
+       "What-if sliders, ranked levers, a claiming-age explorer and a conversion explorer turn the answer into a decision."),
+      ("Portfolio tools stop at today's value; planners ignore what you actually hold.",
+       "Upload your positions; they are priced daily, projected forward and copied into the plan."),
+      ("Your finances end up on somebody else's server, behind a subscription.",
+       "Self-hosted, no accounts, no tracking. SQLite by default, PostgreSQL if you like; nothing leaves but price look-ups."),
+    ] %}
+    <div class="col-md-6"><p class="mb-1"><i class="bi bi-x-circle bad" aria-hidden="true"></i> {{ bad }}</p>
+      <p class="fix mb-0"><i class="bi bi-arrow-return-right" aria-hidden="true"></i> {{ fix }}</p></div>
+    {% endfor %}
+  </div></div>
+</section>
+
+<h2 class="mb-3"><i class="bi bi-stars" aria-hidden="true"></i> What makes it different</h2>
 <div class="row g-3 mb-4">
   {% for icon, title, text in [
-    ('magic', 'Answer first, detail later', 'The quick-start wizard builds a complete plan from a dozen numbers; refine any assumption afterwards.'),
-    ('layers', 'Scenarios side by side', 'Copy a plan, change one thing, and compare odds, wealth and tax on the same random seed.'),
-    ('shield-lock', 'Jurisdiction-free tax', 'Bands you type and wrappers you define. Exactly invertible, so gross-ups need no iteration.'),
-    ('cloud-lightning-rain', 'Markets that misbehave', 'Bear and bull regimes, crash jumps with multi-year shapes, fat tails and stochastic inflation.'),
-    ('briefcase', 'Real portfolios, priced daily', 'Ticker search, paste import, FX conversion, a year of daily closes, risk checks and rebalancing.'),
-    ('graph-up', 'Portfolio projections', 'Correlated lognormal, Student-t or bootstrap models; yearly or quarterly tables; P10 to P90 fan charts.'),
-    ('lightning', 'Crisis replays', '2008, the dot-com bust, Covid, the 2022 rate shock and 1970s stagflation, on your own mix.'),
-    ('clipboard-check', 'Proved, not asserted', 'A reconciliation audit on every plan: every balance rolls forward exactly, every year, every simulated future.'),
-    ('palette', 'Four themes, accessible charts', 'Crimson, dark, blue and green; colour-blind-validated chart palette; every chart has its table.')] %}
+    ('speedometer2', 'Odds with their error bar', 'A success probability is an estimate from a finite number of futures. RetPlan says how precise it is, and says so again when a what-if difference is too small to trust.'),
+    ('sliders2', 'Decisions, ranked', 'Every common change - retire later, spend less, save more, shift the mix, claim later, cut fees - tried alone on your whole plan and ranked by what it does to the odds.'),
+    ('arrow-left-right', 'Conversions for any country', 'Move money between any two accounts and pay the tax now. Fixed amounts or “fill the band”, compared on after-tax wealth, not on a number that forgets the tax still owed.'),
+    ('shield-lock', 'Tax, inverted exactly', 'A progressive schedule is piecewise linear, so “what must I withdraw to spend this” is one calculation. No iteration, no approximation, no circular reference.'),
+    ('cloud-lightning-rain', 'Markets that misbehave', 'Bear and bull regimes, crashes with multi-year shapes and per-asset transmission, fat tails, inflation that surprises - with the effective statistics shown beside what you typed.'),
+    ('file-earmark-arrow-up', 'Your portfolio in one upload', 'A broker export, read column by column; every security identified by symbol, ISIN or name; anything doubtful flagged before it is saved.'),
+    ('graph-up', 'Projections on what you hold', 'Correlated Monte Carlo on your actual securities, with return assumptions that do not pretend a year of prices knows the mean.'),
+    ('clipboard-check', 'Books that balance', 'The roll-forward identity is checked for every year of every trial. A projection that lost a flow somewhere cannot quietly look right.'),
+    ('palette', 'Built with care', 'Four themes, a colour-vision-safe chart palette validated on both surfaces, a table beneath every chart, and no inline script anywhere.'),
+  ] %}
   <div class="col-md-6 col-xl-4"><div class="card about-feature"><div class="card-body">
-    <div class="fi"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></div><h3 class="h6">{{ title }}</h3><p>{{ text }}</p></div></div></div>
+    <div class="fi"><i class="bi bi-{{ icon }}" aria-hidden="true"></i></div>
+    <h3>{{ title }}</h3><p>{{ text }}</p></div></div></div>
   {% endfor %}
 </div>
 
-<section class="card mb-4"><div class="card-body p-4">
-  <h2 class="mb-3">Capabilities</h2>
-  <div class="row g-4">
-    {% for group, items in [
-      ('Plan', ['Several people, retirement ages and horizons', 'Income streams with growth, survivor share and probability', 'Essential and discretionary spending, age curve, lumpy costs', 'Amortising, interest-only and bullet loans']),
-      ('Tax and accounts', ['Progressive bands, allowances, tapers, surtax', 'Generic wrappers: deductibility, caps, penalties, forced draws', 'Draw order, contribution order, employer match', 'Glide paths and rebalancing per account']),
-      ('Simulation', ['Monte Carlo with regimes, crashes and fat tails', 'Six withdrawal policies including guardrails and VPW', 'Solvers: maximum spend, earliest retirement, saving needed', 'Sensitivity tornado and spending sweep']),
-      ('Portfolios', ['Daily Yahoo prices, one year kept, FX converted', 'Allocation by class and account, target mix and trades', 'Three return models, cash-flow schedules, goals', 'Yearly or quarterly tables, CSV export, saved runs'])] %}
-    <div class="col-md-6 col-xl-3"><div class="cap-group">{{ group }}</div><ul class="cap-list small">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul></div>
+<section class="card mb-4">
+  <div class="card-header"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Capabilities</div>
+  <div class="card-body"><div class="row g-4">
+    {% for icon, group, items in [
+      ('pencil-square', 'The plan', ['Up to four people, their retirements and planning ages', 'Income streams with growth, survivor shares and probabilities', 'Essential and discretionary spending, the spending smile, lumpy costs', 'Amortising, interest-only and bullet loans', 'Tax wrappers, draw order, employer matches, glide paths', 'Conversions between accounts, fixed or fill-to']),
+      ('speedometer2', 'The answer', ['Monte Carlo with regimes, crashes, fat tails and stochastic inflation', 'Six withdrawal policies including guardrails and VPW', 'Solvers: maximum spend, earliest retirement, saving needed', 'What-if sliders, ranked levers, claiming and conversion explorers', 'Scenarios compared on one seed; a one-page report', 'Cash flow, balance sheet, tax and audit, year by year']),
+      ('briefcase', 'Portfolios', ['Ticker search, paste import, spreadsheet builder', 'Daily prices from Yahoo, a year kept, FX converted', 'Allocation by class and account, risk checks, rebalancing trades', 'Projections: lognormal, fat-tailed or bootstrap; goals; cash flows', 'Five historical crises replayed or opening every trial', 'Securities look-up; manually priced assets']),
+      ('hdd-stack', 'Platform', ['FastAPI, Jinja2, SQLAlchemy; SQLite or PostgreSQL', 'Two schema files, no migrations; a copy tool between backends', 'A background price collector, or cron', 'One administrator account with a hashed password', 'Every library vendored - works offline apart from prices', 'An offline test suite, also run against PostgreSQL']),
+    ] %}
+    <div class="col-md-6 col-xl-3"><div class="cap-group"><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ group }}</div>
+      <ul class="cap-list">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul></div>
     {% endfor %}
-  </div>
-</div></section>
+  </div></div>
+</section>
 
 <div class="row g-3 mb-4">
-  <div class="col-lg-6"><section class="card h-100"><div class="card-body p-4">
-    <h2 class="h5"><i class="bi bi-stars" aria-hidden="true"></i> In this release</h2>
-    <ul class="cap-list small mt-3">
-      <li>MAYA's design adopted: themes, mega-menu navigation, help and about</li>
-      <li>A database (SQLite or PostgreSQL, switchable in <code>config/retplan.toml</code>)</li>
-      <li>Named scenarios and a side-by-side comparison</li>
-      <li>The quick-start wizard; advanced editor columns tucked away</li>
-      <li>Portfolios with daily prices, FX, risk checks, rebalancing and projections</li>
-      <li>Historical crisis replays and sequence-risk projections</li>
-    </ul></div></section></div>
-  <div class="col-lg-6"><section class="card h-100"><div class="card-body p-4">
-    <h2 class="h5"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Honest limits</h2>
-    <ul class="small mt-3 mb-0">
-      <li><strong>Household-level tax.</strong> A couple's income is taxed as one unit, which overstates tax where individuals are taxed separately and incomes are uneven.</li>
-      <li><strong>Annual periods</strong> in the plan; within-year timing is not modelled. Portfolio projections run quarterly.</li>
-      <li><strong>Capital gains</strong> are the gain share of a withdrawal times an inclusion rate, under the ordinary bands.</li>
-      <li><strong>One year of prices</strong> estimates volatility and correlation well and the mean hardly at all, so expected returns lean on long-run assumptions.</li>
-      <li><strong>Crisis replays</strong> use rounded index approximations, not a precise record.</li>
-      <li><strong>Yahoo's endpoints are unofficial</strong> and may change or throttle.</li>
-      <li><strong>Not financial advice.</strong> Projections under assumptions you supply, not predictions.</li>
-    </ul></div></section></div>
+  <div class="col-lg-7"><section class="card h-100">
+    <div class="card-header"><i class="bi bi-tag" aria-hidden="true"></i> In this release</div>
+    <div class="card-body">
+      {% for version, items in highlights.items() %}
+      <div class="cap-group">Version {{ version }}</div>
+      <ul class="cap-list mb-3">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul>
+      {% endfor %}
+      <p class="small-muted mb-0">Generated from <code>retplan/version.py</code>, the single authority for the version.</p>
+    </div></section></div>
+  <div class="col-lg-5"><section class="card h-100">
+    <div class="card-header"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Honest limits</div>
+    <div class="card-body">
+      <p class="small-muted">Stated so nobody has to discover them.</p>
+      <ul class="cap-list">
+        <li>A couple's income is taxed as one unit - too much tax where individuals are taxed separately and incomes differ.</li>
+        <li>The plan runs in whole years; portfolio projections in quarters.</li>
+        <li>No country's special rules: social-security benefit formulas, Medicare, conversion limits and waiting periods are yours to enter or check.</li>
+        <li>No bank or broker linking: holdings come in by typing, pasting or uploading.</li>
+        <li>A year of prices estimates volatility and correlation well and the mean hardly at all, so expected returns lean on long-run assumptions.</li>
+        <li>Crisis replays use rounded index figures; Yahoo's endpoints are unofficial and can throttle.</li>
+        <li>Not financial advice: projections under assumptions you supply.</li>
+      </ul>
+    </div></section></div>
 </div>
 
-<section class="card mb-4"><div class="card-body p-4 text-center">
-  <h2 class="h5 mb-3">Built with</h2>
-  {% for t in ['Python 3', 'NumPy', 'FastAPI', 'Jinja2', 'SQLAlchemy', 'SQLite', 'PostgreSQL', 'Bootstrap 5', 'Bootstrap Icons', 'Server-rendered SVG charts', 'Yahoo Finance'] %}<span class="tech-badge">{{ t }}</span>{% endfor %}
-  <p class="small-muted mt-3 mb-0">No CDN and no front-end build: every library is vendored, so the app works offline apart from price collection.</p>
-</div></section>
+<section class="card mb-4 about-compete">
+  <div class="card-header"><i class="bi bi-bar-chart-steps" aria-hidden="true"></i> How it compares</div>
+  <div class="card-body">
+    <p>Subscription planners are polished and quick to start, and some know one country's rules in depth. What they
+      rarely do is show their working, let you change every assumption, or leave your data with you. RetPlan does all
+      three - and adds decision tools that treat the answer as something you act on.</p>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('about_compare') }}"><i class="bi bi-arrow-right" aria-hidden="true"></i>
+      RetPlan beside Boldin, ProjectionLab and others, row by row</a>
+  </div>
+</section>
 
-<div class="row g-3">
+<section class="card mb-4">
+  <div class="card-header"><i class="bi bi-code-square" aria-hidden="true"></i> Technology</div>
+  <div class="card-body">
+    {% for t in ['Python 3', 'NumPy', 'FastAPI', 'Jinja2', 'SQLAlchemy 2', 'SQLite', 'PostgreSQL', 'openpyxl', 'Bootstrap 5', 'Bootstrap Icons', 'Server-rendered SVG', 'Canvas figures', 'Yahoo Finance', 'PBKDF2 password hashing'] %}<span class="tech-badge">{{ t }}</span>{% endfor %}
+    <p class="small-muted mt-3 mb-0">Every browser library is vendored and there is no inline script: the application works
+      on an air-gapped network apart from price look-ups. The design follows MAYA's.</p>
+  </div>
+</section>
+
+<div class="row g-3 mb-4">
   <div class="col-md-5"><section class="card h-100 about-author">
     <div class="avatar"><i class="bi bi-person" aria-hidden="true"></i></div>
-    <h2 class="h5 mb-1">Ashutosh Sinha</h2><p class="small-muted mb-0">Author</p></section></div>
-  <div class="col-md-7"><section class="card h-100"><div class="card-body p-4">
-    <h2 class="h5">Privacy and licence</h2>
-    <p class="small">Plans and portfolios live in your own database, keyed by an opaque workspace id in your browser's session cookie; there are no accounts and no tracking. The only outbound traffic is price and symbol lookups to Yahoo Finance.</p>
-    <p class="small mb-0">{{ copyright }}. Released under the MIT licence (see <code>LICENSE</code>). This is an educational model: its outputs must not be relied on as financial, tax or investment advice.</p>
-  </div></section></div>
+    <h3>Ashutosh Sinha</h3>
+    <p class="small-muted mb-0">Designer and author of RetPlan.</p>
+  </section></div>
+  <div class="col-md-7"><section class="card h-100">
+    <div class="card-header"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> Licence and privacy</div>
+    <div class="card-body small">
+      <p>{{ copyright }}. Released under the MIT licence - see the <code>LICENSE</code> file.</p>
+      <p>Plans and portfolios live in your own database, keyed by an opaque workspace id in your browser's session
+        cookie. There are no planning accounts and no tracking; the only outbound traffic is price and symbol
+        look-ups to Yahoo Finance.</p>
+      <p class="mb-0">An educational model: its outputs must not be relied on as financial, tax or investment advice.</p>
+    </div></section></div>
 </div>
 {% endblock %}

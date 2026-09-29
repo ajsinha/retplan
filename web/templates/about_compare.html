@@ -1,1 +1,97 @@
-{% extends "base.html" %}{% block content %}<h1>Comparison</h1>{% endblock %}
+{% extends "base.html" %}
+{% block title %}How RetPlan compares{% endblock %}
+{% block content %}
+{# Categories, not vendors, as MAYA's comparison does: a table naming one product's features
+   would be wrong by its next release and is not ours to state. What is stable is where each
+   category's centre of gravity sits, and that is what the table claims. Each row's note says
+   how RetPlan does it - and the rows where RetPlan is weaker are here too. #}
+{% set Y, P, N = 'Yes', 'Partial', 'No' %}
+{% set rows = [
+  {'id': 'odds', 'cap': 'Monte Carlo odds, with the error bar stated', 'sub': P, 'agg': P, 'calc': P, 'rp': Y,
+   'problem': 'A success rate from a finite number of simulated futures is an estimate. Most tools show “87%” as if it were exact, so a change from 87% to 89% looks like progress when it may be noise.',
+   'how': ['Every success probability carries its standard error and a 95% interval. The what-if sliders and the levers mark any change smaller than the noise as such, and all comparisons use one random seed so that a difference comes from the plan, not the dice.']},
+  {'id': 'decide', 'cap': 'Ranked levers and live what-if sliders', 'sub': P, 'agg': P, 'calc': N, 'rp': Y,
+   'problem': 'A score says how you are doing, not what to change. Sliders exist in some tools, but a ranked list of what would help most usually comes from an adviser.',
+   'how': ['The dashboard tries each common change on its own - retire later or earlier, spend less or more, save more, shift the mix, cut fees, claim a pension later or earlier - on your whole plan, and ranks them by their effect on the odds. Click one to load it into the sliders, combine it with others, and keep the result as a scenario.']},
+  {'id': 'claim', 'cap': 'Public pension claiming age, tested on the whole plan', 'sub': P, 'agg': N, 'calc': N, 'rp': Y,
+   'problem': 'Claiming tools usually optimise the pension on its own - lifetime benefit, break-even age - and for one country’s rules.',
+   'how': ['Every claiming age is run through the whole plan with the early and late adjustment rates you set for your country, and compared on the chance of success and final wealth as well as the break-even age. It is <em>Yes</em> for the decision; for one country’s benefit formula, spousal rules and earnings tests, a dedicated tool knows more.']},
+  {'id': 'convert', 'cap': 'Roth-style conversions, compared after tax', 'sub': P, 'agg': N, 'calc': N, 'rp': Y,
+   'problem': 'Conversion tools compare final wealth that still has tax owing on the untaxed accounts, which quietly favours never converting.',
+   'how': ['Conversions between any two accounts - a fixed amount a year, or just enough to fill taxable income to a band - are run through the engine, their tax grossed up exactly and paid in your draw order. Strategies are compared on after-tax final wealth, with the tax your heirs would pay set by you.']},
+  {'id': 'sequence', 'cap': 'Sequence risk: regimes, crashes, historical crises', 'sub': P, 'agg': P, 'calc': Y, 'rp': Y,
+   'problem': 'Independent yearly returns understate bad decades. Historical calculators capture them, but only for one country’s history.',
+   'how': ['Bear and bull regimes that persist, crashes with multi-year shapes and per-asset transmission, and fat tails. Five historical crises can be replayed on a portfolio or placed at the start of every simulated future.']},
+  {'id': 'country', 'cap': 'Any country’s tax and account types', 'sub': P, 'agg': N, 'calc': N, 'rp': Y,
+   'problem': 'Most consumer planners are built around one country’s tax code and accounts; anyone else approximates.',
+   'how': ['Income tax is a table of bands you type, with allowances, tapers and a surtax; accounts are wrappers that say when money is taxed. The schedule is inverted exactly, so a withdrawal is grossed up for tax without iteration.']},
+  {'id': 'audit', 'cap': 'Shows the working: every number traceable, books reconciled', 'sub': N, 'agg': N, 'calc': P, 'rp': Y,
+   'problem': 'A planner that drops a flow somewhere looks exactly like one that does not. Few show the cash flow behind the headline, and fewer check it.',
+   'how': ['Year-by-year cash flow, balance sheet and tax reports; an audit that checks the roll-forward identity for every year of every simulated future; and the effective market statistics shown beside the ones you typed.']},
+  {'id': 'portfolio', 'cap': 'Your actual holdings, priced daily and projected', 'sub': P, 'agg': Y, 'calc': N, 'rp': Y,
+   'problem': 'Planners work with account totals; portfolio tools track holdings but rarely project them into a retirement plan.',
+   'how': ['Upload a broker’s positions export; every security is identified and priced daily, converted between currencies, checked for concentration, projected with correlated Monte Carlo, and copied into the plan as an account.']},
+  {'id': 'private', 'cap': 'Self-hosted: your data stays with you', 'sub': N, 'agg': N, 'calc': P, 'rp': Y,
+   'problem': 'A hosted planner holds your whole financial life on its servers, behind a subscription.',
+   'how': ['RetPlan runs on your machine, with SQLite by default or your own PostgreSQL. There are no planning accounts and no tracking; only price and symbol look-ups leave the machine.']},
+  {'id': 'link', 'cap': 'Linking bank and broker accounts automatically', 'sub': Y, 'agg': Y, 'calc': N, 'rp': N,
+   'problem': 'Typing balances in is tedious, and they go stale.',
+   'how': ['RetPlan does not connect to banks or brokers - that needs a data aggregator and your credentials on someone else’s server, which is the opposite of the privacy row above. Instead: the portfolio builder reads a positions export in seconds, and prices then update daily on their own.']},
+  {'id': 'rules', 'cap': 'One country’s detailed rules (benefit formulas, health insurance, RMD tables)', 'sub': Y, 'agg': P, 'calc': P, 'rp': P,
+   'problem': 'Where a planner specialises in one country it can model that country’s rules in depth.',
+   'how': ['RetPlan models the mechanisms - forced withdrawals from a divisor table you enter, early-withdrawal penalties, contribution caps, catch-up amounts, survivor shares - but not any one country’s benefit formulas or health-insurance premiums. It is <em>Partial</em> by design.']},
+  {'id': 'people', 'cap': 'Mobile apps, advisers and coaching', 'sub': Y, 'agg': Y, 'calc': N, 'rp': N,
+   'problem': 'Some people want a phone app or a person to talk to.',
+   'how': ['RetPlan is a web application that works on a phone’s browser, with no app and no advisers. The levers are the nearest thing to a coach: computed, not sold.']},
+] %}
+<section class="about-hero">
+  <h1><i class="bi bi-bar-chart-steps" aria-hidden="true"></i> How RetPlan compares</h1>
+  <p>Where RetPlan sits among retirement planners and money tools - and what it does that the others do not, and the other way round.</p>
+  <div class="d-flex flex-wrap gap-2 justify-content-center mt-3 position-relative">
+    <a class="btn btn-outline-light" href="{{ url_for('about') }}"><i class="bi bi-info-circle" aria-hidden="true"></i> About RetPlan</a>
+    <a class="btn btn-outline-light" href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a>
+  </div>
+</section>
+
+<section class="card mb-4 about-compete">
+  <div class="card-body">
+    <p>Four families of product touch retirement planning, and each is good at what it does.
+      <strong>Subscription planners</strong>, such as Boldin (formerly NewRetirement), ProjectionLab and WealthTrace,
+      are polished, quick to start and deep on the rules of the country they are built for.
+      <strong>Aggregators</strong>, such as Empower, link your accounts and show everything in one place, with a
+      retirement estimate on top. <strong>Calculators</strong>, such as FIRECalc, cFIREsim and FI Calc, test a
+      withdrawal rate against history, openly and for free. <strong>Portfolio tools</strong>, such as Portfolio
+      Visualizer and Ghostfolio, analyse holdings but not the life around them.</p>
+    <p class="mb-3">RetPlan's aim is to be the one you can check: every assumption editable, every number
+      traceable, the odds stated with their precision - and then to help you decide, not just score you.</p>
+    <div class="table-wrap"><div class="table-scroll"><table class="table align-middle mb-0">
+      <caption class="visually-hidden">How the product categories compare</caption>
+      <thead><tr><th>Capability</th><th>Subscription planners</th><th>Aggregators</th><th>Calculators</th><th>RetPlan</th></tr></thead>
+      <tbody>{% for r in rows %}<tr><td><a href="#{{ r.id }}">{{ r.cap }}</a></td>
+        {% for k in ('sub', 'agg', 'calc', 'rp') %}<td><span class="cmp cmp-{{ r[k]|lower }}">{% if k == 'rp' %}<strong>{{ r[k] }}</strong>{% else %}{{ r[k] }}{% endif %}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div></div>
+    <p class="small-muted mt-3 mb-0">Categories, not vendors. Each row says where a category's centre of gravity sits as
+      understood in September 2026. Individual products differ, change between releases, and some cross these lines;
+      nothing here is a statement about any one vendor's current offering. The last three rows are where RetPlan does
+      less, and say why.</p>
+  </div>
+</section>
+
+{% for r in rows %}
+<article class="card mb-3" id="{{ r.id }}">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+      <h3 class="h5 mb-0">{{ r.cap }}</h3>
+      <div class="d-flex flex-wrap gap-1 small">
+        <span class="cmp cmp-{{ r.sub|lower }}" title="Subscription planners">Planners {{ r.sub }}</span>
+        <span class="cmp cmp-{{ r.agg|lower }}" title="Aggregators">Aggregators {{ r.agg }}</span>
+        <span class="cmp cmp-{{ r.calc|lower }}" title="Calculators">Calculators {{ r.calc }}</span>
+        <span class="cmp cmp-{{ r.rp|lower }}" title="RetPlan"><strong>RetPlan {{ r.rp }}</strong></span>
+      </div>
+    </div>
+    <p class="small-muted mb-2"><strong>The problem.</strong> {{ r.problem }}</p>
+    {% for para in r.how %}<p class="{{ 'mb-0' if loop.last else 'mb-2' }}">{% if loop.first %}<strong>How RetPlan does it.</strong> {% endif %}{{ para|safe }}</p>{% endfor %}
+  </div>
+</article>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}{{ case.title }} · Case study{% endblock %}
+{% block content %}
+<nav class="help-crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('help') }}"><i class="bi bi-book" aria-hidden="true"></i> Help</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <a href="{{ url_for('help_cases') }}">Case studies</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+  <span aria-current="page">{{ case.title }}</span>
+</nav>
+<header class="help-topic-hero">
+  <span class="ico"><i class="bi {{ case.icon }}" aria-hidden="true"></i></span>
+  <div><h1>{{ case.title }}</h1><p>{{ case.summary }}</p></div>
+</header>
+<div class="row g-3">
+  <div class="col-xl-8">
+    <section class="card"><div class="card-header"><i class="bi bi-person-lines-fill" aria-hidden="true"></i> The household</div>
+      <div class="card-body help-body">{% for para in case.story %}<p>{{ para }}</p>{% endfor %}
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">{{ ui.kv([('People', plan.persons|map(attribute='label')|join(' and ')), ('Ages now', plan.persons|map(attribute='age')|map('int')|join(' and ')), ('Retiring at', plan.persons|map(attribute='retire_age')|map('int')|join(' and ')), ('Planning to', plan.persons|map(attribute='death_age')|map('int')|join(' and '))]) }}</div>
+          <div class="col-md-6">{{ ui.kv([('Savings today', fig.savings|money), ('Spending now', fig.spend|money ~ ' a year'), ('Mortgage', (plan.loans[0].balance|money) if plan.loans else 'none'), ('Investment mix', case.answers.risk)]) }}</div>
+        </div></div></section>
+    <section class="card"><div class="card-header"><i class="bi bi-question-circle" aria-hidden="true"></i> Questions worth asking</div>
+      <div class="card-body help-body">
+        <ol class="help-steps">{% for q, how in case.questions %}<li><strong>{{ q }}</strong> {{ how }}</li>{% endfor %}</ol>
+      </div></section>
+  </div>
+  <div class="col-xl-4">
+    <section class="card"><div class="card-header"><i class="bi bi-speedometer2" aria-hidden="true"></i> What RetPlan says today</div>
+      <div class="card-body">
+        <div class="d-flex align-items-end gap-2"><span class="fs-1 fw-bold tabular">{{ fig.success|pct(0) }}</span>
+          <span class="small-muted pb-2">chance of success ± {{ (1.96 * fig.se * 100)|round(1) }} pts</span></div>
+        {{ ui.kv([('Median final wealth', fig.p50|money), ('Bad-luck final wealth', fig.p5|money), ('When it fails, runs out at', ('age ' ~ fig.depletion_age|round(0)|int) if fig.depletion_age else 'n/a'), ('Lifetime tax (median)', fig.tax|money)]) }}
+        <p class="small-muted mt-2">Computed by the engine when this page was first shown, from {{ '{:,}'.format(fig.trials) }} futures on a fixed seed - not written into the text.</p>
+        <form method="post" action="{{ url_for('help_case_open', slug=case.slug) }}">
+          <button class="btn btn-primary w-100" type="submit"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Open as a scenario</button></form>
+        <p class="small-muted mt-2 mb-0">Adds a copy to your workspace and switches to it. Your own plans are untouched.</p>
+      </div></section>
+    <section class="card"><div class="card-header"><i class="bi bi-journal-code" aria-hidden="true"></i> Other cases</div>
+      <div class="card-body"><ul class="list-rows">{% for c in studies if c.slug != case.slug %}<li><i class="bi {{ c.icon }}" aria-hidden="true"></i><a class="grow" href="{{ url_for('help_case', slug=c.slug) }}">{{ c.title }}</a></li>{% endfor %}</ul></div></section>
+  </div>
+</div>
+{% endblock %}

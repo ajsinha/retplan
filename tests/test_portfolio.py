@@ -795,6 +795,55 @@ def test_tools():
         wa.db.dispose()
 
 
+def test_conventions():
+    """MAYA's house rules, enforced: no inline script, every page's links resolve."""
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "templates")
+    bad = []
+    for dirpath, _, files in os.walk(root):
+        for f in files:
+            if not f.endswith(".html"):
+                continue
+            text = open(os.path.join(dirpath, f), encoding="utf-8").read()
+            if re.search(r"<script(?![^>]*\bsrc=)[^>]*>", text) or \
+                    re.search(r"\son(click|change|submit|input|load|keyup|keydown)=", text) or \
+                    "javascript:" in text:
+                bad.append(f)
+    check("no inline script or event handler in any template", not bad, bad)
+    from web.help_catalog import GUIDES, TOPICS
+    missing = [s for s in TOPICS if not os.path.exists(os.path.join(root, "help", f"{s}.html"))]
+    check("every help topic has a page", not missing, missing)
+    gdir = os.path.join(root, "..", "guides")
+    check("every guide has its Markdown file",
+          all(os.path.exists(os.path.join(gdir, f"{g['slug']}.md")) for g in GUIDES))
+
+
+def test_help_and_about():
+    from fastapi.testclient import TestClient
+    from web import cases
+    from web.config import Config
+    from web.help_catalog import GUIDES, TOPICS
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        wa = RetPlanWebApp(config=Config(data_dir=d, database_url=f"sqlite:///{d}/h.db",
+                                         prices_enabled=False), start_scheduler=False)
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        urls = (["/help", "/help/guides", "/help/case-studies", "/about", "/about/compare", "/"]
+                + [f"/help/{s}" for s in TOPICS] + [f"/help/guides/{g['slug']}" for g in GUIDES]
+                + [f"/help/case-studies/{x['slug']}" for x in cases.CASES])
+        bad = [(u, c.get(u).status_code) for u in urls]
+        bad = [b for b in bad if b[1] != 200]
+        check(f"all {len(urls)} help, guide, case and about pages render", not bad, bad)
+        check("the about page lists this release's highlights",
+              "In this release" in c.get("/about").text and "Version 2.0.0" in c.get("/about").text)
+        r = c.post("/help/case-studies/early-retirement/open", follow_redirects=True)
+        check("a case study opens as the active scenario",
+              r.status_code == 200 and "Case: retire at 60" in r.text)
+        page = c.get("/").text
+        check("the landing page carries its three figures",
+              all(f'id="{i}"' in page for i in ("lpFutures", "lpSequence", "lpLedger")))
+        wa.db.dispose()
+
+
 def main():
     global DB_URL
     if "--database" in sys.argv:
@@ -807,7 +856,7 @@ def main():
     test_projection_closed_forms(); test_projection_statistics()
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
-    test_admin_gate(); test_tools(); test_web()
+    test_admin_gate(); test_tools(); test_conventions(); test_help_and_about(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

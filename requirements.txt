@@ -19,5 +19,8 @@ psycopg[binary]>=3.1
 # Reading uploaded spreadsheets in the portfolio builder
 openpyxl>=3.1
 
+# The help centre's long-form guides are Markdown
+markdown>=3.6
+
 # Tests only (the FastAPI test client)
 httpx>=0.27
