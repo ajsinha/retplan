@@ -53,6 +53,7 @@ class WizardRoutes:
         portfolios = request.app.state.portfolios.list(session_id(request))
         return render(request, "wizard.html", step=step, idx=idx, steps=wizard.STEPS,
                       a=a, risk=wizard.RISK, tax=wizard.TAX,
+                      account_types=wizard.ACCOUNT_TYPES,
                       summary=wizard.summary(a),
                       done=set(request.session.get("wizard_done") or []),
                       portfolios=portfolios,
@@ -70,13 +71,26 @@ class WizardRoutes:
         # unchecked checkboxes are absent from the post
         if step == "you":
             draft["partner"] = "1" if form.get("partner") else ""
+        if step == "savings":
+            # An account type counts when ticked. Without script every type's inputs
+            # are posted, so a type with figures typed in counts too; with script an
+            # unticked type's inputs are disabled, so they are absent and cleared.
+            for t in wizard.ACCOUNT_TYPES:
+                keys = wizard.account_keys(t)
+                typed = any(wizard._f(form, k) > 0 for k in keys if k in form)
+                has = bool(form.get(f"has_{t['key']}")) or typed
+                draft[f"has_{t['key']}"] = "1" if has else ""
+                if not has:
+                    for k in keys:
+                        draft[k] = "0"
         # "use a portfolio's value" fills the taxable balance from the database
         pf = form.get("use_portfolio")
         if step == "savings" and pf:
             try:
                 val = request.app.state.portfolios.valuation(session_id(request), int(pf))
-                draft["taxable"] = f"{val.total:.0f}"
-                flash(request, f"Taxable investments set to your portfolio's value, "
+                draft["brokerage"] = f"{val.total:.0f}"
+                draft["has_brokerage"] = "1"
+                flash(request, f"Brokerage set to your portfolio's value, "
                                f"{val.total:,.0f}.", "success")
             except Exception as exc:  # noqa: BLE001
                 flash_error_and_log(request, "Could not read that portfolio", exc)

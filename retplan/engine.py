@@ -131,6 +131,8 @@ class Projection:
         self.inc_by_cat = {c: np.zeros(T + 1) for c in
                            ("employment", "pension", "other", "tax_free", "one_off")}
         self.pensionable = np.zeros(T + 1)
+        # pay by person, so a "% of pay" contribution uses its owner's pay
+        self.pay_by = np.zeros((max(1, len(p.persons)), T + 1))
         for row in p.income:
             if not row.enabled or row.amount == 0:
                 continue
@@ -155,6 +157,7 @@ class Projection:
             self.inc_by_cat[cat] += v
             if row.category in ("employment", "self_employment"):
                 self.pensionable += v
+                self.pay_by[o] += v
 
         # --- expenses: essential / discretionary, real and nominal -----------
         sm = np.interp(self.age, p.smile.ages, p.smile.mult)
@@ -212,6 +215,12 @@ class Projection:
         self.order_ct = np.argsort([lg.contribute_priority for lg in p.ledgers], kind="stable")
 
     # --------------------------------------------------------------- helpers
+    def _owner_age(self, ledger, k):
+        """The age of an account's owner: wrapper rules go by the owner's age."""
+        if not len(self.ages):
+            return float(self.age[k])
+        return float(self.ages[min(max(0, ledger.owner), len(self.ages) - 1)][k])
+
     def _mrd_divisor(self, wrapper, age):
         tbl = wrapper.mrd_divisors
         if not tbl:
@@ -317,9 +326,10 @@ class Projection:
             mrd_total = np.zeros(n)
             for i, lg in enumerate(p.ledgers):
                 wr = p.wrappers[lg.wrapper]
-                if age < wr.mrd_age:
+                oage = self._owner_age(lg, k)
+                if oage < wr.mrd_age:
                     continue
-                div = self._mrd_divisor(wr, age)
+                div = self._mrd_divisor(wr, oage)
                 if not np.isfinite(div) or div <= 0:
                     continue
                 amt = S[:, i, :].sum(axis=1) / div
@@ -385,12 +395,13 @@ class Projection:
                 if not lg.enabled:
                     continue
                 wr = p.wrappers[lg.wrapper]
-                if not wr.liquid or age < wr.lock_age:
+                oage = self._owner_age(lg, k)
+                if not wr.liquid or oage < wr.lock_age:
                     continue
                 if not np.any(remaining > 1e-9):
                     break
                 avail = S[:, i, :].sum(axis=1)
-                pen = wr.early_penalty if age < wr.early_age else 0.0
+                pen = wr.early_penalty if oage < wr.early_age else 0.0
                 # One tax path for every wrapper.  A taxable account's withdrawal
                 # is taxable only to the extent it is gain, scaled by the
                 # jurisdiction's inclusion rate; a pension is taxable in full; a
@@ -437,13 +448,13 @@ class Projection:
                 wr = p.wrappers[lg.wrapper]
                 if self.hh_retired[k]:
                     continue
-                pay = self.pensionable[k]
+                pay = self.pay_by[min(lg.owner, len(self.pay_by) - 1), k]
                 pct_want = lg.contribution_pct_income * pay
                 want = lg.contribution + pct_want
                 cap = (np.inf if wr.cap_type == "none" else
                        wr.cap_value if wr.cap_type == "absolute" else
                        wr.cap_value * pay)
-                if age >= wr.catch_up_age:
+                if self._owner_age(lg, k) >= wr.catch_up_age:
                     cap = cap + wr.catch_up_amount
                 # your own saving comes out of the household's surplus ...
                 add = np.minimum(surplus, min(max(0.0, want), cap))

@@ -73,6 +73,9 @@
   {% endif %}
 </div>
 
+{% if sim and sim.drawrate %}{% include "_drawrate.html" %}
+{% elif sim %}<p class="small-muted mt-2 mb-0"><i class="bi bi-info-circle" aria-hidden="true"></i> Run the simulation again to see a suggested draw rate.</p>{% endif %}
+
 {% set retiring = plan.persons|selectattr('retire_age', 'gt', plan.persons[0].age - 1)|list and plan.persons[0].retire_age > plan.persons[0].age %}
 {% set has_pension = plan.income|selectattr('category', 'equalto', 'state_pension')|list %}
 <div class="row g-3" id="whatif">

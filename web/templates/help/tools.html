@@ -85,6 +85,33 @@ conversion ladders and tax on benefits that rises with income are not modelled. 
 rules where you live before acting.</p>
 {% endcall %}
 
+<h2 id="draw-rate">The suggested draw rate</h2>
+<p>After every simulation the dashboard suggests how much of your savings to take in the
+first year you live on them - the year nobody in the household is paid for work any
+more. It is worked out for <em>your</em> plan, not borrowed from a rule of thumb:</p>
+{% call steps() %}
+  <li>RetPlan scales your spending in retirement from 40% to 200% of what you planned,
+      leaving the working years (and so what you save) as they are, and runs your whole plan
+      at each level: tax, pensions, forced withdrawals and all.</li>
+  <li>It finds the level at which the chance of success meets your confidence target, and
+      the two levels at the guardrail odds either side - 10 points safer (<em>cautious</em>)
+      and 15 points riskier (<em>bold</em>).</li>
+  <li>For each, the draw rate is that first year's withdrawal from savings - spending plus
+      the tax on the withdrawal, less pensions and other income - divided by what your savings
+      are worth at the start of that year, both in a typical future.</li>
+{% endcall %}
+<p>The marker shows where your plan draws now. <strong>Try … as a scenario</strong> saves a
+copy of the plan with retirement spending at the suggested level. When pensions start a few
+years after you stop work, the first year's rate is higher than the years after; the card
+then gives the ten-year average too.</p>
+{% call note('why', 'Why not just 4%?') %}
+<p>The 4% rule came from US stocks and bonds over 30-year retirements, before tax and with
+no other income. Your answer depends on how long you plan for, your pensions, your tax and
+your mix, and the conservative market assumptions here - which is why it can be well under
+or over 4%. Once retired, use the <a href="#spending">spending check</a> each year: it keeps
+the same odds as markets move.</p>
+{% endcall %}
+
 <h2 id="spending">Spending check: raise, hold or trim</h2>
 <p>{{ goto('tool_spending', 'Open the spending check') }} Once a year, or after a big market
 move, ask how much you can spend. RetPlan runs your plan with all your spending scaled from

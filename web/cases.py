@@ -25,10 +25,10 @@ CASES: list[dict] = [
                      plan_to="95", partner="1", p2_age="50", p2_retire_age="58",
                      p2_plan_to="96", salary="110000", salary_growth="1", p2_salary="65000",
                      pension="24000", pension_age="67", p2_pension="16000", p2_pension_age="67",
-                     taxable="180000", deferred="720000", taxfree="140000", cash="40000",
-                     save_pct="10", employer_pct="5", save_amount="12000", spend="85000",
+                     brokerage="180000", k401="720000", roth_ira="140000", cash="40000",
+                     k401_save="10", k401_match="5", brokerage_save="12000", spend="85000",
                      retire_spend_pct="85", essential_pct="55", mortgage="120000",
-                     mortgage_rate="3.5", mortgage_years="9", risk="balanced", tax="sample",
+                     mortgage_rate="3.5", mortgage_years="9", risk="balanced", tax="us",
                      inflation="2.5"),
         story=[
             "Both work until their late fifties and have saved steadily, most of it in "
@@ -60,10 +60,10 @@ CASES: list[dict] = [
                 "does saving harder buy, and what retirement age makes it work?",
         answers=dict(wizard.DEFAULTS, name="Case: late starter", age="52", retire_age="67",
                      plan_to="92", partner="", salary="58000", salary_growth="0.5",
-                     pension="14000", pension_age="67", taxable="8000", deferred="65000",
-                     taxfree="12000", cash="6000", save_pct="6", employer_pct="3",
-                     save_amount="1500", spend="42000", retire_spend_pct="80",
-                     essential_pct="70", mortgage="0", risk="growth", tax="sample",
+                     pension="14000", pension_age="67", brokerage="8000", k401="65000",
+                     roth_ira="12000", cash="6000", k401_save="6", k401_match="3",
+                     brokerage_save="1500", spend="42000", retire_spend_pct="80",
+                     essential_pct="70", mortgage="0", risk="growth", tax="us",
                      inflation="2.5"),
         story=[
             "A career break and a divorce left little in savings. Fifteen years of work remain, "
@@ -94,10 +94,10 @@ CASES: list[dict] = [
                      retire_age="68", plan_to="96", partner="1", p2_age="66",
                      p2_retire_age="66", p2_plan_to="97", salary="0", p2_salary="0",
                      pension="21000", pension_age="68", p2_pension="11000",
-                     p2_pension_age="67", taxable="260000", deferred="690000",
-                     taxfree="210000", cash="60000", save_pct="0", employer_pct="0",
-                     save_amount="0", spend="78000", retire_spend_pct="100",
-                     essential_pct="60", mortgage="0", risk="balanced", tax="sample",
+                     p2_pension_age="67", brokerage="260000", k401="690000",
+                     roth_ira="210000", cash="60000", k401_save="0", k401_match="0",
+                     brokerage_save="0", spend="78000", retire_spend_pct="100",
+                     essential_pct="60", mortgage="0", risk="balanced", tax="us",
                      inflation="2.5"),
         story=[
             "Both have stopped work and draw on 1.2 million of savings alongside their "

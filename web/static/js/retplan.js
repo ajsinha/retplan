@@ -20,6 +20,7 @@
  *   [data-copy]               copy the <pre> in the same <figure>
  *   a[data-dialog]            open the link's page in the #rp-dialog modal
  *   form[data-stepper]        one [data-step] at a time, with Back / Next
+ *   input[data-reveal=<id>]   a checkbox shows #id when ticked (and disables its inputs when not)
  *
  * Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
  */
@@ -484,6 +485,23 @@
         .catch(function (e) { btn.disabled = false; note.hidden = false; note.textContent = String(e); });
     });
   })();
+
+  // ---------- tick to reveal: without script every panel shows ----------
+  document.querySelectorAll('input[data-reveal]').forEach(function (box) {
+    var panel = document.getElementById(box.getAttribute('data-reveal'));
+    if (!panel) { return; }
+    function sync(focus) {
+      panel.hidden = !box.checked;
+      panel.querySelectorAll('input, select').forEach(function (i) { i.disabled = !box.checked; });
+      if (focus && box.checked) {
+        var first = panel.querySelector('input');
+        panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (first) { first.focus({ preventScroll: true }); first.select(); }
+      }
+    }
+    box.addEventListener('change', function () { sync(true); });
+    sync(false);
+  });
 
   // ---------- dialogs: a link's page in the modal, a step at a time ----------
   // Without script every [data-dialog] link is an ordinary page and every step

@@ -14,6 +14,8 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from web import drawrate
+from web.fastapi_compat import flash, flash_error_and_log, redirect_to
 from web.store import session_id
 from web.viewmodel import simulate, solver_view
 
@@ -33,6 +35,8 @@ class SimulationRoutes:
         add("/api/analysis", self.analysis, methods=["POST"], name="api_analysis")
         add("/api/results", self.results, methods=["GET"], name="api_results")
         add("/api/clear", self.clear, methods=["POST"], name="api_clear")
+        add("/drawrate/try", self.try_drawrate, methods=["POST"], name="drawrate_try",
+            include_in_schema=False)
 
     async def run(self, request: Request):
         sid = session_id(request)
@@ -50,6 +54,7 @@ class SimulationRoutes:
         except Exception as exc:  # noqa: BLE001
             logger.exception("simulation failed")
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        payload["drawrate"] = self._drawrate(plan)
         payload["seconds"] = time.time() - t0
         payload["has_solvers"] = False
         self.store.set_results(sid, payload)
@@ -72,10 +77,44 @@ class SimulationRoutes:
         except Exception as exc:  # noqa: BLE001
             logger.exception("analysis failed")
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        payload["drawrate"] = self._drawrate(plan)
         payload["seconds"] = time.time() - t0
         payload["has_solvers"] = True
         self.store.set_results(sid, payload)
         return self._summary(payload)
+
+    @staticmethod
+    def _drawrate(plan):
+        """The suggested draw rate; a failure here must not lose the simulation."""
+        try:
+            return drawrate.suggest(plan)
+        except Exception:  # noqa: BLE001
+            logger.exception("draw-rate suggestion failed")
+            return None
+
+    async def try_drawrate(self, request: Request):
+        """Save a copy of the plan with retirement spending at a suggested level."""
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        form = await request.form()
+        which = form.get("which") or "suggested"
+        try:
+            d = drawrate.suggest(plan)
+            pick = d.get(which)
+            if not pick:
+                flash(request, "There is no spending level that meets that target.", "warning")
+                return redirect_to(request, "dashboard")
+            q = drawrate.scale_retirement(plan, pick["mult"], d["age"])
+            name = f"{plan.label} - {pick['rate']:.1%} draw rate"
+            q.label = name
+            self.store.create(sid, name, q, activate=True)
+        except Exception as exc:  # noqa: BLE001
+            flash_error_and_log(request, "Could not make that scenario", exc)
+            return redirect_to(request, "dashboard")
+        return redirect_to(request, "dashboard", flash_message=(
+            f"Saved and switched to '{name}': retirement spending of about "
+            f"{pick['spend']:,.0f} a year. Run the simulation to see it in full; "
+            "the original plan is unchanged under Scenarios."))
 
     async def results(self, request: Request):
         payload = self.store.results(session_id(request))
@@ -104,4 +143,5 @@ class SimulationRoutes:
             "has_solvers": payload.get("has_solvers", False),
             "max_spend": payload.get("max_spend"),
             "earliest_age": payload.get("earliest_age"),
+            "draw_rate": ((payload.get("drawrate") or {}).get("suggested") or {}).get("rate"),
         }

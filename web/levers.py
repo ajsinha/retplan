@@ -17,7 +17,7 @@ import numpy as np
 
 from retplan.engine import Projection
 from retplan.metrics import kpis
-from retplan.plan import Conversion
+from retplan.plan import JUST_BEFORE, Conversion
 
 SEED = 20260916
 QUICK = 800            # trials for a slider move - fast, error bar about +/-1.5 pts
@@ -102,8 +102,8 @@ def apply(plan, adj: Adjust):
                     and abs(row.end_age - old[row.owner]) < 1e-9:
                 row.end_age = q.persons[row.owner].retire_age
         for e in q.expenses:              # spending that switches at retirement moves too
-            if abs(e.end_age - old[0]) < 1e-9:
-                e.end_age = q.persons[0].retire_age
+            if abs(e.end_age - old[0]) < 1e-3:
+                e.end_age = q.persons[0].retire_age - (old[0] - e.end_age)
             if abs(e.start_age - old[0]) < 1e-9:
                 e.start_age = q.persons[0].retire_age
     if adj.spend:
@@ -126,7 +126,7 @@ def apply(plan, adj: Adjust):
                     later = copy.deepcopy(e)
                     later.start_age = ret
                     q.expenses.append(later)
-                    e.end_age = ret
+                    e.end_age = ret - JUST_BEFORE
                 e.amount -= cut * e.amount / total
     if adj.equity:
         eq = _asset_index(q, "equity", "stock", "share")

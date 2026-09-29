@@ -39,6 +39,11 @@ class IncomeRow:
     enabled: bool = True
 
 
+# Ages are inclusive at both ends, so a row that hands over to another at an age
+# ends just before it; otherwise both would count in the year of the switch.
+JUST_BEFORE = 1e-6
+
+
 @dataclass
 class ExpenseRow:
     label: str = "Living costs"

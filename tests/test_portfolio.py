@@ -587,6 +587,110 @@ def test_plan_dialogs():
         check("an unknown section is refused", r.status_code == 303)
 
 
+def test_accounts_and_draw_rate():
+    """Accounts by type in the quick start, and the suggested draw rate."""
+    from web import drawrate, wizard
+    from retplan.engine import Projection
+    a = dict(wizard.DEFAULTS, partner="1", has_ira="1", ira_p2="40000", ira_save_p2="3000",
+             has_roth401k="1", roth401k="10000", roth401k_save="5", roth401k_match="2",
+             has_hsa="1", hsa="6000", hsa_save="2000")
+    plan = wizard.build_plan(a)
+    by = {lg.label: lg for lg in plan.ledgers}
+    wr = lambda lg: plan.wrappers[lg.wrapper]
+    check("each ticked type becomes an account, per owner where personal",
+          {"Your 401(k) / 403(b)", "Partner's Traditional IRA", "Your Roth 401(k)", "HSA",
+           "Brokerage", "Savings and CDs", "Your Roth IRA"} <= set(by), sorted(by))
+    k401, ira, roth = by["Your 401(k) / 403(b)"], by["Partner's Traditional IRA"], by["Your Roth IRA"]
+    check("a 401(k) is deductible, taxed out, with required withdrawals and a penalty",
+          wr(k401).contribution_deductible == 1 and wr(k401).withdrawal_taxable_fraction == 1
+          and wr(k401).mrd_divisors and wr(k401).early_age == 59.5)
+    check("a Roth is tax-free out with no required withdrawals",
+          wr(roth).withdrawal_taxable_fraction == 0 and not wr(roth).mrd_divisors)
+    check("the partner's IRA is theirs and saves a fixed amount",
+          ira.owner == 1 and ira.contribution == 3000 and ira.contribution_pct_income == 0)
+    check("a 401(k) saves a share of pay with the employer's match",
+          k401.contribution_pct_income == 0.08 and k401.employer_match_cap_pct == 0.04)
+    check("unspent income is swept into the brokerage account",
+          plan.ledgers[plan.policy.sweep_ledger].label == "Brokerage")
+    check("US tax: brackets over a joint standard deduction",
+          plan.tax.ordinary.lowers[1] == 32200 and plan.tax.ordinary.rates[1] == 0.10)
+    check("Social Security is 85% taxable under US tax",
+          all(r.taxable_fraction == 0.85 for r in plan.income if r.category == "state_pension"))
+    check("wizard savings validate", wizard.validate("savings", a) == [])
+    check("a saving rate over 100% of pay is refused",
+          wizard.validate("savings", dict(a, k401_save="120")) != [])
+    alone = wizard.build_plan(dict(wizard.DEFAULTS, has_brokerage="", brokerage="0",
+                                   brokerage_save="0"))
+    check("without a brokerage account one is made for unspent income",
+          any(lg.label.startswith("Brokerage") for lg in alone.ledgers))
+
+    # a spending row handed over at retirement is not counted twice that year
+    one = wizard.build_plan(wizard.DEFAULTS)
+    proj = Projection(one)
+    k = int(one.persons[0].retire_age - one.persons[0].age)
+    spend = proj.ess_real + proj.disc_real
+    check("the retirement year's spending is the retirement level, not both",
+          abs(spend[k] - 40000 * 0.8) < 1 and abs(spend[k - 1] - 40000) < 1,
+          f"{spend[k - 1]:.0f}, {spend[k]:.0f}")
+
+    d = drawrate.suggest(one, trials=500)
+    c, s_, b = d["cautious"], d["suggested"], d["bold"]
+    check("the draw rate is found for the first year without pay",
+          d["age"] == one.persons[0].retire_age + 1 and d["savings"] > 0, d["age"])
+    check("cautious <= suggested <= bold", c and s_ and b and c["rate"] <= s_["rate"] <= b["rate"],
+          (c and c["rate"], s_ and s_["rate"], b and b["rate"]))
+    check("a plan below its target is told to draw less",
+          d["now"]["success"] < d["target"] and s_["rate"] < d["now"]["rate"])
+    q = drawrate.scale_retirement(one, 0.5, d["age"])
+    pq = Projection(q)
+    sq = pq.ess_real + pq.disc_real
+    check("scaling retirement spending leaves the working years alone",
+          abs(sq[k - 1] - spend[k - 1]) < 1e-6 and abs(sq[k + 1] - 0.5 * spend[k + 1]) < 1e-6)
+    import time as _t
+    t0 = _t.time()
+    drawrate.suggest(one)
+    check("the suggestion takes a few seconds at most", _t.time() - t0 < 8, _t.time() - t0)
+
+
+def test_draw_rate_web():
+    """The savings step by account type; the draw rate after a simulation."""
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False)
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        page = c.get("/start?step=savings").text
+        check("the savings step asks by account type",
+              all(x in page for x in ("401(k) / 403(b)", "Roth IRA", "Roth 401(k)", "HSA",
+                                      'name="has_k401"', 'data-reveal="acct-k401"')))
+        # with script, an unticked type's inputs are disabled and so not posted
+        c.post("/start/savings", data={"has_k401": "1", "k401": "90000", "k401_save": "6",
+                                       "k401_match": "3", "has_ira": "1", "ira": "25000",
+                                       "ira_save": "7000", "go": "next"})
+        review = c.get("/start?step=review").text
+        check("ticked accounts reach the review", "Traditional IRA" in review
+              and "25,000" in review and "401(k)" in review)
+        check("unticked accounts are cleared", "Roth IRA" not in review and "Brokerage" not in review)
+        # without script, typed figures count even when not ticked
+        c.post("/start/savings", data={"k401": "90000", "roth_ira": "5000", "go": "next"})
+        check("typed figures count without a tick", "Roth IRA" in c.get("/start?step=review").text)
+
+        r = c.post("/api/simulate", json={"trials": 300})
+        check("the simulation answers with a draw rate", r.status_code == 200
+              and r.json().get("draw_rate") is not None, r.text[:200])
+        dash = c.get("/dashboard").text
+        check("the dashboard shows the suggested draw rate", "Suggested draw rate" in dash
+              and "dr-scale" in dash and "Try " in dash)
+        r = c.post("/drawrate/try", follow_redirects=True)
+        check("trying the rate makes a scenario and switches to it",
+              "draw rate" in r.text and "Saved and switched" in r.text)
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -1059,7 +1163,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

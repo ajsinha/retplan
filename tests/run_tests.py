@@ -495,6 +495,32 @@ def test_conversions():
     r0 = Projection(plan([])).run(1)
     check("no conversion, no tax in this plan", r0.tax[0].sum() == 0)
 
+def test_owners():
+    print("\nowner-specific account rules")
+    # Two people, one paid 100,000 and one paid 20,000; each has a pension paying in
+    # 10% of pay. Each must pay in 10% of their OWN pay, not of the household's.
+    p = simple_plan(0.0, 0.0, 0.0, 0.0, 3, 0.0)
+    p.persons = [Person("A", 40, 65, 200), Person("B", 70, 80, 200)]
+    p.income = [IncomeRow("pay A", 0, "employment", 100000, start_age=0, end_age=200),
+                IncomeRow("pay B", 1, "employment", 20000, start_age=0, end_age=200)]
+    pw = dict(realises_capital_gains=False, growth_taxed_annually=False,
+              withdrawal_taxable_fraction=1.0, mrd_age=73, mrd_divisors=[(73, 25.0)])
+    p.wrappers = [Wrapper("A's", **pw), Wrapper("B's", **pw), Wrapper("Sweep")]
+    p.ledgers = [Ledger("A's", 0, 0, opening=0, basis=0, weights=[1.0], contribution_pct_income=0.10),
+                 Ledger("B's", 1, 1, opening=100000, basis=0, weights=[1.0],
+                        contribution_pct_income=0.10, withdraw_priority=2),
+                 Ledger("S", 2, 0, opening=0, basis=0, weights=[1.0], contribute_priority=9)]
+    p.policy.sweep_ledger = 2
+    r = Projection(p).run(1)
+    check("a % of pay contribution uses its owner's pay",
+          close(r.balance_by_wrapper[0, 1, 0], 10000.0, 1e-6)
+          and close(r.balance_by_wrapper[0, 1, 1], 102000.0, 1e-6),
+          f"{r.balance_by_wrapper[0, 1]}")
+    # B is 70 at the start: required withdrawals begin in year 3 (age 73), by B's age,
+    # though A is only 43 then.
+    check("required withdrawals start at the owner's age, not person 1's",
+          r.mrd[0, 2] == 0 and r.mrd[0, 3] > 0, f"{r.mrd[0, :4]}")
+
 
 def main():
     slow = "--slow" in sys.argv
@@ -502,7 +528,7 @@ def main():
     test_rng(); test_tax(); test_amortisation()
     test_golden(); test_policies(); test_determinism()
     test_serialisation(); test_edges(); test_solvers()
-    test_convergence(); test_model_fixes(); test_conversions()
+    test_convergence(); test_model_fixes(); test_conversions(); test_owners()
     test_market_statistics(200000 if slow else 40000)
     dt = time.time() - t0
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {dt:.1f}s")

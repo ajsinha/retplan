@@ -16,8 +16,8 @@ you can open and change in the editor afterwards.</p>
 <li><strong>Income.</strong> Pay before tax, real pay growth, and a public or state
     pension with the age it starts. Other income (rent, part-time work, an annuity)
     sits under a fold.</li>
-<li><strong>Savings.</strong> Today's balances in four groups by how they are taxed,
-    and what you save each year until you retire.</li>
+<li><strong>Savings.</strong> Which accounts you have - 401(k), Roth 401(k), IRA, Roth IRA,
+    HSA, brokerage, savings - with each one's balance and what goes into it each year.</li>
 <li><strong>Spending.</strong> What you spend now, the share you expect in
     retirement, the essential share, what you want to leave, and an optional
     mortgage.</li>
@@ -57,23 +57,34 @@ was edited out of order still cannot produce an impossible plan.</p>
    "Fully taxable, and 100% continues to a survivor. Edit it in the income editor if that is wrong."),
 ]) }}
 
-<h3>Savings: four accounts on four wrappers</h3>
-<p>Each balance becomes an account on one of the sample's wrappers, so its tax
-treatment comes from that wrapper:</p>
+<h3>Savings: one account per type</h3>
+<p>Tick each kind of account you have. Each one is taxed differently, and that decides
+how much of a withdrawal you keep, when you must start withdrawing, and which account to
+spend first - so a dollar in a Roth IRA lasts longer than a dollar in a 401(k). Each ticked
+type becomes an account (one each for you and your partner where accounts are personal) on
+a tax wrapper with that type's rules:</p>
 <div class="help-table-wrap"><table class="table table-sm">
-  <thead><tr><th>Wizard field</th><th>Account created</th><th>Wrapper</th><th>Drawn</th><th>Paid into</th></tr></thead>
+  <thead><tr><th>Type</th><th>Paying in</th><th>Growth</th><th>Taking out</th><th>Rules modelled</th><th>Drawn</th></tr></thead>
   <tbody>
-    <tr><td>Taxable investments</td><td>Taxable investments</td><td>Taxable brokerage</td><td>1st</td><td>the fixed amount a year, plus any surplus</td></tr>
-    <tr><td>Tax-free accounts</td><td>Tax-free account</td><td>Tax-free account (TEE)</td><td>2nd</td><td>nothing by default</td></tr>
-    <tr><td>Retirement accounts</td><td>Workplace / retirement account</td><td>Pension (EET)</td><td>3rd</td><td>your % of pay, plus the employer's</td></tr>
-    <tr><td>Cash savings</td><td>Cash savings</td><td>Cash savings</td><td>last</td><td>nothing</td></tr>
+    <tr><td>401(k) / 403(b)</td><td>deducted from taxable income</td><td>untaxed</td><td>taxed as income</td><td>limit 24,500 + 8,000 from 50; 10% penalty before 59½; required withdrawals from 73 (75 if born 1960 or later)</td><td>2nd</td></tr>
+    <tr><td>Roth 401(k)</td><td>after tax</td><td>untaxed</td><td>tax-free</td><td>same limit; 10% penalty before 59½; no required withdrawals</td><td>3rd</td></tr>
+    <tr><td>Traditional IRA</td><td>deducted</td><td>untaxed</td><td>taxed as income</td><td>limit 7,500 + 1,100 from 50; penalty before 59½; required withdrawals</td><td>2nd</td></tr>
+    <tr><td>Roth IRA</td><td>after tax</td><td>untaxed</td><td>tax-free</td><td>same limit; no penalty (contributions can come out any time); no required withdrawals</td><td>3rd</td></tr>
+    <tr><td>HSA</td><td>deducted</td><td>untaxed</td><td>tax-free, assuming it pays for health costs</td><td>limit 4,400 (8,750 family) + 1,000 from 55</td><td>4th</td></tr>
+    <tr><td>Brokerage</td><td>after tax</td><td>dividends taxed yearly</td><td>only the gain is taxed</td><td>no limit; unspent income is saved here</td><td>1st</td></tr>
+    <tr><td>Savings and CDs</td><td>after tax</td><td>interest taxed yearly</td><td>untaxed</td><td>all cash</td><td>last</td></tr>
+    <tr><td>Pension pot (outside the US)</td><td>deducted</td><td>untaxed</td><td>taxed as income</td><td>the sample pension wrapper's rules</td><td>2nd</td></tr>
+    <tr><td>Tax-free savings (ISA, TFSA)</td><td>after tax</td><td>untaxed</td><td>tax-free</td><td>the sample tax-free wrapper's rules</td><td>3rd</td></tr>
   </tbody>
 </table></div>
-<p>The cost basis of the taxable, tax-free and cash accounts is set equal to the
-balance, so no gains are assumed to be embedded in them today; the retirement
-account's basis is zero, which is how a pension taxed on the way out is modelled.
-If you have large unrealised gains in a taxable account, raise the balance-versus-basis
-gap in the accounts editor.</p>
+<p>Limits are for 2026 and are held in today's money. RetPlan keeps each account's saving
+within its own limit; it does not add a 401(k) and a Roth 401(k) together against the one
+shared limit, so keep their combined rate within it. Workplace plans are paid a share of
+their owner's pay, with the employer's match on top; the others a fixed amount a year.
+Ages in the rules are the account owner's. Brokerage and cash accounts start with no
+gains in them; if yours has large unrealised gains, lower its cost basis in the accounts
+editor. <a href="{{ url_for('tool_draw_order') }}">The draw-order tool</a> tests whether
+another order pays less tax.</p>
 <p>Saving works through the household's <strong>surplus</strong> &mdash; income left
 after spending, debt and tax. Your % of pay goes to the retirement account first,
 then the fixed amount to taxable investments, and whatever is still left over is
@@ -121,6 +132,8 @@ at zero.</p>
 
 <h3>Tax and inflation</h3>
 {{ field_table([
+  ("US federal", "2026 federal brackets (10% to 37%) over the standard deduction - joint with a partner, single without. Social Security is 85% taxable; long-term gains enter income at about two-thirds (a stand-in for the lower gains rates).",
+   "No state or local tax: add a few points with a surtax in the tax editor if yours is significant."),
   ("Progressive bands (example)", "The sample schedule: 0% to 12,570, 20% to 50,270, 40% to 100,000, 60% to 125,140 (the allowance taper), then 45%.",
    "An example, not your system. Replace the bands in the tax editor."),
   ("One flat rate", "A single band: the rate you give, on all taxable income from the first unit.", "Quick and honest if your system is roughly flat."),
@@ -147,7 +160,7 @@ drawn. Press <em>Run simulation</em> for the odds.</p>
 
 {% call note('tip', 'Start from a portfolio you track') %}
 <p>If you have built a portfolio in RetPlan, the Savings step offers to fill the
-<em>taxable investments</em> figure from its current value. Only the balance is
+<em>brokerage</em> balance from its current value. Only the balance is
 copied; to copy a portfolio's mix into any account of the plan, use <em>Use in your
 retirement plan</em> on the portfolio page after the plan exists.</p>
 {% endcall %}

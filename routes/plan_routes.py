@@ -419,6 +419,12 @@ class PlanRoutes:
         for f in FIELDS[section]:
             if f["name"] in form:
                 row[f["name"]] = parse_value(form, f["name"], f)
+        if editing:
+            # an age shown rounded (64.999999 as 65) and left alone keeps its value
+            old = asdict(rows[i])
+            for key in ("start_age", "end_age"):
+                if key in old and abs(row.get(key, 0) - old[key]) < 1e-3:
+                    row[key] = old[key]
         if form.get("end_age_life"):
             row["end_age"] = plan_items.LIFE
         if form.get("once"):

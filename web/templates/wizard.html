@@ -79,27 +79,54 @@
   </details>
 
 {% elif step == 'savings' %}
-  <p class="lead-slate">What you have today, grouped by how it is taxed. Rough is fine.</p>
-  <div class="row g-3">
-    {{ money_in('deferred', 'Retirement accounts', 'Taxed when you take it out: 401(k), IRA, workplace pension, RRSP, SIPP.', col='col-md-6') }}
-    {{ money_in('taxfree', 'Tax-free accounts', 'Never taxed again: Roth, ISA, TFSA.', col='col-md-6') }}
-    {{ money_in('taxable', 'Taxable investments', 'A regular brokerage account.', col='col-md-6') }}
-    {{ money_in('cash', 'Cash savings', 'Bank and savings accounts, emergency fund.', col='col-md-6') }}
+  <p class="lead-slate">Which of these do you have? Tick each one: they are taxed differently, and
+    that changes how long your money lasts and which to spend first. Rough figures are fine.</p>
+  {% set two = a.partner %}
+  {% for group in ['Through work', 'On your own', 'Outside the US'] %}
+  <div class="eyebrow mt-3 mb-2">{{ group }}</div>
+  <div class="acct-picker">
+    {% for t in account_types if t.group == group %}
+    <input type="checkbox" class="btn-check" name="has_{{ t.key }}" id="has-{{ t.key }}" value="1"
+           data-reveal="acct-{{ t.key }}" {% if a['has_' ~ t.key] %}checked{% endif %}>
+    <label class="acct-chip" for="has-{{ t.key }}">
+      <i class="bi bi-{{ t.icon }}" aria-hidden="true"></i>
+      <span><span class="t">{{ t.label }}</span><span class="d">{{ t.tax }}</span></span></label>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="acct-panels mt-4">
+  {% for t in account_types %}
+  {% set k = t.key %}
+  <fieldset class="acct-panel" id="acct-{{ k }}">
+    <legend><i class="bi bi-{{ t.icon }}" aria-hidden="true"></i> {{ t.label }}
+      <span class="small-muted fw-normal">· {{ t.blurb }}</span></legend>
+    <div class="row g-3">
+      {{ money_in(k, 'Your balance' if two and t.per_person else 'Balance today', col='col-md-3') }}
+      {% if two and t.per_person %}{{ money_in(k ~ '_p2', "Partner's balance", col='col-md-3') }}{% endif %}
+      {% if t.save == 'pct' %}
+        {{ money_in(k ~ '_save', 'You put in' if two else 'You put in', suffix='% of pay', col='col-md-3') }}
+        {{ money_in(k ~ '_match', 'Employer matches up to', suffix='% of pay', col='col-md-3') }}
+        {% if two and t.per_person %}
+        {{ money_in(k ~ '_save_p2', 'Partner puts in', suffix='% of pay', col='col-md-3') }}
+        {{ money_in(k ~ '_match_p2', "Partner's match up to", suffix='% of pay', col='col-md-3') }}
+        {% endif %}
+      {% else %}
+        {{ money_in(k ~ '_save', 'You add each year' if two and t.per_person else 'Added each year', col='col-md-3') }}
+        {% if two and t.per_person %}{{ money_in(k ~ '_save_p2', 'Partner adds each year', col='col-md-3') }}{% endif %}
+      {% endif %}
+    </div>
+    {% if t.limit %}<div class="form-hint mt-1"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ t.limit }} RetPlan keeps saving within the limit.</div>{% endif %}
+  </fieldset>
+  {% endfor %}
   </div>
   {% if portfolios %}
   <div class="mt-3 p-3 rounded-3" style="background: var(--rp-crimson-tint)">
-    <label class="form-label" for="f-usepf"><i class="bi bi-briefcase" aria-hidden="true"></i> Or take the taxable figure from a portfolio you track here</label>
+    <label class="form-label" for="f-usepf"><i class="bi bi-briefcase" aria-hidden="true"></i> Or take the brokerage balance from a portfolio you track here</label>
     <select class="form-select" id="f-usepf" name="use_portfolio"><option value="">- keep the number above -</option>
       {% for p in portfolios %}<option value="{{ p.id }}">{{ p.name }} ({{ p.n_holdings }} holdings)</option>{% endfor %}</select>
   </div>
   {% endif %}
-  <h3 class="h6 mt-4">Saving each year until you retire</h3>
-  <div class="row g-3">
-    {{ money_in('save_pct', 'You put in', 'Share of your pay into the retirement account.', suffix='% of pay') }}
-    {{ money_in('employer_pct', 'Employer matches up to', 'They match what you put in, up to this share - so it needs your own saving.', suffix='% of pay') }}
-    {{ money_in('save_amount', 'Plus a fixed amount', 'Into taxable investments, per year.') }}
-  </div>
-
 {% elif step == 'spending' %}
   <div class="row g-3">
     {{ money_in('spend', 'You spend per year', 'Everything except saving and tax. Your bank statements know.', col='col-md-6') }}

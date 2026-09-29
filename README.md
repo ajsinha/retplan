@@ -31,9 +31,9 @@ page you see as administrator says so.
 
 | | |
 |---|---|
-| **Quick start** (`/start`) | six short steps - you, income, savings, spending, assumptions, review - build a complete plan, with the plan so far summarised beside each step |
+| **Quick start** (`/start`) | six short steps - you, income, savings, spending, assumptions, review - build a complete plan, with the plan so far summarised beside each step; savings are asked by account type - 401(k), Roth 401(k), IRA, Roth IRA, HSA, brokerage, savings - each with its own tax rules, limits and required withdrawals; US federal tax by default |
 | **Scenarios** (`/scenarios`, `/compare`) | several named plans per workspace; compare odds, wealth and tax side by side on one seed |
-| **Dashboard** | the verdict with success odds and their error bar, KPI tiles, up to eight charts; 500-25,000 trials; solvers for maximum spend, earliest retirement and saving needed |
+| **Dashboard** | the verdict with success odds and their error bar, KPI tiles, a **suggested draw rate** worked out for your plan (with cautious and bold rates at the guardrail odds), up to eight charts; 500-25,000 trials; solvers for maximum spend, earliest retirement and saving needed |
 | **Plan editor** | income, spending, debt, accounts, care and conversions as plain-language cards; adding one asks what it is, then a few questions a step at a time with sensible answers filled in; pause an item to leave it out without losing it; a table view for bulk edits. Household, tax wrappers, tax, markets and withdrawal policy are short forms |
 | **Reports / Audit** | year-by-year cash flow, balance sheet and tax; the reconciliation audit |
 | **Portfolios** (`/portfolios`) | holdings with ticker search or paste import, daily prices, currency conversion, allocation, risk checks, target mix and rebalancing trades, one-click copy into a plan account |
