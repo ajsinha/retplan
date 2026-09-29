@@ -58,10 +58,10 @@ back it up. It needs the <code>psycopg</code> driver, installed from
 
 <h2>The two schema files, and no migrations</h2>
 <p>The tables are described twice, by hand: <code>schema/sqlite.sql</code> and
-<code>schema/postgres.sql</code>, one per database, defining the same nine tables
+<code>schema/postgres.sql</code>, one per database, defining the same ten tables
 (<code>plans</code>, <code>portfolios</code>, <code>securities</code>,
 <code>holdings</code>, <code>prices</code>, <code>fetch_runs</code>,
-<code>projections</code>, <code>import_drafts</code>, <code>app_settings</code>). On
+<code>projections</code>, <code>import_drafts</code>, <code>snapshots</code>, <code>app_settings</code>). On
 start-up RetPlan checks the database against the file for its dialect:</p>
 <ul>
   <li><strong>No RetPlan tables at all</strong>: the schema is built from the file.</li>

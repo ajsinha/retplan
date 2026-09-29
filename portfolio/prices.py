@@ -113,6 +113,12 @@ class PriceCollector:
         pruned = self.repo.prune(self.retention_days)
         msg = "; ".join(errors) if errors else f"{ok} symbol(s) updated"
         self.repo.finish_run(run_id, ok, failed, added, pruned, msg)
+        if ok:
+            try:
+                from .networth import NetWorthRepo, record_all_portfolio_values
+                record_all_portfolio_values(self.repo, NetWorthRepo(self.repo.db))
+            except Exception:  # noqa: BLE001 - history is a by-product, never fatal
+                logger.exception("recording portfolio values failed")
         syms = queue
         logger.info("price run (%s): %d ok, %d failed, %d rows, %d pruned in %.1fs",
                     reason, ok, failed, added, pruned, time.time() - t0)

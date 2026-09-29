@@ -94,7 +94,7 @@ def fresh_db():
         # a shared server database: empty every table first, children first
         with db.tx() as c:
             for t in ("projections", "holdings", "prices", "portfolios", "plans",
-                      "securities", "fetch_runs", "import_drafts", "app_settings"):
+                      "securities", "fetch_runs", "import_drafts", "snapshots", "app_settings"):
                 Database.run(c, f"DELETE FROM {t}")
     return db
 
@@ -125,7 +125,7 @@ def test_schema_files():
     for t in lite:
         check(f"schema column lists match: {t}", lite[t] == pg.get(t),
               f"{lite[t]} vs {pg.get(t)}")
-    idx = lambda p: sorted(re.findall(r"CREATE INDEX IF NOT EXISTS\s+(\w+)",  # noqa: E731
+    idx = lambda p: sorted(re.findall(r"CREATE (?:UNIQUE )?INDEX IF NOT EXISTS\s+(\w+)",  # noqa: E731
                                       open(os.path.join(SCHEMA_DIR, p)).read()))
     check("both schema files declare the same indexes", idx("sqlite.sql") == idx("postgres.sql"))
     db = fresh_db()
@@ -844,6 +844,116 @@ def test_help_and_about():
         wa.db.dispose()
 
 
+def test_new_tools():
+    from fastapi.testclient import TestClient
+    from retplan.engine import Projection
+    from retplan.plan import CareRisk
+    from retplan.samples import sample_plan
+    from web import levers
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    import copy
+    # care risk: simulated future by future, expected on the fixed path
+    p = sample_plan()
+    q = copy.deepcopy(p)
+    q.care = [CareRisk("LTC", 0, 0.5, 82, 88, 3, 90000, 0.0)]
+    a, b = Projection(p).run(4000, seed=3), Projection(q).run(4000, seed=3)
+    extra = (b.spend - a.spend).sum(axis=1)
+    check("care happens in about its probability of futures", abs((extra > 1).mean() - 0.5) < 0.03)
+    check("care costs its full amount where it happens", abs(extra.mean() - 135000) / 135000 < 0.05)
+    f, g = copy.deepcopy(q), copy.deepcopy(p)
+    for x in (f, g):
+        x.market.mode, x.market.inflation.mode = "fixed", "fixed"
+    check("the fixed-return path carries care's expected cost",
+          close((Projection(f).run(1).spend - Projection(g).run(1).spend).sum(), 135000, 1e-6))
+    check("a plan with care still reconciles", reconcile_ok(b))
+    # spending check
+    s = levers.spending_check(p)
+    check("the spending check answers raise, hold or trim",
+          s["verdict"] in ("raise", "hold", "trim") and s["rows"])
+    check("success falls as spending rises",
+          all(x["success"] >= y["success"] - 0.02 for x, y in zip(s["rows"], s["rows"][1:])))
+    from web import cases
+    retired = cases.plan_for(cases.get("drawdown-crash"))
+    low = levers.spending_check(retired, savings=500000)
+    check("for a retiree, a large fall in savings says trim",
+          low["verdict"] == "trim" and low["change"] < 0, (low["verdict"], low["success"]))
+    # draw order
+    d = levers.draw_orders(p)
+    check("every draw order of the plan's wrappers is screened", d["screened"] == 24)
+    check("the current order is always a finalist", any(r["current"] for r in d["rows"]))
+    q2 = levers.apply_draw_order(p, d["best"]["order"])
+    liquid = [lg for lg in q2.ledgers if q2.wrappers[lg.wrapper].liquid]
+    firsts = sorted(liquid, key=lambda lg: lg.withdraw_priority)
+    check("applying an order puts its first wrapper first", firsts[0].wrapper == d["best"]["order"][0])
+    # the pages, and net worth
+    with tempfile.TemporaryDirectory() as dd:
+        wa = RetPlanWebApp(config=Config(data_dir=dd, database_url=f"sqlite:///{dd}/n.db",
+                                         prices_enabled=False), start_scheduler=False)
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        pages = [c.get(u).status_code for u in ("/tools/spending", "/tools/draw-order",
+                                                "/tools/health", "/networth", "/plan/care")]
+        check("the new tool pages render", pages == [200] * 5, pages)
+        r = c.post("/tools/spending", data={"savings": "745000", "lower": "70", "target": "85",
+                                            "upper": "95"})
+        check("the spending check page gives a verdict", r.status_code == 200 and "verdict" in r.text)
+        r = c.post("/tools/draw-order", data={"heir": "25"})
+        check("the draw-order page lists finalists", r.status_code == 200 and "finalists" in r.text)
+        r = c.post("/tools/health", data={"bridge": "12000", "bridge_to": "65", "later": "4000",
+                                          "later_from": "75", "growth": "2", "care_prob": "50",
+                                          "care_from": "80", "care_to": "90", "care_years": "3",
+                                          "care_cost": "80000", "care_all": "1"})
+        check("the health test compares before and after", r.status_code == 200 and "was " in r.text)
+        c.post("/tools/health/add", data={"care_prob": "40", "care_from": "80", "care_to": "90",
+                                          "care_years": "2", "care_cost": "70000", "later": "3000",
+                                          "later_from": "75", "growth": "2", "care_all": "1"})
+        sid = wa.db.query("SELECT owner FROM plans LIMIT 1")[0]["owner"]
+        plan = wa.store.get(sid)
+        check("health costs and care risks are added to the plan",
+              len(plan.care) == 2 and any("later life" in e.label for e in plan.expenses))
+        today = date.today()
+        c.post("/networth/snapshot", data={"taken_on": (today - timedelta(days=90)).isoformat(),
+                                           "it-0-name": "Home", "it-0-kind": "asset", "it-0-value": "400000",
+                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "150000"})
+        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
+                                           "it-0-name": "Joint brokerage", "it-0-kind": "account",
+                                           "it-0-value": "130000", "it-0-ref": "0",
+                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "140000",
+                                           "it-1-ref": "0"})
+        snaps = wa.networth.manual(sid)
+        check("snapshots record assets, debts and net worth",
+              len(snaps) == 2 and snaps[0]["net"] == 250000 and snaps[1]["net"] == -10000)
+        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
+                                           "it-0-name": "Home", "it-0-kind": "asset", "it-0-value": "410000"})
+        check("a second snapshot on the same day replaces the first", len(wa.networth.manual(sid)) == 2)
+        c.post(f"/networth/{snaps[1]['id']}/delete")
+        c.post("/networth/snapshot", data={"taken_on": today.isoformat(),
+                                           "it-0-name": "Joint brokerage", "it-0-kind": "account",
+                                           "it-0-value": "130000", "it-0-ref": "0",
+                                           "it-1-name": "Mortgage", "it-1-kind": "debt", "it-1-value": "140000",
+                                           "it-1-ref": "0"})
+        last = wa.networth.manual(sid)[-1]
+        c.post(f"/networth/{last['id']}/to-plan")
+        plan = wa.store.get(sid)
+        check("a snapshot brings the plan's balances up to date",
+              plan.ledgers[0].opening == 130000 and plan.loans[0].balance == 140000)
+        check("the net-worth page shows the chart", "Net worth over time" in c.get("/networth").text)
+        # portfolio values are recorded after a price run and kept
+        fake = FakeYahoo({"VTI": synthetic("VTI", seed=1)})
+        wa.collector._fetch, wa.collector._long_run, wa.collector._pause = fake.fetch, fake.long_run, 0
+        pid = wa.portfolios.create(sid, "P")
+        wa.portfolios.add_holding(sid, pid, "VTI", 10)
+        wa.collector.collect(reason="test")
+        check("each portfolio's value is recorded after a price run",
+              str(pid) in wa.networth.portfolio_series(sid))
+        wa.db.dispose()
+
+
+def reconcile_ok(res):
+    from retplan.metrics import reconcile
+    return reconcile(res)["pass"]
+
+
 def main():
     global DB_URL
     if "--database" in sys.argv:
@@ -856,7 +966,8 @@ def main():
     test_projection_closed_forms(); test_projection_statistics()
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
-    test_admin_gate(); test_tools(); test_conventions(); test_help_and_about(); test_web()
+    test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
+    test_new_tools(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

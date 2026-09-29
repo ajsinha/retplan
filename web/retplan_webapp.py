@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from portfolio.db import Database
+from portfolio.networth import NetWorthRepo
 from portfolio.prices import PriceCollector, PriceScheduler
 from portfolio.repository import PortfolioRepo
 from retplan import __version__ as VERSION
@@ -43,6 +44,7 @@ class RetPlanWebApp:
         self.db = Database(self.config.database_url, echo=self.config.database_echo)
         self.store = PlanStore(self.db, legacy_dir=os.path.join(self.data_dir, "plans"))
         self.portfolios = PortfolioRepo(self.db)
+        self.networth = NetWorthRepo(self.db)
         self.collector = PriceCollector(self.portfolios,
                                         retention_days=self.config.prices_retention_days)
         self.scheduler = PriceScheduler(self.collector, run_at=self.config.prices_run_at,
@@ -82,7 +84,7 @@ class RetPlanWebApp:
         self.app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
         st = self.app.state
         st.store, st.version, st.config = self.store, VERSION, self.config
-        st.db, st.portfolios = self.db, self.portfolios
+        st.db, st.portfolios, st.networth = self.db, self.portfolios, self.networth
         st.collector, st.scheduler = self.collector, self.scheduler
 
     def _register_routes(self) -> None:

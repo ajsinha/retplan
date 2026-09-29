@@ -36,11 +36,12 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 | `fetch_runs` | `id` | One collection run: `reason` (schedule, startup, manual, new-symbol, admin), start/finish, counts of symbols, ok, failed, rows added and pruned, `message` |
 | `projections` | `id` | A saved portfolio projection: `portfolio_id`, `created_at`, `settings`, `summary`, `result` (all JSON) |
 | `import_drafts` | `id` | The portfolio builder's analysis of an upload: `owner`, `filename`, `created_at`, `data` (JSON) |
+| `snapshots` | `id` | Net worth over time: `owner`, `taken_on` (date), `kind` (`manual` or `portfolio`), `ref` (portfolio id), `assets`, `liabilities`, `data` (JSON items), `note`, `created_at`; one per owner, day, kind and ref |
 | `app_settings` | `key` | Application-wide JSON values, e.g. the administrator's password hash |
 
 Indexes: `plans(owner)`, `portfolios(owner)`, `holdings(portfolio_id)`,
 `holdings(symbol)`, `prices(date)`, `projections(portfolio_id)`,
-`import_drafts(owner)`.
+`import_drafts(owner)`, unique `snapshots(owner, taken_on, kind, ref)`.
 
 ### 1.3 Relationships
 
@@ -48,7 +49,8 @@ Indexes: `plans(owner)`, `portfolios(owner)`, `holdings(portfolio_id)`,
 owner ─┬─< plans
        ├─< portfolios ─┬─< holdings >── securities ─< prices
        │               └─< projections
-       └─< import_drafts
+       ├─< import_drafts
+       └─< snapshots
 fetch_runs, app_settings: global
 ```
 

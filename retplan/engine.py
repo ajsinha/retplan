@@ -225,6 +225,42 @@ class Projection:
         idx = int(np.searchsorted(ages, age, side="right")) - 1
         return float(divs[max(0, min(idx, len(divs) - 1))])
 
+    def _care(self, n, T, seed, expected: bool):
+        """Care costs by trial and period, in real terms. Each risk happens in a
+        trial with its probability and starts at an age drawn evenly from its
+        range; with `expected` (the fixed-return path) the probability-weighted
+        cost is spread over the same window instead, so one smooth path stays
+        one smooth path. Drawn from its own stream, so switching care on or off
+        never reshuffles the market's draws."""
+        out = np.zeros((n, T + 1))
+        risks = [c for c in getattr(self.plan, "care", []) if c.enabled and c.amount > 0]
+        if not risks:
+            return out
+        rng = np.random.default_rng([int(seed) & 0xFFFFFFFF, 0xCA7E])
+        ages = self.age                                       # person 1's age by period
+        for c in risks:
+            owner = self.plan.persons[c.owner] if c.owner < len(self.plan.persons) else self.plan.persons[0]
+            shift = owner.age - self.plan.persons[0].age      # owner's age = person 1's + shift
+            end_age = owner.death_age
+            lo, hi = min(c.start_min, c.start_max), max(c.start_min, c.start_max)
+            growth = (1.0 + c.infl_delta) ** np.arange(T + 1)
+            if expected:
+                own = ages + shift
+                # probability that care is under way at each age, start uniform in [lo, hi]
+                span = max(hi - lo, 1e-9)
+                started = np.clip((own - lo) / span, 0.0, 1.0) if hi > lo else (own >= lo).astype(float)
+                ended = np.clip((own - c.years - lo) / span, 0.0, 1.0) if hi > lo else (own >= lo + c.years).astype(float)
+                live = (started - ended) * (own < end_age)
+                out += c.probability * c.amount * live[None, :] * growth[None, :]
+                continue
+            hit = rng.random(n) < c.probability
+            start = lo + (hi - lo) * rng.random(n)
+            own = ages[None, :] + shift
+            live = hit[:, None] & (own >= start[:, None]) & (own < start[:, None] + c.years) \
+                & (own < end_age)
+            out += np.where(live, c.amount, 0.0) * growth[None, :]
+        return out
+
     # ------------------------------------------------------------------- run
     def run(self, n_trials: int = 1, seed: int | None = None, market=None) -> Results:
         p, T, NL, NW, A = self.plan, self.T, self.NL, self.NW, self.A
@@ -237,6 +273,8 @@ class Projection:
         cpi = np.ones((n, T + 1))
         cpi[:, 1:] = np.cumprod(1.0 + infl, axis=1)
         real_ret = (1.0 + rets) / (1.0 + infl[:, :, None]) - 1.0
+
+        care = self._care(n, T, seed, mm.spec.mode == "fixed")   # (n, T+1) real
 
         S = np.zeros((n, NL, A))                               # real balances
         basis = np.zeros((n, NL))
@@ -321,7 +359,7 @@ class Projection:
                 out["conversion"][:, k] += amt
 
             # ---- spending target --------------------------------------------
-            ess = self.ess_real[k] + self.ess_nom[k] / cp
+            ess = self.ess_real[k] + self.ess_nom[k] / cp + care[:, k]
             disc = self.disc_real[k] + self.disc_nom[k] / cp
             spend = self._spending(k, ess, disc, tot, cp, gm, pol)
 

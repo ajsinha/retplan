@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Which account to draw from first{% endblock %}
+{% block content %}
+{% call ui.page_head('Which account to draw from first', 'The order you spend your accounts in changes how much tax you pay over a lifetime. RetPlan tries every order of your kinds of account on the fixed-return path, then simulates the best few in full, and compares them on the chance of success and after-tax final wealth.', eyebrow='Planning tools · ' ~ plan.label, help=url_for('help_tools') ~ '#draw-order') %}{% endcall %}
+<div class="row g-3">
+  <div class="col-lg-5"><div class="card h-100"><div class="card-header"><i class="bi bi-list-ol" aria-hidden="true"></i> Your order now</div>
+    <div class="card-body"><ol class="mb-0">{% for lg in current %}<li>{{ lg.label }} <span class="small-muted">· {{ plan.wrappers[lg.wrapper].label }}{% if not plan.wrappers[lg.wrapper].liquid %} · not drawn (illiquid){% endif %}</span></li>{% endfor %}</ol></div></div></div>
+  <div class="col-lg-7"><form class="card h-100" method="post" action="{{ url_for('tool_draw_order') }}" data-busy="Trying every order…">
+    <div class="card-body">
+      <label class="form-label" for="d-h">Tax your heirs pay on money left in accounts taxed on the way out</label>
+      <div class="input-group mb-2" style="max-width:220px"><input class="form-control num" id="d-h" name="heir" type="number" step="any" value="{{ '%g'|format(heir) }}"><span class="input-group-text">%</span></div>
+      <p class="form-hint">Without it, spending taxable-on-the-way-out money last would look free - its tax would simply never be counted.</p>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Compare orders</button>
+    </div></form></div>
+</div>
+{% if result %}
+{% if not result.rows %}<div class="alert alert-info mt-3">{{ result.note }}</div>{% else %}{% set best = result.best %}
+<div class="stat-grid mt-3">
+  {{ ui.kpi('Best order', best.names|join(' → '), best.delta_after_tax|smoney ~ " after tax vs yours", 'trophy', 'good' if best.delta_after_tax > 0 else '') }}
+  {{ ui.kpi('Lifetime tax', best.tax|money, best.delta_tax|smoney ~ ' vs yours (median)', 'receipt') }}
+  {{ ui.kpi('Orders tried', result.screened, 'on the fixed-return path; the best ' ~ (result.rows|length) ~ ' simulated', 'list-check') }}
+</div>
+<div class="card"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> The finalists <span class="ms-auto small-muted fw-normal">{{ result.trials }} futures each, one seed · today's money · medians</span></div>
+  <div class="card-body p-0"><div class="table-scroll"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Draw from, in order</th><th class="num">Success</th><th class="num">Lifetime tax</th><th class="num">vs yours</th><th class="num band-col">After-tax final wealth</th><th class="num">vs yours</th><th></th></tr></thead>
+    <tbody>{% for r in result.rows %}<tr {% if loop.first %}class="fw-semibold"{% endif %}>
+      <td>{{ r.names|join(' → ') }}{% if r.current %} {{ ui.pill('info', 'yours') }}{% endif %}{% if loop.first %} {{ ui.pill('ok', 'best') }}{% endif %}</td>
+      <td class="num">{{ r.success|pct }}</td><td class="num">{{ r.tax|money }}</td>
+      <td class="num {{ 'up' if r.delta_tax < 0 else ('down' if r.delta_tax > 0 else '') }}">{{ r.delta_tax|smoney if not r.current else '' }}</td>
+      <td class="num band-col">{{ r.after_tax_p50|money }}</td>
+      <td class="num {{ 'up' if r.delta_after_tax > 0 else ('down' if r.delta_after_tax < 0 else '') }}">{{ r.delta_after_tax|smoney if not r.current else '' }}</td>
+      <td class="text-end text-nowrap">{% if not r.current %}
+        <form class="d-inline" method="post" action="{{ url_for('tool_draw_order_apply') }}"><input type="hidden" name="order" value="{{ r.order|join(',') }}">
+          <button class="btn btn-sm btn-outline-primary" name="as_scenario" value="1">Try it</button>
+          <button class="btn btn-sm btn-primary" type="submit" title="Change the order in this plan">Use it</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div></div>
+<p class="small-muted">Accounts are grouped by how they are taxed; within a group they keep your order. Differences of a point or two of success are within the noise. A common pattern is spending taxable-on-the-way-out money while your tax rate is low - but your own bands, pensions and forced withdrawals decide, which is why this tries them all.</p>
+{% endif %}{% endif %}
+{% endblock %}

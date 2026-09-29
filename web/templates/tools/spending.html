@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Spending check{% endblock %}
+{% block content %}
+{% call ui.page_head('Spending check', 'How much can you spend this year? RetPlan runs your plan at a range of spending levels and draws guardrails around your target odds: inside them, carry on; above the upper one, you can spend more; below the lower one, trim. Check again after a big market move - enter what your savings are worth today.', eyebrow='Planning tools · ' ~ plan.label, help=url_for('help_tools') ~ '#spending') %}{% endcall %}
+<form class="card" method="post" action="{{ url_for('tool_spending') }}" data-busy="Testing spending levels…">
+  <div class="card-body"><div class="row g-3 align-items-end">
+    <div class="col-md-3"><label class="form-label" for="s-sav">Your savings today</label>
+      <input class="form-control num" id="s-sav" name="savings" type="number" step="any" min="0" value="{{ '%.0f'|format(savings) }}">
+      <div class="form-hint mt-1">The plan says {{ liquid|money }}; update it after the markets move.</div></div>
+    <div class="col-4 col-md-2"><label class="form-label" for="s-lo">Lower guardrail</label><div class="input-group"><input class="form-control num" id="s-lo" name="lower" type="number" step="any" value="{{ '%g'|format(lower * 100) }}"><span class="input-group-text">%</span></div></div>
+    <div class="col-4 col-md-2"><label class="form-label" for="s-t">Target</label><div class="input-group"><input class="form-control num" id="s-t" name="target" type="number" step="any" value="{{ '%g'|format(target * 100) }}"><span class="input-group-text">%</span></div></div>
+    <div class="col-4 col-md-2"><label class="form-label" for="s-up">Upper guardrail</label><div class="input-group"><input class="form-control num" id="s-up" name="upper" type="number" step="any" value="{{ '%g'|format(upper * 100) }}"><span class="input-group-text">%</span></div></div>
+    <div class="col-md-3"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-speedometer" aria-hidden="true"></i> Check my spending</button></div>
+  </div>
+  <p class="form-hint mt-2 mb-0">Spending here means every spending row, scaled together; today it is {{ now|money }} a year{% if plan.persons[0].age < plan.persons[0].retire_age %} in your first year of retirement{% endif %}.</p></div>
+</form>
+{% if result %}{% set r = result %}
+<section class="rp-welcome">
+  <div class="row g-4 align-items-center">
+    <div class="col-lg-7">
+      <div class="small text-uppercase fw-bold" style="letter-spacing:.08em;opacity:.8">This year's verdict</div>
+      {% if r.verdict == 'hold' %}<h1 class="mt-1">Carry on</h1><p class="lead mt-1">Your odds, {{ r.success|pct(0) }}, sit between your guardrails ({{ r.lower|pct(0) }} to {{ r.upper|pct(0) }}). No change needed.</p>
+      {% elif r.verdict == 'raise' %}<h1 class="mt-1">You can spend more</h1><p class="lead mt-1">Your odds, {{ r.success|pct(0) }}, are above your upper guardrail. Spending about <strong>{{ r.change|money }}</strong> more a year brings them back to your {{ r.target|pct(0) }} target.</p>
+      {% else %}<h1 class="mt-1">Trim spending</h1><p class="lead mt-1">Your odds, {{ r.success|pct(0) }}, are below your lower guardrail. Spending about <strong>{{ (-r.change)|money if r.change is not none else '-' }}</strong> less a year brings them back to your {{ r.target|pct(0) }} target.</p>{% endif %}
+      <div class="meter mt-2"><span style="width: {{ (r.success * 100)|round(1) }}%"></span></div>
+    </div>
+    <div class="col-lg-5">
+      {{ ui.kv([('Spending now', r.now|money ~ ' a year'), ('Spending at your target', (r.at_target|money ~ ' a year') if r.at_target else 'beyond the range tested'), ('Raise when spending falls below', (r.raise_when_below|money) if r.raise_when_below else '-'), ('Trim when spending rises above', (r.trim_when_above|money) if r.trim_when_above else '-'), ('Savings tested', r.savings|money)]) }}
+    </div>
+  </div>
+</section>
+<div class="row g-3">
+  <div class="col-xl-7">{{ ui.chart_card('Success against spending', 'graph-down', chart, r.trials ~ ' futures per level, one seed') }}</div>
+  <div class="col-xl-5"><div class="card h-100"><div class="card-header"><i class="bi bi-table" aria-hidden="true"></i> Every level tried</div>
+    <div class="card-body p-0"><div class="table-scroll" style="max-height:420px"><table class="table table-sm mb-0">
+      <thead><tr><th class="num">Spending</th><th class="num">vs now</th><th class="num">Success</th><th class="num">Median final wealth</th><th class="num">Bad luck</th></tr></thead>
+      <tbody>{% for x in r.rows %}<tr {% if (x.mult - 1)|abs < 0.001 %}class="fw-semibold"{% endif %}><td class="num">{{ x.spend|money }}</td><td class="num">{{ (x.mult - 1)|spct(0) }}</td>
+        <td class="num {{ 'up' if x.success >= r.upper else ('down' if x.success < r.lower else '') }}">{{ x.success|pct }}</td><td class="num">{{ x.p50|money }}</td><td class="num">{{ x.p5|money }}</td></tr>{% endfor %}</tbody></table></div></div></div></div>
+</div>
+<p class="small-muted">Guardrails ask for a change only when the odds move a long way, so small market wobbles do not become spending cuts. Each level runs {{ r.trials }} futures (± about {{ (1.96 * r.se * 100)|round(1) }} points); for a precise figure, save the change as a scenario and run the full simulation.</p>
+{% endif %}
+{% endblock %}

@@ -131,6 +131,24 @@ class Conversion:
 
 
 @dataclass
+class CareRisk:
+    """A chance of needing care: in each simulated future it happens or not, with
+    `probability`, starting at an age drawn evenly between `start_min` and
+    `start_max` (the owner's age), costing `amount` a year (real, growing
+    `infl_delta` above inflation) for `years` years or until the planning age.
+    The fixed-return projection uses its expected cost instead."""
+    label: str = "Long-term care"
+    owner: int = 0
+    probability: float = 0.5
+    start_min: float = 80.0
+    start_max: float = 90.0
+    years: float = 3.0
+    amount: float = 0.0
+    infl_delta: float = 0.02
+    enabled: bool = True
+
+
+@dataclass
 class Policy:
     method: str = "fixed_real"   # fixed_real | fixed_nominal | pct_portfolio | vpw |
                                  # guardrails | table
@@ -164,6 +182,7 @@ class Plan:
     expenses: list = field(default_factory=list)
     loans: list = field(default_factory=list)
     conversions: list = field(default_factory=list)
+    care: list = field(default_factory=list)
     wrappers: list = field(default_factory=lambda: [Wrapper()])
     ledgers: list = field(default_factory=lambda: [Ledger()])
     market: MarketSpec = field(default_factory=MarketSpec)
@@ -180,7 +199,7 @@ class Plan:
 _TYPES = {
     "persons": Person, "income": IncomeRow, "expenses": ExpenseRow, "loans": Loan,
     "wrappers": Wrapper, "ledgers": Ledger, "assets": AssetClass, "regimes": Regime,
-    "conversions": Conversion,
+    "conversions": Conversion, "care": CareRisk,
 }
 
 

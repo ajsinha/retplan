@@ -2,7 +2,13 @@
    POST handler parses against, so a column cannot drift between the two. #}
 
 {% macro field(name, f, value, wrappers=None) %}
-  {% if f.kind == 'ledger' %}
+  {% if f.kind == 'person' %}
+    <select class="form-select form-select-sm" name="{{ name }}">
+      {% for pp in plan.persons %}
+        <option value="{{ loop.index0 }}" {% if value == loop.index0 %}selected{% endif %}>{{ pp.label }}</option>
+      {% endfor %}
+    </select>
+  {% elif f.kind == 'ledger' %}
     <select class="form-select form-select-sm" name="{{ name }}">
       {% for lg in plan.ledgers %}
         <option value="{{ loop.index0 }}" {% if value == loop.index0 %}selected{% endif %}>{{ lg.label }}</option>

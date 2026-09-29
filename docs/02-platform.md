@@ -78,7 +78,8 @@ else a handler needs is read from `request.app.state`.
 | `PortfolioRoutes` | `/portfolios/*`, `/prices`, `/api/tickers`, `/api/portfolios/{pid}` |
 | `SecurityRoutes` | `/securities/*` |
 | `AdminRoutes` | `/admin/login`, `/admin/logout`, `/admin/password` |
-| `ToolsRoutes` | `/api/whatif`, `/api/whatif/save`, `/api/levers`, `/tools/claiming`, `/tools/conversions` |
+| `ToolsRoutes` | `/api/whatif`, `/api/whatif/save`, `/api/levers`, `/tools/claiming`, `/tools/conversions`, `/tools/spending`, `/tools/draw-order`, `/tools/health` |
+| `NetWorthRoutes` | `/networth` - snapshots, portfolio value history, update the plan |
 | `HelpRoutes` | `/help`, one route per help topic, `/help/guides/*` (Markdown in `web/guides/`, rendered by `web/guide_render.py`), `/help/case-studies/*` (`web/cases.py`) |
 
 Long computations (Monte Carlo, solvers, scenario comparison) are JSON endpoints

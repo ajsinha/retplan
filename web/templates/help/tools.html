@@ -1,7 +1,7 @@
 {% extends "help/_layout.html" %}
 {% from "help/_macros.html" import note, steps, field_table, goto with context %}
 {% block help %}
-<p>Four tools turn "is my plan all right?" into "what should I do about it?". Each changes
+<p>These tools turn "is my plan all right?" into "what should I do about it?". Each changes
 a <em>copy</em> of your active plan and simulates it with the same random seed as the
 original, so any difference you see comes from the change, not from different luck.
 Nothing is saved unless you ask.</p>
@@ -83,5 +83,70 @@ and paid by drawing on your accounts in the usual order.</p>
 <p>RetPlan applies no country's conversion rules: waiting periods, income limits,
 conversion ladders and tax on benefits that rises with income are not modelled. Check the
 rules where you live before acting.</p>
+{% endcall %}
+
+<h2 id="spending">Spending check: raise, hold or trim</h2>
+<p>{{ goto('tool_spending', 'Open the spending check') }} Once a year, or after a big market
+move, ask how much you can spend. RetPlan runs your plan with all your spending scaled from
+30% to 160% of today's, and draws three lines on the chance of success: your
+<strong>target</strong> (your plan's confidence level) and a <strong>lower</strong> and an
+<strong>upper guardrail</strong> around it - by default 15 points below and 10 above.</p>
+<ul>
+  <li><strong>Inside the guardrails: carry on.</strong> Small market wobbles never become
+      spending cuts.</li>
+  <li><strong>Above the upper one: you can spend more</strong> - the page gives the amount that
+      brings the odds back to the target.</li>
+  <li><strong>Below the lower one: trim</strong> - by the amount that brings them back.</li>
+</ul>
+<p>Enter <strong>your savings today</strong> after markets have moved: every liquid account is
+scaled to that total before the test, so you need not update the plan first. This works best
+once you are retired; while you are still working, future pay and saving count for more than
+today's balance.</p>
+
+<h2 id="draw-order">Which account to draw from first</h2>
+<p>{{ goto('tool_draw_order', 'Open the draw-order tool') }} The order in which you spend your
+accounts changes the tax you pay over a lifetime. RetPlan groups your accounts by how they are
+taxed, tries <em>every</em> order of those groups on the fixed-return path, simulates the best
+few (and your current order) in full, and compares them on the chance of success, lifetime tax
+and after-tax final wealth - money left in accounts taxed on the way out is reduced by the tax
+your heirs would pay. <strong>Try it</strong> saves a copy of your plan with that order;
+<strong>Use it</strong> changes the order in the plan itself (Plan → Accounts, "Draw order").</p>
+{% call note('why', 'Why there is no single right answer') %}
+<p>"Spend taxable money first, tax-free last" is a common rule, but low-income years before a
+pension starts, forced withdrawals later, and your own tax bands can all turn it around. That is
+why the tool tries every order on your plan rather than applying a rule.</p>
+{% endcall %}
+
+<h2 id="health">Health costs and long-term care</h2>
+<p>{{ goto('tool_health', 'Open the health and care tool') }} Three kinds of cost, tested
+before you add them:</p>
+<ul>
+  <li><strong>Health cover until public cover starts</strong> - private insurance between
+      retiring and, say, 65 in the US. An essential spending row.</li>
+  <li><strong>Health costs in later life</strong> - premiums and out-of-pocket costs, rising
+      faster than prices. An essential spending row with growth above inflation.</li>
+  <li><strong>Long-term care</strong> - a <em>chance</em>, not a certainty. In each simulated
+      future it happens or not, with your probability, starting at an age drawn between the two
+      you give, and costs its full amount for its duration. That is how care really works, and
+      why an average cost understates it: the risk is a few futures with very large bills. The
+      fixed-return projection uses the expected cost.</li>
+</ul>
+<p><strong>Test the effect</strong> shows the odds, wealth and tax with and without them;
+<strong>Add to my plan</strong> or <strong>Save as a scenario</strong> keeps them. Care risks are
+edited under {{ goto('plan_section', 'Plan → Health and care', 'care') }}.</p>
+
+<h2 id="networth">Net worth history</h2>
+<p>{{ goto('networth', 'Open net worth history') }} A plan looks forward; this looks back.</p>
+{% call steps() %}
+  <li><strong>Take a snapshot</strong> now and then - quarterly, or at each year-end. The form
+      starts from your plan's accounts and loans and every portfolio's value; add a home, a car,
+      other debts. A second snapshot on the same day replaces the first.</li>
+  <li><strong>Watch it over time.</strong> With two or more snapshots, a chart shows assets, debts
+      and net worth.</li>
+  <li><strong>Portfolios record themselves.</strong> After every price collection each portfolio's
+      value is stored, and kept for good - so its history grows beyond the year of daily prices
+      RetPlan keeps.</li>
+  <li><strong>Bring the plan up to date.</strong> <em>To plan</em> sets the plan's account and loan
+      balances to a snapshot's, so the projection starts from where you really are.</li>
 {% endcall %}
 {% endblock %}

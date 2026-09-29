@@ -279,3 +279,189 @@ def conversions(plan, src: int, dst: int, start_age: float, end_age: float,
     best = max(rows, key=lambda r: (round(r["success"], 2), r["after_tax_p50"]))
     return dict(rows=rows, best=best, heir_rate=heir_rate, trials=trials,
                 start_age=start_age, end_age=end_age)
+
+
+# --------------------------------------------------------------------------- #
+# spending check: guardrails on the odds
+# --------------------------------------------------------------------------- #
+def scale_savings(plan, new_total: float):
+    """A copy with every liquid account scaled so the total equals `new_total` -
+    "my savings are worth this today", after the markets have moved."""
+    q = copy.deepcopy(plan)
+    liquid = [lg for lg in q.ledgers if lg.enabled and q.wrappers[lg.wrapper].liquid]
+    now = sum(lg.opening for lg in liquid)
+    if now > 0 and new_total >= 0:
+        f = new_total / now
+        for lg in liquid:
+            lg.opening *= f
+            lg.basis *= f
+    return q
+
+
+def spending_now(plan) -> float:
+    """What the household spends this year (or, before retiring, in its first
+    retired year) in today's money - regular spending rows only."""
+    p0 = plan.persons[0]
+    at = p0.age if p0.age >= p0.retire_age else p0.retire_age
+    return sum(e.amount for e in plan.expenses
+               if e.enabled and not e.recur_years and e.start_age <= at < e.end_age)
+
+
+def spending_check(plan, target: float | None = None, lower: float | None = None,
+                   upper: float | None = None, savings: float | None = None,
+                   trials: int = QUICK) -> dict:
+    """Risk-based guardrails: the chance of success across a range of spending
+    levels, the spending that meets the target, and whether today's spending is
+    inside the band where no change is needed."""
+    target = plan.policy.confidence if target is None else target
+    lower = max(0.0, target - 0.15) if lower is None else lower
+    upper = min(0.99, target + 0.10) if upper is None else upper
+    base = scale_savings(plan, savings) if savings is not None else plan
+    now = spending_now(base)
+    grid = [0.3, 0.4, 0.5] + [round(x, 2) for x in np.arange(0.60, 1.401, 0.05)] + [1.5, 1.6]
+    rows = []
+    for m in grid:
+        r = run(apply(base, Adjust(spend=m - 1.0)), trials)
+        rows.append(dict(mult=m, spend=now * m, success=r["success"], p50=r["p50"], p5=r["p5"]))
+
+    def spend_at(level):
+        """Spending at which success crosses `level` (success falls as spending rises)."""
+        for a, b in zip(rows, rows[1:]):
+            if a["success"] >= level >= b["success"] and a["success"] != b["success"]:
+                t = (a["success"] - level) / (a["success"] - b["success"])
+                return a["spend"] + t * (b["spend"] - a["spend"])
+        return None if rows[0]["success"] < level else rows[-1]["spend"]
+
+    current = next(r for r in rows if abs(r["mult"] - 1.0) < 1e-9)
+    at_target = spend_at(target)
+    raise_above, trim_below = spend_at(upper), spend_at(lower)
+    s = current["success"]
+    if s > upper:
+        verdict, change = "raise", (at_target - now) if at_target else None
+    elif s < lower:
+        verdict, change = "trim", (at_target - now) if at_target else None
+    else:
+        verdict, change = "hold", 0.0
+    return dict(rows=rows, now=now, success=s, se=np.sqrt(max(s * (1 - s), 1e-9) / trials),
+                target=target, lower=lower, upper=upper, at_target=at_target,
+                raise_when_below=raise_above, trim_when_above=trim_below,
+                verdict=verdict, change=change, trials=trials,
+                savings=sum(lg.opening for lg in base.ledgers if lg.enabled
+                            and base.wrappers[lg.wrapper].liquid))
+
+
+# --------------------------------------------------------------------------- #
+# draw order
+# --------------------------------------------------------------------------- #
+def _after_tax(res, plan, heir_rate):
+    bw = res.balance_by_wrapper[:, -1, :]
+    owed = np.zeros(bw.shape[0])
+    for wi, wr in enumerate(plan.wrappers):
+        owed += bw[:, wi] * wr.withdrawal_taxable_fraction * heir_rate
+    return res.terminal - owed
+
+
+def draw_orders(plan, heir_rate: float = 0.25, finalists: int = 4,
+                trials: int = TOOL) -> dict:
+    """Every order of drawing on the plan's wrappers, screened on the fixed-return
+    path and the best few simulated in full.
+
+    Accounts are grouped by wrapper (the tax treatment is what matters); within a
+    wrapper they keep their current relative order. Illiquid accounts stay last.
+    """
+    import itertools
+    from retplan.engine import Projection as P
+    liquid = [i for i, lg in enumerate(plan.ledgers)
+              if lg.enabled and plan.wrappers[lg.wrapper].liquid]
+    wrappers = []
+    for i in sorted(liquid, key=lambda i: plan.ledgers[i].withdraw_priority):
+        w = plan.ledgers[i].wrapper
+        if w not in wrappers:
+            wrappers.append(w)
+    if len(wrappers) < 2:
+        return dict(rows=[], note="There is only one kind of account to draw from.")
+
+    def with_order(order):
+        q = copy.deepcopy(plan)
+        rank = 1
+        for w in order:
+            for i in sorted([i for i in liquid if q.ledgers[i].wrapper == w],
+                            key=lambda i: plan.ledgers[i].withdraw_priority):
+                q.ledgers[i].withdraw_priority = rank
+                rank += 1
+        for i, lg in enumerate(q.ledgers):
+            if i not in liquid:
+                lg.withdraw_priority = 100 + i
+        return q
+
+    def fixed(q):
+        f = copy.deepcopy(q)
+        f.market.mode = "fixed"
+        f.market.inflation.mode = "fixed"
+        return f
+
+    current = tuple(wrappers)
+    screened = []
+    for order in itertools.permutations(wrappers):
+        q = with_order(order)
+        res = P(fixed(q)).run(1)
+        screened.append((float(_after_tax(res, q, heir_rate)[0]), float(res.tax[0].sum()),
+                         int(res.depleted_period[0]), order))
+    screened.sort(key=lambda r: (r[2] < 0, r[0]), reverse=True)
+    picks = [r[3] for r in screened[:finalists]]
+    if current not in picks:
+        picks.append(current)
+    rows = []
+    for order in picks:
+        q = with_order(order)
+        res = P(q).run(trials, seed=SEED)
+        k = kpis(res, q.policy.legacy_target, q.policy.confidence)
+        net = _after_tax(res, q, heir_rate)
+        rows.append(dict(order=list(order), names=[plan.wrappers[w].label for w in order],
+                         current=order == current, success=k["success_probability"],
+                         se=k["success_se"], after_tax_p50=float(np.median(net)),
+                         tax=float(np.median(res.tax.sum(axis=1)))))
+    rows.sort(key=lambda r: (round(r["success"], 2), r["after_tax_p50"]), reverse=True)
+    cur = next(r for r in rows if r["current"])
+    for r in rows:
+        r["delta_after_tax"] = r["after_tax_p50"] - cur["after_tax_p50"]
+        r["delta_tax"] = r["tax"] - cur["tax"]
+        r["delta_success"] = r["success"] - cur["success"]
+    return dict(rows=rows, best=rows[0], current=cur, screened=len(screened),
+                heir_rate=heir_rate, trials=trials)
+
+
+def apply_draw_order(plan, order: list[int]):
+    """Set withdraw priorities so wrappers are drawn in `order`."""
+    q = copy.deepcopy(plan)
+    liquid = [i for i, lg in enumerate(q.ledgers) if lg.enabled and q.wrappers[lg.wrapper].liquid]
+    rank = 1
+    for w in order:
+        for i in sorted([i for i in liquid if q.ledgers[i].wrapper == w],
+                        key=lambda i: plan.ledgers[i].withdraw_priority):
+            q.ledgers[i].withdraw_priority = rank
+            rank += 1
+    for i, lg in enumerate(q.ledgers):
+        if i not in liquid:
+            lg.withdraw_priority = 100 + i
+    return q
+
+
+# --------------------------------------------------------------------------- #
+# health and care
+# --------------------------------------------------------------------------- #
+def health_rows(plan, bridge: float, bridge_to: float, later: float, later_from: float,
+                later_growth: float):
+    """Spending rows for health cover until public cover starts, and for health
+    costs in later life (both essential)."""
+    from retplan.plan import ExpenseRow
+    p0 = plan.persons[0]
+    rows = []
+    if bridge > 0 and bridge_to > p0.retire_age:
+        rows.append(ExpenseRow("Health cover until public cover", bridge, "real", True,
+                               later_growth, False, max(p0.age, p0.retire_age), bridge_to,
+                               -1, 0, 1.0))
+    if later > 0:
+        rows.append(ExpenseRow("Health costs in later life", later, "real", True,
+                               later_growth, False, max(p0.age, later_from), 200, -1, 0, 1.0))
+    return rows

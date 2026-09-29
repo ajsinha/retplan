@@ -13,8 +13,8 @@ import logging
 
 from fastapi import FastAPI, Request
 
-from retplan.plan import (CATEGORIES, Conversion, ExpenseRow, IncomeRow, Ledger, Loan,
-                          Person, Wrapper)
+from retplan.plan import (CATEGORIES, CareRisk, Conversion, ExpenseRow, IncomeRow, Ledger,
+                          Loan, Person, Wrapper)
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.help_catalog import CONTEXT_HELP
 from web.store import session_id
@@ -126,6 +126,17 @@ CONVERSION_FIELDS = [
     F("end_age", "Until age", "number", help="the conversion stops before this age"),
 ]
 
+CARE_FIELDS = [
+    F("label", "Label", "text", width="wide"),
+    F("owner", "Who", "person"),
+    F("probability", "Chance", "pct", help="the chance this person ever needs it"),
+    F("start_min", "Earliest age", "number"),
+    F("start_max", "Latest age", "number", help="the start age is drawn evenly between the two"),
+    F("years", "Years", "number", help="how long it lasts, if it happens"),
+    F("amount", "Cost / year", "money", help="in today's money"),
+    F("infl_delta", "Above CPI", "pct", adv=True, help="care costs usually rise faster than prices"),
+]
+
 SECTIONS = [
     ("household", "Household", "bi-people", "Who the plan covers and how long it runs."),
     ("income", "Income", "bi-arrow-down-circle", "Every stream of money coming in."),
@@ -136,6 +147,8 @@ SECTIONS = [
     ("markets", "Markets", "bi-graph-up-arrow", "Returns, regimes, crashes, inflation, fees."),
     ("tax", "Tax", "bi-percent", "A table of bands. No jurisdiction is assumed."),
     ("policy", "Policy", "bi-sliders", "How much you take out, and what counts as success."),
+    ("care", "Health and care", "bi-heart-pulse",
+     "The chance of needing long-term care, simulated future by future."),
     ("conversions", "Conversions", "bi-arrow-left-right",
      "Move money between accounts each year, paying the tax now to pay less later."),
 ]
@@ -161,6 +174,7 @@ def completeness(plan) -> dict:
         "tax": n(len(plan.tax.ordinary.lowers), "band"),
         "policy": plan.policy.method.replace("_", " "),
         "conversions": n(len(plan.conversions), "conversion") if plan.conversions else "none",
+        "care": n(len(plan.care), "care risk") if plan.care else "none",
     }
 
 
@@ -212,7 +226,7 @@ def parse_rows(form, prefix: str, fields: list) -> list:
                 row[f["name"]] = int(_num(form, key))
             elif kind == "pct":
                 row[f["name"]] = _pct(form, key)
-            elif kind in ("wrapper", "ledger"):
+            elif kind in ("wrapper", "ledger", "person"):
                 row[f["name"]] = int(_num(form, key))
             elif kind == "select":
                 val = form.get(key, "")
@@ -257,13 +271,15 @@ class PlanRoutes:
             section = "household"
         fields_for = {"income": INCOME_FIELDS, "expenses": EXPENSE_FIELDS,
                       "debt": LOAN_FIELDS, "wrappers": WRAPPER_FIELDS,
-                      "accounts": LEDGER_FIELDS, "conversions": CONVERSION_FIELDS}
+                      "accounts": LEDGER_FIELDS, "conversions": CONVERSION_FIELDS,
+                      "care": CARE_FIELDS}
         ctx = dict(plan=plan, section=section, sections=SECTIONS,
                    context_help=CONTEXT_HELP, completeness=completeness(plan),
                    has_advanced=any(f.get("adv") for f in fields_for.get(section, [])),
                    income_fields=INCOME_FIELDS, expense_fields=EXPENSE_FIELDS,
                    loan_fields=LOAN_FIELDS, wrapper_fields=WRAPPER_FIELDS,
                    ledger_fields=LEDGER_FIELDS, conversion_fields=CONVERSION_FIELDS,
+                   care_fields=CARE_FIELDS,
                    policies=POLICIES,
                    policy_options=POLICY_OPTIONS,
                    categories=CATEGORIES)
@@ -289,6 +305,8 @@ class PlanRoutes:
                 w = [1.0] + [0.0] * (len(plan.market.assets) - 1)
                 plan.ledgers.append(Ledger(f"Account {n}", 0, 0, 0.0, 0.0, w, [],
                                            200, 200, n, n))
+            elif section == "care":
+                plan.care.append(CareRisk("Long-term care", 0, 0.5, 80, 90, 3, 0.0, 0.02))
             elif section == "conversions":
                 n_l = len(plan.ledgers)
                 plan.conversions.append(Conversion("New conversion", 0, min(1, n_l - 1), "amount",
@@ -386,6 +404,9 @@ class PlanRoutes:
             kept.append(lg)
         plan.ledgers = kept or plan.ledgers
         plan.policy.sweep_ledger = max(0, int(_num(form, "sweep_ledger", 0)))
+
+    def _save_care(self, plan, form):
+        plan.care = [CareRisk(**r) for r in parse_rows(form, "care", CARE_FIELDS)]
 
     def _save_conversions(self, plan, form):
         rows = parse_rows(form, "conversions", CONVERSION_FIELDS)

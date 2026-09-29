@@ -48,7 +48,7 @@ make test                               # both test suites, offline
 | Check | Result (at the time of writing) |
 |---|---|
 | Engine suite (`tests/run_tests.py`) | 110 checks passing in about 3 s |
-| Portfolio and web suite (`tests/test_portfolio.py`, SQLite) | 178 checks passing in about 8 s |
+| Portfolio and web suite (`tests/test_portfolio.py`, SQLite) | 199 checks passing in about 18 s |
 | Golden scenarios G1–G9 | Exact to 1e-9 relative (G2 lands on zero within 1e-6) |
 | Reconciliation | Balance roll-forward ties to 1e-6 relative every period, including employer money and conversions |
 | Gross-up | Net delivered equals the need for every taxable fraction, with and without penalty |

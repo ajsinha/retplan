@@ -27,8 +27,9 @@ from web.config import load_config  # noqa: E402
 
 # parents before children, so foreign keys hold at every insert
 ORDER = ["plans", "portfolios", "securities", "holdings", "prices", "fetch_runs",
-         "projections", "import_drafts", "app_settings"]
-IDENTITY = ["plans", "portfolios", "holdings", "fetch_runs", "projections", "import_drafts"]
+         "projections", "import_drafts", "snapshots", "app_settings"]
+IDENTITY = ["plans", "portfolios", "holdings", "fetch_runs", "projections", "import_drafts",
+            "snapshots"]
 
 
 def main() -> int:

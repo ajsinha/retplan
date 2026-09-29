@@ -129,6 +129,24 @@ CREATE TABLE IF NOT EXISTS import_drafts (
 );
 CREATE INDEX IF NOT EXISTS ix_import_drafts_owner ON import_drafts (owner);
 
+-- Net worth over time. 'manual' snapshots are what someone recorded on a day
+-- (every account, other assets, debts); 'portfolio' rows are each portfolio's
+-- value, recorded automatically after each price collection - kept for good,
+-- unlike the daily prices, which are pruned after a year.
+CREATE TABLE IF NOT EXISTS snapshots (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner       TEXT    NOT NULL,
+    taken_on    TEXT    NOT NULL,                    -- ISO date
+    kind        TEXT    NOT NULL DEFAULT 'manual',   -- manual | portfolio
+    ref         TEXT    NOT NULL DEFAULT '',         -- portfolio id for 'portfolio'
+    assets      REAL    NOT NULL DEFAULT 0,
+    liabilities REAL    NOT NULL DEFAULT 0,
+    data        TEXT    NOT NULL DEFAULT '{}',       -- JSON breakdown
+    note        TEXT    NOT NULL DEFAULT '',
+    created_at  TEXT    NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_snapshots_day ON snapshots (owner, taken_on, kind, ref);
+
 -- Application-wide key/value settings (JSON values), e.g. the collector schedule.
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,

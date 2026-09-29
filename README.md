@@ -40,6 +40,8 @@ page you see as administrator says so.
 | **Portfolio builder** (`/portfolios/build`) | upload a broker's .xlsx or CSV of positions; RetPlan finds the table, reads the columns, identifies every security on Yahoo (symbol, ISIN or name), flags doubtful matches, and imports after you review |
 | **Projection** | correlated lognormal, fat-tailed Student-t or bootstrap Monte Carlo over 1-60 years, contributions, withdrawals and a goal; yearly or quarterly table, P10-P90 fan chart, return and drawdown distributions, three sample futures, CSV, saved runs |
 | **Stress tests** | 2008, the dot-com bust, Covid, the 2022 rate shock and 1973-74 replayed on your mix; any of them can open every projection trial |
+| **Planning tools** (`/tools/*`) | what-if sliders and ranked levers on the dashboard; when to claim a public pension; Roth-style conversions; a spending check with guardrails; the tax-efficient draw order; health costs and long-term care simulated future by future |
+| **Net worth history** (`/networth`) | dated snapshots of everything you own and owe; each portfolio's value recorded daily and kept for good; bring the plan up to date from a snapshot |
 | **Securities** (`/securities`) | look up any symbol live on Yahoo; the administrator adds, amends and deletes securities, including manually priced ones (private funds, property) |
 | **Help** (`/help`) | every screen and idea, searchable; `Ctrl-K` searches pages, help and holdings |
 

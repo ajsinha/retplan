@@ -22,6 +22,9 @@ HIGHLIGHTS: dict[str, list[str]] = {
         "quarterly tables and five historical crisis replays",
         "Deciding, not only projecting: what-if sliders, your biggest levers, when to "
         "claim a public pension, and Roth-style conversions between any two accounts",
+        "A spending check with guardrails on the odds; the tax-efficient draw order, "
+        "every order tried; health costs and long-term care simulated future by "
+        "future; net worth history with portfolio values kept daily",
         "A quick-start wizard, named scenarios compared on one seed, a life timeline "
         "and a one-page plan report",
         "Model corrections: employer matches paid on top of saving; a funded ratio "

@@ -18,7 +18,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from retplan.plan import Conversion
+from retplan.plan import CareRisk, Conversion
 from web import charts, levers
 from web.fastapi_compat import flash, flash_error_and_log, redirect_to, render
 from web.store import session_id
@@ -60,6 +60,13 @@ class ToolsRoutes:
             name="tool_conversions", **r)
         add("/tools/conversions/add", self.conversion_add, methods=["POST"],
             name="tool_conversion_add", **r)
+        add("/tools/spending", self.spending, methods=["GET", "POST"], name="tool_spending", **r)
+        add("/tools/draw-order", self.draw_order, methods=["GET", "POST"],
+            name="tool_draw_order", **r)
+        add("/tools/draw-order/apply", self.draw_order_apply, methods=["POST"],
+            name="tool_draw_order_apply", **r)
+        add("/tools/health", self.health, methods=["GET", "POST"], name="tool_health", **r)
+        add("/tools/health/add", self.health_add, methods=["POST"], name="tool_health_add", **r)
 
     # -- what-if --------------------------------------------------------------
     async def _body(self, request):
@@ -191,3 +198,128 @@ class ToolsRoutes:
             self.store.put(sid, plan)
             msg = "Conversion added to your plan."
         return redirect_to(request, "plan_section", section="conversions", flash_message=msg)
+
+    # -- spending check ----------------------------------------------------------
+    async def spending(self, request: Request):
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        form = await request.form() if request.method == "POST" else {}
+        pct = lambda k, d: (_f(form.get(k), d * 100) if form else d * 100) / 100   # noqa: E731
+        target = pct("target", plan.policy.confidence)
+        lower = pct("lower", max(0.0, plan.policy.confidence - 0.15))
+        upper = pct("upper", min(0.99, plan.policy.confidence + 0.10))
+        savings = _f(form.get("savings")) if form else None
+        result, chart = None, ""
+        if form:
+            if not lower < target < upper:
+                flash(request, "The lower guardrail must be below the target and the upper "
+                               "one above it.", "error")
+            else:
+                try:
+                    result = levers.spending_check(plan, target, lower, upper, savings)
+                    xs = [r["spend"] for r in result["rows"]]
+                    chart = charts.line_chart(
+                        xs, [("Chance of success", [r["success"] for r in result["rows"]]),
+                             ("Target", [target] * len(xs)), ("Upper guardrail", [upper] * len(xs)),
+                             ("Lower guardrail", [lower] * len(xs))],
+                        "Success against spending", "probability", y_fmt=charts._pct_fmt,
+                        x_name="Spending")
+                except Exception as exc:  # noqa: BLE001
+                    flash_error_and_log(request, "The spending check failed", exc)
+        from web.levers import spending_now
+        liquid = sum(lg.opening for lg in plan.ledgers
+                     if lg.enabled and plan.wrappers[lg.wrapper].liquid)
+        return render(request, "tools/spending.html", plan=plan, result=result, chart=chart,
+                      target=target, lower=lower, upper=upper, liquid=liquid,
+                      savings=savings if savings is not None else liquid,
+                      now=spending_now(plan))
+
+    # -- draw order --------------------------------------------------------------
+    async def draw_order(self, request: Request):
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        form = await request.form() if request.method == "POST" else {}
+        heir = _f(form.get("heir"), 25.0) if form else 25.0
+        result = None
+        if form:
+            try:
+                result = levers.draw_orders(plan, heir / 100)
+            except Exception as exc:  # noqa: BLE001
+                flash_error_and_log(request, "The draw-order comparison failed", exc)
+        current = sorted([lg for lg in plan.ledgers if lg.enabled],
+                         key=lambda lg: lg.withdraw_priority)
+        return render(request, "tools/draw_order.html", plan=plan, result=result, heir=heir,
+                      current=current)
+
+    async def draw_order_apply(self, request: Request):
+        sid = session_id(request)
+        form = await request.form()
+        plan = self.store.get(sid)
+        try:
+            order = [int(x) for x in (form.get("order") or "").split(",") if x.strip()]
+        except ValueError:
+            order = []
+        if not order:
+            return redirect_to(request, "tool_draw_order")
+        q = levers.apply_draw_order(plan, order)
+        if form.get("as_scenario"):
+            q.label = f"{plan.label} - new draw order"[:80]
+            self.store.create(sid, q.label, q, activate=True)
+            msg = f"Saved as a new scenario, “{q.label}”."
+        else:
+            self.store.put(sid, q)
+            msg = "Draw order updated."
+        return redirect_to(request, "plan_section", section="accounts", flash_message=msg)
+
+    # -- health and care ---------------------------------------------------------
+    def _health_values(self, plan, form):
+        p0 = plan.persons[0]
+        g = lambda k, d: _f(form.get(k), d) if form else d   # noqa: E731
+        return dict(bridge=g("bridge", 0.0), bridge_to=g("bridge_to", max(65.0, p0.retire_age)),
+                    later=g("later", 0.0), later_from=g("later_from", max(75.0, p0.retire_age)),
+                    growth=g("growth", 2.0), care_prob=g("care_prob", 50.0),
+                    care_from=g("care_from", 80.0), care_to=g("care_to", 90.0),
+                    care_years=g("care_years", 3.0), care_cost=g("care_cost", 0.0),
+                    care_all=bool(form.get("care_all")) if form else True)
+
+    def _with_health(self, plan, v):
+        import copy
+        q = copy.deepcopy(plan)
+        q.expenses = list(q.expenses) + levers.health_rows(
+            q, v["bridge"], v["bridge_to"], v["later"], v["later_from"], v["growth"] / 100)
+        if v["care_cost"] > 0:
+            owners = range(len(q.persons)) if v["care_all"] else [0]
+            q.care = list(q.care) + [
+                CareRisk(f"Long-term care - {q.persons[i].label}", i, v["care_prob"] / 100,
+                         v["care_from"], v["care_to"], v["care_years"], v["care_cost"],
+                         v["growth"] / 100) for i in owners]
+        return q
+
+    async def health(self, request: Request):
+        sid = session_id(request)
+        plan = self.store.get(sid)
+        form = await request.form() if request.method == "POST" else {}
+        v = self._health_values(plan, form)
+        result = None
+        if form:
+            try:
+                before = levers.run(plan, levers.TOOL)
+                after = levers.run(self._with_health(plan, v), levers.TOOL)
+                result = dict(before=before, after=after)
+            except Exception as exc:  # noqa: BLE001
+                flash_error_and_log(request, "The health-cost test failed", exc)
+        return render(request, "tools/health.html", plan=plan, v=v, result=result)
+
+    async def health_add(self, request: Request):
+        sid = session_id(request)
+        form = await request.form()
+        plan = self.store.get(sid)
+        q = self._with_health(plan, self._health_values(plan, form))
+        if form.get("as_scenario"):
+            q.label = f"{plan.label} + health and care"[:80]
+            self.store.create(sid, q.label, q, activate=True)
+            msg = f"Saved as a new scenario, “{q.label}”."
+        else:
+            self.store.put(sid, q)
+            msg = "Health costs and care risks added to your plan."
+        return redirect_to(request, "plan_section", section="care", flash_message=msg)

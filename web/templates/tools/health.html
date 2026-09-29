@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Health and care costs{% endblock %}
+{% block content %}
+{% call ui.page_head('Health and care costs', 'Health costs are the retirement expense people most often leave out. Add cover until public cover starts, costs that rise in later life, and the chance of needing long-term care - then see what they do to your odds before you add them.', eyebrow='Planning tools · ' ~ plan.label, help=url_for('help_tools') ~ '#health') %}{% endcall %}
+<form class="card" method="post" action="{{ url_for('tool_health') }}" data-busy="Testing…">
+  <div class="card-body">
+    <h2 class="h6">Health cover until public cover starts</h2>
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label" for="h-b">Cost a year</label><input class="form-control num" id="h-b" name="bridge" type="number" step="any" min="0" value="{{ '%g'|format(v.bridge) }}">
+        <div class="form-hint mt-1">E.g. private insurance between retiring and 65 in the US.</div></div>
+      <div class="col-md-3"><label class="form-label" for="h-bt">Until age</label><input class="form-control num" id="h-bt" name="bridge_to" type="number" step="1" value="{{ '%g'|format(v.bridge_to) }}"></div>
+    </div>
+    <h2 class="h6 mt-4">Health costs in later life</h2>
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label" for="h-l">Cost a year</label><input class="form-control num" id="h-l" name="later" type="number" step="any" min="0" value="{{ '%g'|format(v.later) }}">
+        <div class="form-hint mt-1">Premiums, out-of-pocket costs, dental, hearing, eyes.</div></div>
+      <div class="col-md-3"><label class="form-label" for="h-lf">From age</label><input class="form-control num" id="h-lf" name="later_from" type="number" step="1" value="{{ '%g'|format(v.later_from) }}"></div>
+      <div class="col-md-3"><label class="form-label" for="h-g">Rising above inflation</label><div class="input-group"><input class="form-control num" id="h-g" name="growth" type="number" step="any" value="{{ '%g'|format(v.growth) }}"><span class="input-group-text">% a year</span></div></div>
+    </div>
+    <h2 class="h6 mt-4">Long-term care</h2>
+    <div class="row g-3">
+      <div class="col-md-2"><label class="form-label" for="h-cp">Chance</label><div class="input-group"><input class="form-control num" id="h-cp" name="care_prob" type="number" step="any" min="0" max="100" value="{{ '%g'|format(v.care_prob) }}"><span class="input-group-text">%</span></div></div>
+      <div class="col-md-2"><label class="form-label" for="h-cf">Starting between</label><input class="form-control num" id="h-cf" name="care_from" type="number" step="1" value="{{ '%g'|format(v.care_from) }}"></div>
+      <div class="col-md-2"><label class="form-label" for="h-ct">and age</label><input class="form-control num" id="h-ct" name="care_to" type="number" step="1" value="{{ '%g'|format(v.care_to) }}"></div>
+      <div class="col-md-2"><label class="form-label" for="h-cy">For years</label><input class="form-control num" id="h-cy" name="care_years" type="number" step="any" value="{{ '%g'|format(v.care_years) }}"></div>
+      <div class="col-md-2"><label class="form-label" for="h-cc">Cost a year</label><input class="form-control num" id="h-cc" name="care_cost" type="number" step="any" min="0" value="{{ '%g'|format(v.care_cost) }}"></div>
+      {% if plan.persons|length > 1 %}<div class="col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" id="h-ca" name="care_all" value="1" {% if v.care_all %}checked{% endif %}><label class="form-check-label" for="h-ca">For each person</label></div></div>{% endif %}
+    </div>
+    <p class="form-hint mt-2">Care is simulated future by future: in about {{ v.care_prob|round(0)|int }}% of futures it happens and costs the full amount, in the rest it never does. Studies in several countries suggest around half of people reaching 65 will need some long-term care, most for under two years and a minority for many; costs vary hugely by country and setting, so use your own.</p>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Test the effect</button>
+      <button class="btn btn-outline-primary" type="submit" formaction="{{ url_for('tool_health_add') }}" name="as_scenario" value="1">Save as a scenario</button>
+      <button class="btn btn-outline-secondary" type="submit" formaction="{{ url_for('tool_health_add') }}">Add to my plan</button>
+    </div>
+  </div>
+</form>
+{% if result %}{% set b, a = result.before, result.after %}
+<div class="stat-grid">
+  {{ ui.kpi('Chance of success', a.success|pct(0), 'was ' ~ b.success|pct(0) ~ ' without them (' ~ ((a.success - b.success) * 100)|round(1) ~ ' pts)', 'heart-pulse', 'bad' if a.success < b.success - 0.02 else '') }}
+  {{ ui.kpi('Median final wealth', a.p50|money, (a.p50 - b.p50)|smoney ~ ' vs without', 'trophy') }}
+  {{ ui.kpi('Bad-luck final wealth', a.p5|money, (a.p5 - b.p5)|smoney ~ ' vs without', 'cloud-lightning-rain') }}
+  {{ ui.kpi('Lifetime tax', a.tax|money, (a.tax - b.tax)|smoney ~ ' vs without', 'receipt') }}
+</div>
+<p class="small-muted">{{ a.trials }} futures each, on one seed. Nothing has been saved; use the buttons above to keep these costs.</p>
+{% endif %}
+{% endblock %}

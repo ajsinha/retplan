@@ -92,12 +92,14 @@ CATEGORIES = [
                  summary="The six spending rules, how guardrails behave, and what "
                          "counts as success.", context="policy",
                  keywords="withdrawal 4% rule guardrails vpw guyton klinger spending"),
-            dict(slug="tools", title="Deciding: what-if, levers, claiming, conversions",
+            dict(slug="tools", title="Deciding: what-if, levers, and the planning tools",
                  icon="bi-sliders2",
-                 summary="Drag the sliders, rank the levers that matter, pick a pension "
-                         "claiming age and test account conversions - all on your whole plan.",
+                 summary="Sliders, ranked levers, claiming age, conversions, the spending "
+                         "check, draw order, health and care, and net worth history.",
                  keywords="what if slider lever coach recommendation social security claiming "
-                          "state pension delay roth conversion fill bracket decide"),
+                          "state pension delay roth conversion fill bracket decide guardrails "
+                          "spending check withdrawal order draw order health medicare long "
+                          "term care net worth snapshot history"),
             dict(slug="scenarios", title="Scenarios and comparison", icon="bi-layers",
                  summary="Keep several versions of the plan, switch between them, and "
                          "compare their odds and wealth side by side.",

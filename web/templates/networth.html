@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Net worth history{% endblock %}
+{% block content %}
+{% call ui.page_head('Net worth history', 'A plan looks forward; this looks back. Take a snapshot now and then - every account, the home, the car, what you owe - and your portfolios record their own value every day. Then check that reality is keeping up with the plan, and bring the plan up to date in one click.', eyebrow='Results', help=url_for('help_tools') ~ '#networth') %}
+  <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#snap-form"><i class="bi bi-camera" aria-hidden="true"></i> Take a snapshot</button>
+{% endcall %}
+{% set last = snaps[0] if snaps else None %}
+{% set prev = snaps[1] if snaps|length > 1 else None %}
+<div class="stat-grid">
+  {{ ui.kpi('Net worth', last.net|money if last else '-', ('on ' ~ last.taken_on) if last else 'no snapshot yet', 'bank2') }}
+  {% if prev %}{{ ui.kpi('Since the last one', (last.net - prev.net)|smoney, 'since ' ~ prev.taken_on ~ ' (' ~ ((last.net / prev.net - 1) if prev.net else 0)|spct ~ ')', 'arrow-left-right', 'good' if last.net >= prev.net else 'bad') }}{% endif %}
+  {% if last %}{{ ui.kpi('Assets / debts', last.assets|compact ~ ' / ' ~ last.liabilities|compact, 'at the latest snapshot', 'scale') }}{% endif %}
+  {{ ui.kpi('Snapshots', snaps|length, 'plus ' ~ series|length ~ ' portfolio(s) recorded daily', 'camera') }}
+</div>
+
+<div class="collapse {{ 'show' if not snaps }}" id="snap-form">
+<form class="card" method="post" action="{{ url_for('networth_snapshot') }}">
+  <div class="card-header"><i class="bi bi-camera" aria-hidden="true"></i> Snapshot
+    <span class="ms-auto small-muted fw-normal">filled in from your plan and portfolios - change anything</span></div>
+  <div class="card-body">
+    <div class="row g-2 mb-3">
+      <div class="col-md-3"><label class="form-label" for="n-d">Date</label><input class="form-control" id="n-d" name="taken_on" type="date" value="{{ today }}" max="{{ today }}"></div>
+      <div class="col-md-9"><label class="form-label" for="n-n">Note <span class="small-muted">(optional)</span></label><input class="form-control" id="n-n" name="note" maxlength="300" placeholder="e.g. after the bonus; year-end"></div>
+    </div>
+    <div class="table-scroll"><table class="table table-sm align-middle mb-2">
+      <thead><tr><th>What</th><th>Kind</th><th class="num">Value</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
+      <tbody id="nw-items">
+        {% for it in prefill %}<tr data-row>
+          <td><input class="form-control form-control-sm" name="it-{{ loop.index0 }}-name" value="{{ it.name }}" aria-label="What"><input type="hidden" name="it-{{ loop.index0 }}-ref" value="{{ it.ref }}"></td>
+          <td><select class="form-select form-select-sm" name="it-{{ loop.index0 }}-kind" aria-label="Kind">{% for k, l in [('account','plan account'),('portfolio','portfolio'),('asset','other asset'),('debt','debt')] %}<option value="{{ k }}" {% if k == it.kind %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></td>
+          <td><input class="form-control form-control-sm num" name="it-{{ loop.index0 }}-value" type="number" step="any" value="{{ it.value }}" aria-label="Value"></td>
+          <td><button type="button" class="btn btn-sm btn-link text-danger p-0 remove-row" title="Remove"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Remove</span></button></td></tr>{% endfor %}
+      </tbody></table></div>
+    <template id="nw-tpl"><tr data-row>
+      <td><input class="form-control form-control-sm" name="it-__i__-name" placeholder="e.g. Home" aria-label="What"><input type="hidden" name="it-__i__-ref" value=""></td>
+      <td><select class="form-select form-select-sm" name="it-__i__-kind" aria-label="Kind"><option value="asset">other asset</option><option value="debt">debt</option><option value="account">plan account</option><option value="portfolio">portfolio</option></select></td>
+      <td><input class="form-control form-control-sm num" name="it-__i__-value" type="number" step="any" aria-label="Value"></td>
+      <td><button type="button" class="btn btn-sm btn-link text-danger p-0 remove-row" title="Remove"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Remove</span></button></td></tr></template>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-add-row="nw-tpl" data-target="#nw-items"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a home, car, loan…</button>
+      <button class="btn btn-primary btn-sm ms-auto" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Save snapshot</button>
+    </div>
+    <p class="form-hint mt-2 mb-0">Plan accounts and portfolios can overlap if you copied a portfolio into the plan - remove one of the two so nothing is counted twice. A second snapshot on the same date replaces the first.</p>
+  </div>
+</form>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-7">
+    {% if chart_nw %}{% call ui.chart_card('Net worth over time', 'graph-up', chart_nw, 'your snapshots') %}
+      <table class="table table-sm"><thead><tr><th>Date</th><th class="num">Assets</th><th class="num">Debts</th><th class="num">Net worth</th></tr></thead>
+        <tbody>{% for s in snaps %}<tr><td>{{ s.taken_on }}</td><td class="num">{{ s.assets|money }}</td><td class="num">{{ s.liabilities|money }}</td><td class="num">{{ s.net|money }}</td></tr>{% endfor %}</tbody></table>
+    {% endcall %}
+    {% else %}<div class="card h-100"><div class="card-body">{% call ui.empty('graph-up', 'The chart appears with two snapshots', 'Take one today and another in a few months - quarterly or at each year-end works well.') %}{% endcall %}</div></div>{% endif %}
+  </div>
+  <div class="col-xl-5">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-camera" aria-hidden="true"></i> Snapshots</div>
+      <div class="card-body">
+        {% if snaps %}<ul class="list-rows">{% for s in snaps %}
+          <li><span class="grow"><strong>{{ s.taken_on }}</strong> · {{ s.net|money }}<span class="cell-sub">{{ s.data.get('items', [])|length }} items{% if s.note %} · {{ s.note }}{% endif %}</span></span>
+            <form class="d-inline" method="post" action="{{ url_for('networth_to_plan', snap=s.id) }}" data-confirm="Set the plan's account balances and loan balances to this snapshot's?"><button class="btn btn-sm btn-outline-primary" title="Update the plan's balances from this snapshot">To plan</button></form>
+            <form class="d-inline" method="post" action="{{ url_for('networth_delete', snap=s.id) }}" data-confirm="Delete the snapshot of {{ s.taken_on }}?"><button class="btn btn-sm btn-link text-danger p-0" title="Delete"><i class="bi bi-trash" aria-hidden="true"></i><span class="visually-hidden">Delete</span></button></form></li>{% endfor %}</ul>
+        {% else %}<p class="small-muted mb-0">None yet.</p>{% endif %}
+      </div></div>
+  </div>
+</div>
+{% if chart_pf %}
+{% call ui.chart_card('Portfolio values, recorded daily', 'briefcase', chart_pf, 'kept for good - unlike daily prices') %}
+  <table class="table table-sm"><thead><tr><th>Portfolio</th><th class="num">First recorded</th><th class="num">Latest</th><th class="num">Change</th></tr></thead>
+    <tbody>{% for ref, pts in series.items() %}<tr><td>{{ names.get(ref, 'Portfolio ' ~ ref) }}</td><td class="num">{{ pts[0][1]|money }} <span class="small-muted">{{ pts[0][0] }}</span></td><td class="num">{{ pts[-1][1]|money }} <span class="small-muted">{{ pts[-1][0] }}</span></td><td class="num">{{ (pts[-1][1] / pts[0][1] - 1)|spct if pts[0][1] else '' }}</td></tr>{% endfor %}</tbody></table>
+{% endcall %}
+{% endif %}
+{% endblock %}

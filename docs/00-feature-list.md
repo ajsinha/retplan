@@ -86,6 +86,10 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-DEC-4 | Public-pension claiming-age explorer: every age with user-set early and late adjustment rates, on the whole plan, with break-even ages | `/tools/claiming` |
 | F-DEC-5 | Conversion explorer: fixed amounts or fill-to levels between two accounts and two ages, compared on after-tax final wealth; "try it" saves a scenario | `/tools/conversions` |
 | F-DEC-6 | Life timeline: people, retirements, income streams, time-limited costs, loans, conversions by age | `charts.life_timeline` |
+| F-DEC-7 | Spending check: success at spending from 30% to 160% of today's, guardrails around the target, a raise / hold / trim verdict with the amount; savings can be restated after a market move | `levers.spending_check`, `/tools/spending` |
+| F-DEC-8 | Draw order: every order of the plan's wrappers screened at fixed returns, the best few simulated, compared on success, lifetime tax and after-tax wealth; applied to the plan or a scenario | `levers.draw_orders`, `/tools/draw-order` |
+| F-DEC-9 | Health and care: bridge health cover, later-life health costs above inflation, and long-term care as a stochastic risk (happens per future with its probability, random start age); tested before it is added | `retplan.plan.CareRisk`, `Projection._care`, `/tools/health` |
+| F-DEC-10 | Net worth history: dated snapshots of accounts, portfolios, other assets and debts; each portfolio's value recorded after every price run and kept; a snapshot can update the plan's balances | `portfolio/networth.py`, `/networth` |
 
 ## 7. Reports and audit — `F-RPT-*`
 

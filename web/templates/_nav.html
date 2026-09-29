@@ -19,15 +19,20 @@
       (url_for('plan_section', section='tax'), 'percent', 'Tax', 'A table of bands; no country assumed', '/plan/tax'),
       (url_for('plan_section', section='markets'), 'graph-up-arrow', 'Markets', 'Returns, regimes, crashes, inflation', '/plan/markets'),
       (url_for('plan_section', section='policy'), 'sliders', 'Withdrawal policy', 'How much to take out; what counts as success', '/plan/policy'),
-      (url_for('plan_section', section='conversions'), 'arrow-left-right', 'Conversions', 'Move money between accounts, pay tax now', '/plan/conversions')]),
+      (url_for('plan_section', section='conversions'), 'arrow-left-right', 'Conversions', 'Move money between accounts, pay tax now', '/plan/conversions'),
+      (url_for('plan_section', section='care'), 'heart-pulse', 'Health and care', 'The chance of long-term care, future by future', '/plan/care')]),
     ('Decide', [
       (url_for('dashboard') ~ '#whatif', 'sliders2', 'What if…', 'Drag retirement age, spending, saving; see the odds move', None),
       (url_for('tool_claiming'), 'calendar-check', 'When to claim a pension', 'Every claiming age tried on your whole plan', '/tools/claiming'),
-      (url_for('tool_conversions'), 'arrow-left-right', 'Conversion explorer', 'Roth-style conversions, compared after tax', '/tools/conversions')])]),
+      (url_for('tool_conversions'), 'arrow-left-right', 'Conversion explorer', 'Roth-style conversions, compared after tax', '/tools/conversions'),
+      (url_for('tool_spending'), 'speedometer', 'Spending check', 'Raise, hold or trim this year - guardrails on the odds', '/tools/spending'),
+      (url_for('tool_draw_order'), 'sort-numeric-down', 'Draw order', 'Which account to spend first, for the least tax', '/tools/draw-order'),
+      (url_for('tool_health'), 'heart-pulse', 'Health and care', 'Health costs and long-term care, tested first', '/tools/health')])]),
   ('Results', 'speedometer2', [
     ('Outcome', [
       (url_for('dashboard'), 'speedometer2', 'Dashboard', 'Verdict, success odds, charts', '/dashboard'),
-      (url_for('compare'), 'columns-gap', 'Compare scenarios', 'Side by side: odds, wealth, tax, spending', '/compare')]),
+      (url_for('compare'), 'columns-gap', 'Compare scenarios', 'Side by side: odds, wealth, tax, spending', '/compare'),
+      (url_for('networth'), 'bank2', 'Net worth history', 'Snapshots over time; portfolio values kept daily', '/networth')]),
     ('Year by year', [
       (url_for('report', name='cashflow'), 'table', 'Cash flow', 'Income, spending, tax and withdrawals', '/reports/cashflow'),
       (url_for('report', name='balance'), 'journal-text', 'Balance sheet', 'Accounts, debt and net worth', '/reports/balance'),
