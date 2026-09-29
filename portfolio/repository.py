@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from . import account_types as at
+from . import calendar as tcal
 from .assets import CASH_SYMBOL, CLASSES, classify
 from .fx import is_fx, pair
 from .db import PRICE_RETENTION_DAYS, Database, utcnow
@@ -753,6 +754,9 @@ class PortfolioRepo:
             r["high_52"] = r["high_52"] or r["close_high_52"]
             r["low_52"] = r["low_52"] or r["close_low_52"]
             px, prev = r.get("last_price"), r.get("prev_close")
+            r["calendar"] = tcal.CALENDARS[self.calendar(r["symbol"])]
+            r["missing"] = len(self.missing_days(r["symbol"])) if r["n_prices"] else 0
+            r["known_gaps"] = len(self.known_gaps(r["symbol"]))
             r["change"] = (px - prev) if px is not None and prev else None
             r["change_pct"] = (px / prev - 1) if px is not None and prev else None
         return rows
@@ -763,6 +767,71 @@ class PortfolioRepo:
             "SELECT date, open, high, low, close, adj_close, volume FROM prices"
             " WHERE symbol = :s" + (" AND date >= :d" if since else "") + " ORDER BY date",
             {"s": normalise_symbol(symbol), "d": since})
+
+    # -- completeness: every trading day, or a known reason why not -------------
+    GAP_ATTEMPTS = 3                  # after this many tries a missing day is a known gap
+
+    def calendar(self, symbol: str) -> str:
+        """The trading calendar a symbol follows (portfolio/calendar.py)."""
+        sec = self.security(symbol) or {}
+        return tcal.calendar_for(symbol, sec.get("quote_type") or "",
+                                 sec.get("exchange") or "", sec.get("currency") or "")
+
+    def missing_days(self, symbol: str, keep_days: int | None = None,
+                     today: date | None = None) -> list[str]:
+        """Trading days the symbol's calendar expects, from its first stored day (or
+        the start of its window) to the last complete trading day, with no bar and
+        not yet a known gap. Empty when nothing is stored - a first fetch fills the
+        window anyway."""
+        symbol = normalise_symbol(symbol)
+        first = self.first_price_date(symbol)
+        if not first:
+            return []
+        today = today or date.today()
+        keep = keep_days or self.keep_days(symbol)
+        start = max(date.fromisoformat(first), today - timedelta(days=keep))
+        cal = self.calendar(symbol)
+        end = tcal.last_complete_day(cal, today)
+        if end < start:
+            return []
+        have = {r["date"] for r in self.db.query(
+            "SELECT date FROM prices WHERE symbol = :s AND date >= :d",
+            {"s": symbol, "d": start.isoformat()})}
+        known = {r["date"] for r in self.db.query(
+            "SELECT date FROM price_gaps WHERE symbol = :s AND attempts >= :n",
+            {"s": symbol, "n": self.GAP_ATTEMPTS})}
+        return [d.isoformat() for d in tcal.trading_days(cal, start, end)
+                if d.isoformat() not in have and d.isoformat() not in known]
+
+    def note_gaps(self, symbol: str, dates, settled_before: str | None = None) -> None:
+        """Days still missing after a fetch that covered them. A day before
+        ``settled_before`` is a known gap at once - Yahoo does not add a bar weeks
+        later, and a market's own holidays (Tokyo's, say) show up this way. A more
+        recent day gets another attempt, in case Yahoo is just late."""
+        now = utcnow()
+        rows = [{"s": symbol, "d": d, "t": now,
+                 "n": self.GAP_ATTEMPTS if settled_before and d < settled_before else 1}
+                for d in dates]
+        if not rows:
+            return
+        with self.db.tx() as c:
+            self.db.run(c, "INSERT INTO price_gaps (symbol, date, attempts, last_tried)"
+                           " VALUES (:s, :d, :n, :t) ON CONFLICT (symbol, date) DO UPDATE SET"
+                           " attempts = CASE WHEN excluded.attempts > price_gaps.attempts + 1"
+                           " THEN excluded.attempts ELSE price_gaps.attempts + 1 END,"
+                           " last_tried = excluded.last_tried", rows)
+
+    def clear_filled_gaps(self, symbol: str) -> int:
+        """Forget gaps that now have a bar (Yahoo supplied them after all)."""
+        with self.db.tx() as c:
+            return self.db.run(c, "DELETE FROM price_gaps WHERE symbol = :s AND date IN"
+                                  " (SELECT date FROM prices WHERE symbol = :s)",
+                               {"s": symbol}).rowcount
+
+    def known_gaps(self, symbol: str) -> list[str]:
+        return [r["date"] for r in self.db.query(
+            "SELECT date FROM price_gaps WHERE symbol = :s AND attempts >= :n ORDER BY date",
+            {"s": normalise_symbol(symbol), "n": self.GAP_ATTEMPTS})]
 
     def first_price_date(self, symbol: str) -> str | None:
         return self.db.scalar("SELECT MIN(date) FROM prices WHERE symbol = :s",
@@ -915,6 +984,7 @@ class PortfolioRepo:
             raise ValueError(f"{symbol} is held in {n} holding(s); remove those first")
         with self.db.tx() as c:
             self.db.run(c, "DELETE FROM prices WHERE symbol = :s", {"s": symbol})
+            self.db.run(c, "DELETE FROM price_gaps WHERE symbol = :s", {"s": symbol})
             self.db.run(c, "DELETE FROM securities WHERE symbol = :s", {"s": symbol})
 
     def put_prices(self, symbol: str, rows, retention_days: int = PRICE_RETENTION_DAYS) -> dict:
@@ -968,6 +1038,19 @@ class PortfolioRepo:
         if not rows:
             return 0
         with self.db.tx() as c:
+            # A dividend or split restates every earlier adjusted close. The fetched
+            # bars carry the new basis only from their first date; bring the stored
+            # days before it onto the same basis, or the history would show a false
+            # drop at the join.
+            first = rows[0]
+            old = self.db.run(c, "SELECT adj_close FROM prices WHERE symbol = :s AND date = :d",
+                              {"s": symbol, "d": first["d"]}).scalar()
+            if old and first["a"]:
+                ratio = first["a"] / old
+                if abs(ratio - 1.0) > 1e-9:
+                    self.db.run(c, "UPDATE prices SET adj_close = adj_close * :r"
+                                   " WHERE symbol = :s AND date < :d",
+                                {"r": ratio, "s": symbol, "d": first["d"]})
             # Adjusted closes are restated after every dividend and split, so a
             # re-fetched date replaces what was stored rather than being skipped.
             self.db.run(c, "INSERT INTO prices (symbol, date, close, adj_close, volume,"
@@ -982,6 +1065,8 @@ class PortfolioRepo:
     def prune(self, days: int = PRICE_RETENTION_DAYS) -> int:
         """Delete closes past each symbol's window: its own keep_days, else ``days``."""
         with self.db.tx() as c:
+            self.db.run(c, "DELETE FROM price_gaps WHERE date < :d",
+                        {"d": retention_cutoff(max(days, 7305))})
             n = self.db.run(c, "DELETE FROM prices WHERE date < :d AND symbol NOT IN"
                                " (SELECT symbol FROM securities WHERE keep_days IS NOT NULL)",
                             {"d": retention_cutoff(days)}).rowcount

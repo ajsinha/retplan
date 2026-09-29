@@ -85,6 +85,35 @@ automatically in the same run, including a pair discovered
 during the run itself when a new symbol turns out to be quoted in a new
 currency.</p>
 
+<h2 id="calendar">Missing days and trading calendars</h2>
+<p>Every run checks each symbol's stored history against the days its market was
+actually open, and fetches back to the earliest day that is missing - after a run
+failed, the computer was off for a week, or a fetch came back short. Each security
+follows a trading calendar, chosen from its exchange, symbol and type:</p>
+{{ field_table([
+  ("US markets", "NYSE and Nasdaq: US stocks, ETFs, mutual funds, the US indices and yields, futures.", "Weekdays less New Year's Day, Martin Luther King Jr. Day, Washington's Birthday, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving and Christmas - each moved as the NYSE moves it - and special closures such as national days of mourning."),
+  ("London Stock Exchange", "Symbols ending .L, the FTSE indices.", "Weekdays less the bank holidays of England and Wales, including one-off ones (jubilees, a state funeral)."),
+  ("Currencies", "Pairs ending =X.", "Every weekday but 1 January and 25 December."),
+  ("Crypto", "BTC-USD and the like.", "Every day of the year."),
+  ("Weekdays", "Any other exchange (Tokyo, Toronto, Frankfurt…).", "Every weekday; its own holidays are learned as known gaps."),
+]) }}
+<ul>
+  <li><strong>Weekends and holidays cost nothing.</strong> A scheduled run skips a
+      symbol that already has every day its market traded, so a Saturday run fetches
+      only crypto, and a US holiday run skips US securities. <em>Refresh prices</em>
+      and <em>Collect now</em> always fetch.</li>
+  <li><strong>Known gaps.</strong> A day the calendar expects but Yahoo has no bar
+      for - a data hole, or another market's holiday - is recorded. One more than ten
+      days old is a known gap at once; a recent one is asked for on three runs first,
+      in case Yahoo is late. Known gaps are never asked for again, and a security's
+      page lists them.</li>
+  <li><strong>Adjusted closes stay consistent.</strong> A dividend or split restates
+      every earlier adjusted close. When a fetch shows that, the older stored
+      adjusted closes are rescaled to match, so returns across the join are right.</li>
+</ul>
+<p>Each run's log line says how many symbols were already complete, how many missing
+days were filled, and how many recent days Yahoo has not supplied yet.</p>
+
 <h2>Why only a year is kept</h2>
 <p>After each run, daily bars older than the retention window
 (<code>retention_days</code>, 365 by default) are deleted - or older than a

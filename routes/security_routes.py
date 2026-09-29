@@ -28,6 +28,7 @@ from portfolio.fx import is_fx
 from portfolio.repository import normalise_symbol
 from web import charts
 from portfolio import market
+from portfolio.calendar import CALENDARS
 from web.admin import admin_mode, is_admin
 from web.fastapi_compat import flash, redirect_to, render
 from web.store import session_id
@@ -208,6 +209,9 @@ class SecurityRoutes:
                       mode=admin_mode(request), holders=self.repo.holders(sym),
                       quote_types=QUOTE_TYPES, bars=list(reversed(self.repo.bars(sym)))[:60],
                       keep_choices=market.KEEP_CHOICES,
+                      calendar=CALENDARS[self.repo.calendar(sym)],
+                      missing=self.repo.missing_days(sym) if sec.get("source") != "manual" else [],
+                      known_gaps=self.repo.known_gaps(sym),
                       retention=self.app.state.config.prices_retention_days)
 
     async def my_class(self, request: Request, symbol: str):

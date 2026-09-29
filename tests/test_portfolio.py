@@ -94,7 +94,7 @@ def fresh_db():
         # a shared server database: empty every table first, children first
         with db.tx() as c:
             for t in ("projections", "holdings", "portfolio_accounts", "portfolio_children",
-                      "accounts", "prices", "portfolios", "plans",
+                      "accounts", "price_gaps", "prices", "portfolios", "plans",
                       "securities", "fetch_runs", "import_drafts", "snapshots", "app_settings"):
                 Database.run(c, f"DELETE FROM {t}")
     return db
@@ -1092,6 +1092,97 @@ def test_market_web():
         wa.db.dispose()
 
 
+def test_trading_calendar():
+    """Trading calendars, gap repair, known gaps, weekend skips, adjusted restatements."""
+    from portfolio import calendar as tcal
+    nyse_2026 = {"2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25",
+                 "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"}
+    check("NYSE holidays 2026 by rule", {d.isoformat() for d in tcal.us_holidays(2026)} == nyse_2026)
+    check("NYSE: a Saturday New Year's Day is not moved; Christmas on Saturday closes Friday",
+          date(2021, 12, 31) not in tcal.us_holidays(2021) and date(2021, 12, 24) in tcal.us_holidays(2021)
+          and date(2022, 1, 1) not in tcal.us_holidays(2022))
+    check("NYSE special closures (the 2025 day of mourning)", date(2025, 1, 9) in tcal.us_holidays(2025))
+    check("currencies do not trade on 1 January or 25 December",
+          not tcal.is_trading_day("fx", date(2026, 1, 1)) and not tcal.is_trading_day("fx", date(2026, 12, 25))
+          and tcal.is_trading_day("fx", date(2026, 7, 3)))
+    check("UK bank holidays with Christmas on a Sunday",
+          {d.isoformat() for d in tcal.uk_holidays(2022)} >= {"2022-12-26", "2022-12-27", "2022-09-19"})
+    check("each security gets its calendar",
+          [tcal.calendar_for(*a) for a in (("VTI", "ETF", "PCX", "USD"), ("^FTSE", "INDEX", "", "GBP"),
+                                           ("BTC-USD", "", "", "USD"), ("EURUSD=X", "", "", "USD"),
+                                           ("7203.T", "EQUITY", "JPX", "JPY"), ("GC=F", "", "", "USD"))]
+          == ["us", "uk", "crypto", "fx", "weekdays", "us"])
+    check("the last complete trading day skips a holiday weekend",
+          tcal.last_complete_day("us", date(2026, 9, 8)) == date(2026, 9, 4)
+          and tcal.last_complete_day("crypto", date(2026, 9, 8)) == date(2026, 9, 7))
+
+    db = fresh_db()
+    r = PortfolioRepo(db)
+    today = date(2026, 10, 2)                                  # a Friday
+    days = [d for d in tcal.trading_days("us", today - timedelta(days=200), today)]
+
+    def history(skip=(), factor=1.0, cut=None):
+        bars = []
+        for i, d in enumerate(days):
+            if d.isoformat() in skip:
+                continue
+            px = 100 + i
+            adj = px * (factor if cut and d.isoformat() < cut else 1.0)
+            bars.append(yahoo.Bar(d.isoformat(), px, adj, 1000.0, px, px + 1, px - 1))
+        return yahoo.History(symbol="VTI", name="VTI", quote_type="ETF", currency="USD",
+                             exchange="PCX", price=bars[-1].close, prev_close=bars[-2].close,
+                             bars=bars)
+    holes = {days[50].isoformat(), days[51].isoformat(), days[120].isoformat()}
+    fake = FakeYahoo({"VTI": history()})
+    col = PriceCollector(r, fetch=fake.fetch, long_run=fake.long_run, pause=0)
+    r.watch("VTI")
+    col.collect(reason="schedule", today=today)
+    with db.tx() as cx:                                        # as if runs had failed
+        for h in holes:
+            Database.run(cx, "DELETE FROM prices WHERE symbol = 'VTI' AND date = :d", {"d": h})
+    check("a symbol's calendar reports the days it is missing",
+          set(r.missing_days("VTI", today=today)) == holes)
+    fake.calls.clear()
+    res = col.collect(reason="schedule", today=today)
+    check("the next run fetches back to the earliest missing day and fills the holes",
+          fake.calls == [("VTI", "6mo")] and r.missing_days("VTI", today=today) == []
+          and res["gaps_filled"] == 3, (fake.calls, res))
+    fake.calls.clear()
+    res = col.collect(reason="schedule", today=date(2026, 10, 3))   # a Saturday
+    check("a weekend run skips a symbol already complete for its calendar",
+          fake.calls == [] and res["skipped"] == 1, (fake.calls, res))
+    col.collect(reason="manual", today=date(2026, 10, 3))
+    check("a manual refresh fetches anyway", fake.calls == [("VTI", "5d")], fake.calls)
+    # a day Yahoo does not supply: an old one is a known gap at once, a recent one
+    # after three tries
+    old_day, new_day = days[100].isoformat(), days[-3].isoformat()
+    with db.tx() as cx:
+        for d in (old_day, new_day):
+            Database.run(cx, "DELETE FROM prices WHERE symbol = 'VTI' AND date = :d", {"d": d})
+    fake.table["VTI"] = history(skip={old_day, new_day})
+    col.collect(reason="schedule", today=today)
+    check("an old day Yahoo has no bar for is a known gap at once",
+          r.known_gaps("VTI") == [old_day] and r.missing_days("VTI", today=today) == [new_day])
+    for _ in range(2):
+        col.collect(reason="schedule", today=today)
+    fake.calls.clear()
+    col.collect(reason="schedule", today=today)
+    check("a recent one after three tries, and then it is no longer asked for",
+          r.known_gaps("VTI") == [old_day, new_day] and r.missing_days("VTI", today=today) == []
+          and fake.calls == [], fake.calls)
+    fake.table["VTI"] = history()
+    # a dividend restates earlier adjusted closes: the stored ones follow
+    before = {b["date"]: b["adj_close"] for b in r.bars("VTI")}
+    ex = days[-3].isoformat()
+    fake.table["VTI"] = history(factor=0.99, cut=ex)
+    col.collect(["VTI"], reason="manual", today=today)
+    after = {b["date"]: b["adj_close"] for b in r.bars("VTI")}
+    early = days[10].isoformat()
+    check("older adjusted closes are rescaled when a dividend restates them",
+          close(after[early], before[early] * 0.99, 1e-9)
+          and close(after[days[-1].isoformat()], before[days[-1].isoformat()], 1e-9))
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -1563,7 +1654,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_trading_calendar(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

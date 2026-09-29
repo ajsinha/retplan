@@ -51,6 +51,20 @@ make test                               # both test suites, offline
 
 ## Changes
 
+### 2026-09-29 - Trading calendars and missing days
+
+Each security follows a trading calendar (`portfolio/calendar.py`): US markets with
+every NYSE holiday computed by rule and the special closures, the London Stock
+Exchange with England and Wales bank holidays, currencies (weekdays but 1 January
+and 25 December), crypto (every day), and plain weekdays for other exchanges. Every
+run compares the stored days with the calendar and fetches back to the earliest
+missing one; a day Yahoo has no bar for is a known gap (new table `price_gaps`) -
+at once if more than ten days old, otherwise after three tries. Scheduled runs skip
+symbols already complete for their calendar, so weekend and holiday runs fetch
+almost nothing. When a fetch shows a dividend or split has restated adjusted
+closes, the older stored ones are rescaled to match. Checked against five years of
+live Yahoo data: US, London and crypto histories match their calendars exactly.
+
 ### 2026-09-29 - Market data
 
 Securities can be collected every day whether anyone holds them or not: indices,

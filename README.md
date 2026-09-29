@@ -96,7 +96,11 @@ chart endpoint using only the standard library.
 The app collects them daily at `prices.run_at` and catches up at start-up when the
 last run is stale; `tools/fetch_prices.py` does one run for cron. Closes older than
 `prices.retention_days` (365) are deleted after every run, unless a market-data
-symbol keeps more (2 to 20 years); long-run return and
+symbol keeps more (2 to 20 years). Each symbol follows a trading calendar (US markets
+with every NYSE holiday, London, currencies, crypto, other weekdays): missing
+trading days are fetched on the next run, a day Yahoo has no bar for is recorded as
+a known gap, weekend and holiday runs skip symbols that are already complete, and
+older adjusted closes are rescaled when a dividend restates them; long-run return and
 volatility from up to twenty years of monthly history are kept as numbers only.
 
 ### Workspaces

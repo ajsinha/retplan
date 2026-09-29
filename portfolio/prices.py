@@ -23,6 +23,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta
 
+from . import calendar as tcal
 from . import yahoo
 from .db import PRICE_RETENTION_DAYS, utcnow
 from .repository import PortfolioRepo, normalise_symbol
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 LONG_RUN_REFRESH_DAYS = 30
 PAUSE_BETWEEN_SYMBOLS = 0.4          # be polite to an unofficial endpoint
+SETTLE_DAYS = 10                     # a day missing longer than this is a known gap
 
 
 def _range_for(last: str | None, retention_days: int = PRICE_RETENTION_DAYS) -> str:
@@ -42,15 +44,11 @@ def _range_for(last: str | None, retention_days: int = PRICE_RETENTION_DAYS) -> 
                 return rng
         return "max"
     gap = (date.today() - date.fromisoformat(last)).days
-    if gap <= 4:
-        return "5d"
-    if gap <= 25:
-        return "1mo"
-    if gap <= 80:
-        return "3mo"
-    if gap <= 170:
-        return "6mo"
-    return "1y"
+    for days, rng in ((4, "5d"), (25, "1mo"), (80, "3mo"), (170, "6mo"), (360, "1y"),
+                      (725, "2y"), (1820, "5y"), (3645, "10y")):
+        if gap <= days:
+            return rng
+    return "max"
 
 
 class PriceCollector:
@@ -65,38 +63,51 @@ class PriceCollector:
         self._lock = threading.Lock()
         self.running = False
 
-    def collect(self, symbols=None, reason: str = "manual") -> dict:
+    def collect(self, symbols=None, reason: str = "manual", today: date | None = None) -> dict:
         """Fetch ``symbols`` (default: every held symbol). Safe to call concurrently:
         a second caller waits for the first rather than fetching twice."""
         with self._lock:
             self.running = True
             try:
-                return self._collect(symbols, reason)
+                return self._collect(symbols, reason, today or date.today())
             finally:
                 self.running = False
 
-    def _collect(self, symbols, reason: str) -> dict:
+    def _collect(self, symbols, reason: str, today: date) -> dict:
         syms = sorted({normalise_symbol(s) for s in (symbols or
                                                      self.repo.tracked_symbols())})
         syms = [s for s in syms if s and s != "CASH"
                 and (self.repo.security(s) or {}).get("source") != "manual"]
         run_id = self.repo.start_run(reason, len(syms))
         ok, failed, added, errors = 0, 0, 0, []
+        skipped, filled, still_missing = 0, 0, 0
         t0 = time.time()
         queue, seen = list(syms), set(syms)
         i = -1
         while i + 1 < len(queue):
             i += 1
             sym = queue[i]
-            if i and self._pause:
-                time.sleep(self._pause)
             try:
                 keep = self.repo.keep_days(sym, self.retention_days)
-                # a backfill (a window just lengthened) fetches the whole window again
-                last = None if reason == "backfill" else self.repo.last_price_date(sym)
-                h = self._fetch(sym, range_=_range_for(last, keep))
+                plan = self._plan(sym, keep, reason, today)
+                if plan is None:                     # complete for its calendar
+                    skipped += 1
+                    continue
+                if i and self._pause:
+                    time.sleep(self._pause)
+                since, missing = plan
+                h = self._fetch(sym, range_=_range_for(since, keep))
                 self.repo.record_quote(h)
                 added += self.repo.store_bars(sym, h.bars, self.retention_days)
+                # whatever the calendar still misses after a fetch that covered it
+                self.repo.clear_filled_gaps(sym)
+                left = set(self.repo.missing_days(sym, keep, today))
+                filled += len([d for d in missing if d not in left])
+                if left:
+                    self.repo.note_gaps(sym, sorted(left), settled_before=(
+                        today - timedelta(days=SETTLE_DAYS)).isoformat())
+                    still_missing += len([d for d in left if d >= (
+                        today - timedelta(days=SETTLE_DAYS)).isoformat()])
                 ok += 1
                 if not sym.endswith("=X"):
                     self._maybe_long_run(sym)
@@ -117,6 +128,15 @@ class PriceCollector:
                 logger.exception("price fetch for %s failed", sym)
         pruned = self.repo.prune(self.retention_days)
         msg = "; ".join(errors) if errors else f"{ok} symbol(s) updated"
+        notes = []
+        if skipped:
+            notes.append(f"{skipped} already complete for their calendar")
+        if filled:
+            notes.append(f"{filled} missing day(s) filled")
+        if still_missing:
+            notes.append(f"{still_missing} day(s) Yahoo has no data for yet")
+        if notes:
+            msg += " (" + "; ".join(notes) + ")"
         self.repo.finish_run(run_id, ok, failed, added, pruned, msg)
         if ok:
             try:
@@ -125,10 +145,37 @@ class PriceCollector:
             except Exception:  # noqa: BLE001 - history is a by-product, never fatal
                 logger.exception("recording portfolio values failed")
         syms = queue
-        logger.info("price run (%s): %d ok, %d failed, %d rows, %d pruned in %.1fs",
-                    reason, ok, failed, added, pruned, time.time() - t0)
+        logger.info("price run (%s): %d ok, %d failed, %d skipped, %d rows, %d filled,"
+                    " %d pruned in %.1fs", reason, ok, failed, skipped, added, filled, pruned,
+                    time.time() - t0)
         return dict(run_id=run_id, symbols=len(syms), ok=ok, failed=failed,
-                    rows_added=added, rows_pruned=pruned, errors=errors)
+                    rows_added=added, rows_pruned=pruned, errors=errors, skipped=skipped,
+                    gaps_filled=filled, gaps_left=still_missing)
+
+    def _plan(self, sym: str, keep: int, reason: str, today: date):
+        """What to fetch for one symbol: (since, missing days), or None when it is
+        complete for its trading calendar and this is a routine run.
+
+        - nothing stored, or a backfill: the whole window;
+        - trading days missing (a failed run, a hole Yahoo has since filled): from
+          the day before the earliest one - Yahoo only serves ranges ending today;
+        - otherwise the gap since the last stored day - unless the market has not
+          traded since (a weekend, a holiday), when a scheduled run skips it.
+        """
+        last = self.repo.last_price_date(sym)
+        if reason == "backfill" or not last:
+            return None, []
+        missing = self.repo.missing_days(sym, keep, today)
+        if missing:
+            since = (date.fromisoformat(missing[0]) - timedelta(days=1)).isoformat()
+            return min(since, last), missing
+        cal = self.repo.calendar(sym)
+        current = last >= today.isoformat() or (
+            not tcal.is_trading_day(cal, today)
+            and last >= tcal.last_complete_day(cal, today).isoformat())
+        if current and reason in ("schedule", "startup"):
+            return None
+        return last, []
 
     def _maybe_long_run(self, sym: str) -> None:
         sec = self.repo.security(sym) or {}

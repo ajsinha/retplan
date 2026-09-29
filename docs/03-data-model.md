@@ -39,6 +39,7 @@ is `schema/sqlite.sql` / `schema/postgres.sql`.
 | `portfolio_children` | (`parent_id`, `child_id`) | Portfolios made of other portfolios, with `position`: a parent includes every account of each child, recursively, each account counted once; the app refuses a cycle (a portfolio containing itself directly or through another) |
 | `holdings` | `id` | A position in an investment account: `account_id`, `symbol`, `quantity`, `cost_basis` (total, nullable), `asset_class` (blank = use the security's), `notes`, `added_at` |
 | `prices` | (`symbol`, `date`) | Daily bars: `open`, `high`, `low`, `close`, `adj_close`, `volume` (open, high, low and volume nullable); `WITHOUT ROWID` on SQLite |
+| `price_gaps` | (`symbol`, `date`) | Trading days a symbol's calendar expects but Yahoo has no bar for: `attempts`, `last_tried`. A day is a known gap (never asked for again) once `attempts` reaches 3 - at once if it was more than ten days old when found |
 | `fetch_runs` | `id` | One collection run: `reason` (schedule, startup, manual, new-symbol, admin), start/finish, counts of symbols, ok, failed, rows added and pruned, `message` |
 | `projections` | `id` | A saved portfolio projection: `portfolio_id`, `created_at`, `settings`, `summary`, `result` (all JSON) |
 | `import_drafts` | `id` | The portfolio builder's analysis of an upload: `owner`, `filename`, `created_at`, `data` (JSON) |

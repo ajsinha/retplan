@@ -47,6 +47,12 @@
         {% else %}
           <p class="small-muted mb-2">{{ 'Collected while someone holds it.' if holders else 'Not collected: nobody holds it and it is not in the market data.' }}</p>
         {% endif %}
+        {% if sec.source != 'manual' %}
+        <p class="small mb-2"><i class="bi bi-calendar3" aria-hidden="true"></i> Trades on: <strong>{{ calendar }}</strong>.
+          {% if missing %}<span class="down">{{ missing|length }} trading day{{ '' if missing|length == 1 else 's' }} missing ({{ missing[:3]|join(', ') }}{{ '…' if missing|length > 3 }}) - the next run fetches {{ 'it' if missing|length == 1 else 'them' }}.</span>
+          {% elif sec.last_price_date %}<span class="up">Every trading day is stored.</span>{% endif %}
+          {% if known_gaps %}<span class="small-muted"> Yahoo has no data for {{ known_gaps|length }} day{{ '' if known_gaps|length == 1 else 's' }} ({{ known_gaps[-3:]|join(', ') }}); they are no longer asked for.</span>{% endif %}</p>
+        {% endif %}
         {% if admin and sec.source != 'manual' %}
           {% if sec.collect %}
           <form method="post" action="{{ url_for('market_stop', symbol=sec.symbol) }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Stop collecting</button></form>

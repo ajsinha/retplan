@@ -97,7 +97,8 @@
             <span class="hi num">{{ '{:,.2f}'.format(r.high_52) }}</span></div>
           {% else %}<span class="small-muted">-</span>{% endif %}</td>
         <td><span class="small">{{ r.n_prices }} days{% if r.first_date %} since {{ r.first_date }}{% endif %}</span>
-          <span class="cell-sub">keeps {{ keep_label(r.keep_days) }} · <a href="{{ url_for('security_csv', symbol=r.symbol) }}">CSV</a></span></td>
+          <span class="cell-sub">keeps {{ keep_label(r.keep_days) }} · <a href="{{ url_for('security_csv', symbol=r.symbol) }}">CSV</a></span>
+          <span class="cell-sub">{% if r.missing %}<span class="down"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ r.missing }} trading day{{ '' if r.missing == 1 else 's' }} missing - next run fetches {{ 'it' if r.missing == 1 else 'them' }}</span>{% elif r.n_prices %}<span class="up"><i class="bi bi-check-circle" aria-hidden="true"></i> complete</span>{% endif %}{% if r.known_gaps %} · {{ r.known_gaps }} day{{ '' if r.known_gaps == 1 else 's' }} Yahoo has no data for{% endif %} · {{ r.calendar }}</span></td>
         {% if admin %}
         <td class="text-nowrap">
           <form class="d-inline-flex gap-1" method="post" action="{{ url_for('market_keep', symbol=r.symbol) }}">

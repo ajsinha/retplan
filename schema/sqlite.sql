@@ -145,6 +145,16 @@ CREATE TABLE IF NOT EXISTS prices (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS ix_prices_date ON prices (date);
 
+-- Trading days a symbol's calendar expects but Yahoo has no bar for. Each run
+-- asks again; after three attempts a day is a known gap and is not asked for.
+CREATE TABLE IF NOT EXISTS price_gaps (
+    symbol     TEXT    NOT NULL REFERENCES securities (symbol) ON DELETE CASCADE,
+    date       TEXT    NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    last_tried TEXT    NOT NULL,
+    PRIMARY KEY (symbol, date)
+);
+
 -- One row per price-collection run, for the status page.
 CREATE TABLE IF NOT EXISTS fetch_runs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
