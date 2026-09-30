@@ -6,6 +6,48 @@ a <em>copy</em> of your active plan and simulates it with the same random seed a
 original, so any difference you see comes from the change, not from different luck.
 Nothing is saved unless you ask.</p>
 
+<h2 id="strategy">Your strategy: every decision chosen together</h2>
+<p>{{ goto('strategy', 'Open your strategy') }} The tools below each answer one question. The
+decisions interact, though - retiring earlier makes a later public pension more valuable,
+which opens low-income years for conversions, which changes the best account to draw on and
+how much risk your savings can carry - so the strategy optimiser chooses them together, on
+your whole plan.</p>
+{{ field_table([
+  ("Safest", "The highest chance your money lasts.", "Beyond 97% (strategy.enough_odds), more certainty is not bought with more years of work, nor traded for wealth."),
+  ("Retire earliest", "The earliest retirement that meets your confidence target.", "The only objective that searches working longer than you plan without first falling short."),
+  ("Spend the most", "The most you can spend in retirement at your target.", "The answer is an amount a year from your retirement age."),
+  ("Leave the most", "The most left after tax, while meeting your target.", "Money left in accounts taxed on the way out is reduced by the tax your heirs would pay."),
+]) }}
+{% call steps() %}
+  <li><strong>When to retire and claim.</strong> Each person's retirement age (from five years
+      before your plan; later only when your plan falls short of the target) and each public
+      pension's claiming age (62 to 70), one at a time, twice over.</li>
+  <li><strong>How to invest.</strong> The share in shares, moved up or down; the glide path
+      moves with it.</li>
+  <li><strong>How to spend.</strong> Fixed spending, or guardrails that trim in bad years and
+      raise in good ones.</li>
+  <li><strong>Which account first.</strong> Every order of drawing on your accounts.</li>
+  <li><strong>Conversions.</strong> Filling the lower tax bands in the years between retiring
+      and the pension starting.</li>
+  <li><strong>Timing again</strong>, now the rest is settled - and, for "spend the most", the
+      spending that keeps the odds at your target.</li>
+{% endcall %}
+<p>Every candidate runs on the same simulated futures (600 each by default), so differences come
+from the decisions, not luck; the winner and your plan are then run on 3,000. The result gives
+each decision now and recommended, <strong>what each change is worth on its own</strong>, the
+standing rules to live by, <strong>alternatives that are just as good within the noise</strong>,
+and the plan year by year. <em>Save as a scenario</em> keeps it alongside your plan to compare.</p>
+{% call note('why', 'Why a range, not a single answer') %}
+<p>With a few thousand simulated futures, odds are known to about a point either way. Two
+strategies within that of each other are equally good, and the page says so - claim at 69 or
+at 70, say - so you can choose on what the model cannot see: your health, your job, your
+plans.</p>
+{% endcall %}
+<p>The search's settings - futures per candidate, time limit, claiming rules (a US Social
+Security default of 6.67% a year less early and 8% more late around 67), the moves of the
+share in shares to try - are under <code>strategy:</code> in <code>config/retplan.yaml</code>
+and take effect at the next search.</p>
+
 <h2>What if… (the dashboard sliders)</h2>
 <p>{{ goto('dashboard', 'Open the dashboard') }} The sliders move one thing at a time,
 or several together, and each move re-runs 800 futures in well under a second:</p>

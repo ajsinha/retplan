@@ -131,6 +131,17 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-PF-12 | Live link from a plan to a portfolio: every time the plan is read, each of the portfolio's investment, cash and property accounts becomes a plan account (value, owner, cost basis, mix, a wrapper from its type) and each debt a loan; accounts leaving or joining the portfolio leave or join the plan; what the plan adds (contributions, match, order, glide path, rebalancing, paused) is kept; simulation results are dropped when the portfolio's accounts change; link, unlink (freezes today's figures), "Start a plan from it" | `web/plan_link.py`, `/plan/link`, `/plan/unlink` |
 | F-PF-13 | Nine asset classes with long-run return and volatility assumptions; a class guessed from Yahoo's instrument type and name, editable per holding | `portfolio/assets.py` |
 
+## 8a. Strategy optimiser — `F-STG-*`
+
+| ID | Feature | Where |
+|---|---|---|
+| F-STG-1 | Chooses together each person's retirement age, each public pension's claiming age, fixed or guardrail spending, the draw order, Roth-style conversions and the share in shares | `web/strategy.Optimiser` |
+| F-STG-2 | Four objectives: safest, retire earliest, spend the most, leave the most after tax; a confidence target and a latest working age | `/strategy` |
+| F-STG-3 | Staged coordinate search on common random numbers with caching and a time limit; confirming run of the winner and the plan on more futures | `strategy.search_trials`, `final_trials`, `max_seconds` |
+| F-STG-4 | Never more years of work than planned unless needed to reach the target; beyond `enough_odds` certainty is not bought with work nor traded for wealth | `Optimiser.score` |
+| F-STG-5 | Report: each decision now and recommended with its worth on its own, standing rules, alternatives within the noise, the plan year by year, saved as a scenario | `strategy/index.html` |
+| F-STG-6 | Runs in the background with progress; settings in `strategy.*` of `config/retplan.yaml`, read at each search | `strategy.Jobs` |
+
 ## 9. Prices — `F-PX-*`
 
 | ID | Feature | Where |

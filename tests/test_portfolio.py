@@ -13,6 +13,7 @@ Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 from __future__ import annotations
 
 import io
+import copy
 import math
 import os
 import re
@@ -1212,6 +1213,105 @@ def test_trading_calendar():
           and close(after[days[-1].isoformat()], before[days[-1].isoformat()], 1e-9))
 
 
+def test_strategy():
+    """The strategy optimiser: claiming rules, objectives, no needless extra work."""
+    from retplan.samples import sample_plan
+    from web import strategy, wizard
+    fast = dict(search_trials=150, final_trials=300, equity_shifts=[-0.2, 0.0, 0.2])
+    plan = wizard.build_plan(dict(wizard.DEFAULTS, partner="1", p2_salary="40000",
+                                  p2_pension="8000"))
+    q = copy.deepcopy(plan)
+    row = strategy.pension_rows(plan)[0]
+    s = strategy.Settings(**fast)
+    strategy.set_claim(q, plan, row, 70, s)
+    check("claiming at 70 with a full age of 67 pays 24% more",
+          close(q.income[row].amount, plan.income[row].amount * 1.24, 1e-9) and q.income[row].start_age == 70)
+    strategy.set_claim(q, plan, row, 62, s)
+    check("claiming at 62 pays about 33% less", close(q.income[row].amount / plan.income[row].amount,
+                                                       1 - 5 * 0.0667, 1e-9))
+    q = copy.deepcopy(plan)
+    strategy.set_retire(q, plan, 0, 62)
+    salary = next(r for r in q.income if r.category == "employment" and r.owner == 0)
+    check("retiring earlier ends the salary then and moves spending that switches at retirement",
+          salary.end_age == 62 and any(abs(e.start_age - 62) < 1e-9 for e in q.expenses))
+
+    from web import drawrate
+    from retplan.engine import Projection
+    sp = sample_plan()
+    a, b2 = Projection(sp), Projection(drawrate.scale_retirement(sp, 1.0, 65))
+    check("splitting spending at retirement changes nothing by itself - every-few-years costs keep their cycle",
+          np.allclose(a.ess_real + a.disc_real, b2.ess_real + b2.disc_real))
+    r = strategy.Optimiser(plan, "odds", settings=strategy.Settings(**fast)).run()
+    base_retire = [p.retire_age for p in plan.persons]
+    rec = {d["label"]: d for d in r["decisions"]}
+    check("a plan already above its target is never asked to work longer",
+          all(not d["changed"] for d in r["decisions"] if d["area"] == "timing"), r["decisions"])
+    check("the safest strategy is at least as safe as the plan",
+          r["strategy"]["success"] >= r["baseline"]["success"] - 0.01)
+    check("the report has decisions, rules, a timeline and the plan itself",
+          r["decisions"] and r["rules"] and len(r["timeline"]) > 10 and r["plan"]["persons"])
+    check("every alternative asks for no more work than the recommendation",
+          all(float(x) <= max(base_retire) for a in r["alternatives"]
+              for x in re.findall(r"retires at ([0-9.]+)", " ".join(a["changes"]))))
+
+    short = wizard.build_plan(dict(wizard.DEFAULTS, spend="52000"))
+    r = strategy.Optimiser(short, "earliest", target=0.8, settings=strategy.Settings(**fast)).run()
+    ret = next(d for d in r["decisions"] if d["area"] == "timing")
+    check("retire earliest: a plan short of its target may be asked to work longer, just enough",
+          r["meets_target"] or ret["changed"], ret)
+    r2 = strategy.Optimiser(sample_plan(), "spend", settings=strategy.Settings(**fast)).run()
+    spend = next((d for d in r2["decisions"] if d["label"] == "Spending in retirement"), None)
+    check("spend the most finds the spending that keeps the odds at the target",
+          spend and r2["strategy"]["success"] >= r2["target"] - 0.04, (spend, r2["strategy"]["success"]))
+    r3 = strategy.Optimiser(sample_plan(), "legacy", settings=strategy.Settings(**fast)).run()
+    check("leave the most keeps the target and leaves at least as much after tax",
+          r3["meets_target"] and r3["strategy"]["after_tax"] >= r3["baseline"]["after_tax"] * 0.98)
+    t = strategy.Settings(**dict(fast, max_seconds=0.01))
+    r4 = strategy.Optimiser(sample_plan(), "odds", settings=t).run()
+    check("a search out of time still reports the best found", r4["timed_out"] and r4["decisions"])
+
+
+def test_strategy_web():
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False,
+                     overrides={"strategy.search_trials": 200, "strategy.final_trials": 400,
+                                "strategy.investments.equity_shifts": [0.0]})
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        page = c.get("/strategy").text
+        check("the strategy page offers the four objectives",
+              all(x in page for x in ("Safest", "Retire earliest", "Spend the most", "Leave the most")))
+        r = c.post("/strategy/run", data={"objective": "odds", "target": "85", "area_claiming": "1",
+                                          "area_withdrawals": "1"}, follow_redirects=False)
+        job = r.headers["location"].split("job=")[1]
+        for _ in range(240):
+            st = c.get(f"/api/strategy/{job}").json()
+            if st["status"] != "running":
+                break
+            time.sleep(0.5)
+        check("a search runs in the background and finishes", st["status"] == "done", st)
+        other = TestClient(wa.app, raise_server_exceptions=False)
+        check("another workspace cannot see it", other.get(f"/api/strategy/{job}").status_code == 404)
+        page = c.get(f"/strategy?job={job}").text
+        check("the result shows decisions, rules and the year-by-year plan",
+              "The decisions" in page and "The rules to live by" in page and "Year by year" in page)
+        n = len(wa.store.scenarios(wa.db.query("SELECT owner FROM plans LIMIT 1")[0]["owner"]))
+        r = c.post(f"/strategy/{job}/save", follow_redirects=True)
+        sid = wa.db.query("SELECT owner FROM plans LIMIT 1")[0]["owner"]
+        check("the strategy saves as a new scenario", "Saved and switched" in r.text
+              and len(wa.store.scenarios(sid)) == n + 1)
+        wa.config.overrides["strategy.enabled"] = False
+        r = c.post("/strategy/run", data={"objective": "odds"}, follow_redirects=True)
+        check("the optimiser can be switched off in the configuration", "switched off" in r.text)
+        wa.db.dispose()
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -1683,7 +1783,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_trading_calendar(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_trading_calendar(); test_strategy(); test_strategy_web(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

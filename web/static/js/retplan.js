@@ -21,6 +21,7 @@
  *   a[data-dialog]            open the link's page in the #rp-dialog modal
  *   form[data-stepper]        one [data-step] at a time, with Back / Next
  *   input[data-reveal=<id>]   a checkbox shows #id when ticked (and disables its inputs when not)
+ *   [data-strategy-job=<url>] poll a strategy search's progress; reload when it ends
  *
  * Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
  */
@@ -630,6 +631,27 @@
       open(a.getAttribute('href'));
     });
   })();
+
+  // ---------- a strategy search running in the background ----------
+  document.querySelectorAll('[data-strategy-job]').forEach(function (box) {
+    var url = box.getAttribute('data-strategy-job');
+    var bar = box.querySelector('[data-strategy-bar]');
+    var stage = box.querySelector('[data-strategy-stage]');
+    var pctEl = box.querySelector('[data-strategy-pct]');
+    function poll() {
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.status !== 'running') { window.location.reload(); return; }
+          bar.style.width = (d.progress * 100).toFixed(1) + '%';
+          stage.textContent = d.stage;
+          pctEl.textContent = Math.round(d.progress * 100) + '%';
+          setTimeout(poll, 1200);
+        })
+        .catch(function () { setTimeout(poll, 3000); });
+    }
+    setTimeout(poll, 800);
+  });
 
   window.RetPlan = { money: money, pct: pct };
 }());

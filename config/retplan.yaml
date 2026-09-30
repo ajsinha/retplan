@@ -53,6 +53,8 @@ strategy:
   search_trials: 600        # futures per candidate while searching
   final_trials: 3000        # futures for the confirming run of the winner
   max_seconds: 600          # stop searching after this long and report the best so far
+  enough_odds: 0.97         # beyond this chance of success, more certainty is not worth
+                            # more years of work
   retire:
     earliest_shift: -5      # years before the planned retirement age to try
     latest_age: 75          # never suggest working beyond this age

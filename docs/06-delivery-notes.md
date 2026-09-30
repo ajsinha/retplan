@@ -51,6 +51,23 @@ make test                               # both test suites, offline
 
 ## Changes
 
+### 2026-09-29 - Configuration in YAML; the strategy optimiser; the assistant designed
+
+- **Configuration** moved to `config/retplan.yaml`, read by the configurator adopted from
+  DishtaYantra (`core/`): dotted keys, `${ENV:default}`, precedence command line >
+  environment > a git-ignored `config/retplan.local.yaml` > the file, and live reload. The
+  `RETPLAN_*` variables still work. `config/retplan.toml` is gone.
+- **Your strategy** (`/strategy`): an optimiser choosing together when to retire, when to claim
+  public pensions, how to spend, which account to draw first, whether to convert and how much to
+  hold in shares, for one of four objectives; it never adds years of work unless the target
+  needs them, reports each change's worth and the alternatives within the noise, and saves as a
+  scenario. Settings under `strategy:`.
+- Fixed while building it: splitting spending at retirement restarted every-few-years costs
+  (a car every eight years fell due at the split); they now keep their cycle - this also
+  corrects the suggested draw rate for plans with such costs.
+- **AI assistant**: designed (`docs/07-ai-assistant.md`) with its whole configuration under
+  `assistant:` (off by default). Not yet built.
+
 ### 2026-09-29 - Trading calendars and missing days
 
 Each security follows a trading calendar (`portfolio/calendar.py`): US markets with

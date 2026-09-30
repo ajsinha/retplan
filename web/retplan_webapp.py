@@ -89,6 +89,8 @@ class RetPlanWebApp:
         st.store, st.version, st.config = self.store, VERSION, self.config
         st.db, st.portfolios, st.networth = self.db, self.portfolios, self.networth
         st.collector, st.scheduler = self.collector, self.scheduler
+        from web.strategy import Jobs
+        st.strategy_jobs = Jobs()
 
     def _register_routes(self) -> None:
         from routes import ALL_ROUTES

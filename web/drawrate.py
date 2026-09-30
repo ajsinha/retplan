@@ -21,6 +21,7 @@ Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 from __future__ import annotations
 
 import copy
+import math
 
 import numpy as np
 
@@ -50,8 +51,14 @@ def scale_retirement(plan, mult: float, at_age: float):
         if e.start_age < at_age:
             later = copy.deepcopy(e)
             later.start_age = at_age
+            if e.recur_years and e.recur_years > 1:
+                # an every-few-years cost keeps its cycle: the later part starts at
+                # the next due date, not at the split
+                n = e.recur_years
+                later.start_age = e.start_age + math.ceil((at_age - e.start_age) / n - 1e-9) * n
             later.amount *= mult
-            extra.append(later)
+            if later.start_age <= later.end_age:
+                extra.append(later)
             e.end_age = at_age - JUST_BEFORE
         else:
             e.amount *= mult

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Your strategy{% endblock %}
+{% macro pct(x) %}{{ '%.1f'|format(x * 100) }}%{% endmacro %}
+{% block content %}
+{% call ui.page_head('Your strategy', 'When to retire, when to claim public pensions, how to spend, which account to draw from, whether to convert, and how to invest - chosen together, on your whole plan, by the same engine as every other number here.', eyebrow='Decide', help=url_for('help_tools') ~ '#strategy') %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2" aria-hidden="true"></i> Dashboard</a>
+{% endcall %}
+
+{% if not enabled %}
+<div class="link-box"><i class="bi bi-slash-circle" aria-hidden="true"></i><div class="grow">The strategy optimiser is switched off in the configuration (<code>strategy.enabled</code>).</div></div>
+{% else %}
+{% set r = job.result if job and job.status == 'done' else none %}
+<form class="card" method="post" action="{{ url_for('strategy_run') }}" data-busy="Starting…">
+  <div class="card-header"><i class="bi bi-signpost-split" aria-hidden="true"></i> What matters most to you?
+    <span class="ms-auto small-muted fw-normal">for {{ plan.label }}</span></div>
+  <div class="card-body">
+    <div class="choice-grid mb-3" role="radiogroup">
+      {% for key, label, icon, blurb in objectives %}
+      <label class="choice"><input type="radio" name="objective" value="{{ key }}" {% if (r.objective if r else 'odds') == key %}checked{% endif %}>
+        <span class="t"><i class="bi bi-{{ icon }}" aria-hidden="true"></i> {{ label }}</span><span class="d">{{ blurb }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="row g-3 align-items-end">
+      <div class="col-sm-4 col-lg-3"><label class="form-label" for="s-target">Confidence target</label>
+        <div class="input-group"><input class="form-control num" id="s-target" name="target" type="number" min="50" max="99" step="1" value="{{ ((r.target if r else plan.policy.confidence) * 100)|round|int }}"><span class="input-group-text">%</span></div>
+        <div class="form-hint mt-1">The chance of success to aim for.</div></div>
+      {% if working %}
+      <div class="col-sm-4 col-lg-3"><label class="form-label" for="s-latest">Work no later than</label>
+        <div class="input-group"><input class="form-control num" id="s-latest" name="latest_age" type="number" min="40" max="85" step="1" value="{{ settings.latest_age|int }}"><span class="input-group-text">years old</span></div>
+        <div class="form-hint mt-1">Working past your plan is only suggested when it is needed.</div></div>
+      {% endif %}
+      <div class="col">
+        <div class="form-label">Decide</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for key, label in areas %}
+          {% set off = (key == 'timing' and not working) or (key == 'claiming' and not pensions) %}
+          <input type="checkbox" class="btn-check" name="area_{{ key }}" id="a-{{ key }}" value="1" {% if not off %}checked{% endif %} {% if off %}disabled{% endif %}>
+          <label class="btn btn-sm btn-outline-primary" for="a-{{ key }}" {% if off %}title="Nothing to decide here in this plan"{% endif %}>{{ label }}</label>
+          {% endfor %}
+        </div></div>
+    </div>
+    <div class="d-flex flex-wrap gap-3 align-items-center mt-3">
+      <button class="btn btn-primary" type="submit" {% if job and job.status == 'running' %}disabled{% endif %}><i class="bi bi-magic" aria-hidden="true"></i> Find my strategy</button>
+      <span class="small-muted">Tries a hundred or more combinations on {{ '{:,}'.format(settings.search_trials) }} simulated futures each, then confirms the best on {{ '{:,}'.format(settings.final_trials) }}. About a minute.</span>
+    </div>
+  </div>
+</form>
+
+{% if job and job.status == 'running' %}
+<div class="card" data-strategy-job="{{ url_for('api_strategy', job=job.id) }}">
+  <div class="card-body">
+    <div class="d-flex justify-content-between small mb-1"><span data-strategy-stage>{{ job.stage }}</span><span data-strategy-pct>{{ (job.progress * 100)|round|int }}%</span></div>
+    <div class="meter on-surface"><span data-strategy-bar style="width:{{ (job.progress * 100)|round(1) }}%"></span></div>
+    <p class="small-muted mt-2 mb-0">You can leave this page; the search carries on. This page updates by itself.</p>
+  </div>
+</div>
+{% elif job and job.status == 'failed' %}
+<div class="alert alert-danger">The search failed: {{ job.error }}</div>
+{% endif %}
+
+{% if r %}
+{% set b, s = r.baseline, r.strategy %}
+<div class="stat-grid mt-3">
+  {{ ui.kpi('Chance of success', pct(s.success), 'was ' ~ pct(b.success) ~ ' · ±' ~ '%.1f'|format(1.96 * s.se * 100) ~ ' pts', 'shield-check', 'good' if s.success >= r.target else 'warn') }}
+  {{ ui.kpi('Left after tax', s.after_tax|compact, 'median; was ' ~ b.after_tax|compact, 'gift') }}
+  {{ ui.kpi('Lifetime tax', s.tax|compact, 'median; was ' ~ b.tax|compact, 'receipt') }}
+  {{ ui.kpi('Searched', r.evaluations ~ ' plans', r.seconds ~ ' s' ~ (' · stopped at the time limit' if r.timed_out else ''), 'cpu') }}
+</div>
+{% if not r.meets_target %}
+<div class="link-box"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div class="grow">Even the best strategy found reaches {{ pct(s.success) }}, short of your {{ (r.target * 100)|round|int }}% target. The decisions searched here are not enough on their own: spending less, saving more or working longer than {{ settings.latest_age|int }} would be needed - try the <a href="{{ url_for('tool_spending') }}">spending check</a>.</div></div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-xl-7">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-list-check" aria-hidden="true"></i> The decisions
+      <span class="ms-auto small-muted fw-normal">each change's worth is on its own, from your plan as it is</span></div>
+      <div class="card-body p-0">
+        <table class="table table-sm align-middle mb-0 strategy-table">
+          <thead><tr><th>Decision</th><th>Now</th><th>Recommended</th><th class="num">Worth</th></tr></thead>
+          <tbody>
+          {% for d in r.decisions %}
+          <tr class="{{ 'changed' if d.changed }}">
+            <td><i class="bi bi-{{ d.icon }}" aria-hidden="true"></i> {{ d.label }}</td>
+            <td class="small-muted">{{ d.current }}</td>
+            <td>{% if d.changed %}<strong>{{ d.recommended }}</strong>{% else %}<span class="small-muted">keep</span>{% endif %}</td>
+            <td class="num">{% if d.worth %}<span class="{{ 'up' if d.worth.success > 0.0005 else ('down' if d.worth.success < -0.0005 else '') }}">{{ '%+.1f'|format(d.worth.success * 100) }} pts</span><span class="cell-sub">{{ d.worth.after_tax|smoney }} left</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div></div>
+  </div>
+  <div class="col-xl-5">
+    <div class="card h-100"><div class="card-header"><i class="bi bi-journal-check" aria-hidden="true"></i> The rules to live by</div>
+      <div class="card-body">
+        <ol class="strategy-rules">{% for line in r.rules %}<li>{{ line }}</li>{% endfor %}</ol>
+        <div class="d-flex flex-wrap gap-2">
+          <form method="post" action="{{ url_for('strategy_save', job=job.id) }}"><button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-layers" aria-hidden="true"></i> Save as a scenario</button></form>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('compare') }}">Compare scenarios</a>
+        </div>
+      </div></div>
+  </div>
+</div>
+
+{% if r.alternatives %}
+<div class="card"><div class="card-header"><i class="bi bi-arrows-angle-expand" aria-hidden="true"></i> Just as good, within the noise
+  <span class="ms-auto small-muted fw-normal">choose among these freely</span></div>
+  <div class="card-body"><ul class="list-rows">
+    {% for a in r.alternatives %}<li><span class="grow">{{ a.changes|join('; ') }}</span><span class="num">{{ pct(a.success) }}<span class="cell-sub">{{ a.after_tax|compact }} left</span></span></li>{% endfor %}
+  </ul></div></div>
+{% endif %}
+
+<div class="card"><div class="card-header"><i class="bi bi-calendar-range" aria-hidden="true"></i> Year by year
+  <span class="ms-auto small-muted fw-normal">a typical future (fixed average returns), today's money</span></div>
+  <div class="card-body p-0"><div class="table-scroll">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Age{{ 's' if r.timeline[0].ages|length > 1 }}</th><th>What happens</th><th class="num">Income</th><th class="num">Spending</th><th class="num">From savings</th><th class="num">Converted</th><th class="num">Tax</th><th class="num">Savings</th></tr></thead>
+      <tbody>
+      {% set ns = namespace(last=-9) %}
+      {% for y in r.timeline %}
+        {% if y.events or loop.first or loop.last or loop.index0 % 5 == 0 %}
+        <tr class="{{ 'event' if y.events }}">
+          <td class="text-nowrap">{{ y.ages|join(' / ') }}</td>
+          <td>{% for e in y.events %}<div><i class="bi bi-flag" aria-hidden="true"></i> {{ e }}</div>{% endfor %}</td>
+          <td class="num">{{ y.income|compact }}</td><td class="num">{{ y.spend|compact }}</td>
+          <td class="num">{{ y.withdrawal|compact if y.withdrawal > 0.5 else '-' }}</td>
+          <td class="num">{{ y.conversion|compact if y.conversion > 0.5 else '-' }}</td>
+          <td class="num">{{ y.tax|compact }}</td><td class="num">{{ y.savings|compact }}</td></tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table></div></div></div>
+
+<p class="small-muted">Searched on {{ '{:,}'.format(r.search_trials) }} futures per candidate and confirmed on {{ '{:,}'.format(r.final_trials) }}, all on the same simulated markets, so differences come from the decisions, not luck. Beyond {{ (settings.enough_odds * 100)|round|int }}% odds, more certainty is not traded for more years of work. Public pensions are rescaled for claiming age by {{ '%.2f'|format(settings.claim_early * 100) }}% a year early and {{ '%.0f'|format(settings.claim_late * 100) }}% late around {{ settings.claim_full|int }}. Educational, not financial advice.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

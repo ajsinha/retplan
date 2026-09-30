@@ -1019,3 +1019,10 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .range52 .track { position: relative; flex: 1 1 auto; height: 4px; border-radius: 4px; background: var(--rp-border); }
 .range52 .mark { position: absolute; top: -4px; width: 4px; height: 12px; border-radius: 2px; background: var(--rp-crimson); transform: translateX(-2px); }
 .range52 .lo, .range52 .hi { color: var(--rp-slate); }
+
+/* ---------- strategy ---------- */
+.strategy-table tr.changed td:first-child { font-weight: 600; }
+.strategy-table .bi { color: var(--rp-crimson); }
+.strategy-rules { padding-left: 1.2rem; }
+.strategy-rules li { margin-bottom: .5rem; }
+tr.event td { background: var(--rp-crimson-tint); }
