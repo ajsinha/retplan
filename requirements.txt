@@ -11,8 +11,11 @@ jinja2>=3.1
 itsdangerous>=2.1
 python-multipart>=0.0.9
 
+# Configuration: config/retplan.yaml, read by core/properties_configurator.py
+pyyaml>=6.0
+
 # Database: SQLAlchemy over SQLite (built in) or PostgreSQL (psycopg driver).
-# Pick the backend with [database] url in config/retplan.toml.
+# Pick the backend with database.url in config/retplan.yaml.
 sqlalchemy>=2.0
 psycopg[binary]>=3.1
 

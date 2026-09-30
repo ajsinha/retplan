@@ -4,14 +4,14 @@ RetPlan has no user accounts for planning - every browser is its own workspace.
 Administration (adding, amending and deleting securities and their prices) is
 the one thing that affects everyone, so it needs signing in:
 
-- The account is ``[admin] username`` / ``password`` in config/retplan.toml
+- The account is ``admin.username`` / ``password`` in config/retplan.yaml
   (default ``admin`` / ``retplan-dev-admin``), or RETPLAN_ADMIN_USERNAME /
   RETPLAN_ADMIN_PASSWORD.
 - Once changed in the app (/admin/password), the new password is stored as a
   salted PBKDF2 hash in the database and takes precedence over the file.
 - While the shipped default password is still in force, every page an
   administrator sees carries a warning, as MAYA does for its bootstrap admin.
-- ``[admin] local_is_admin`` (default false) additionally treats requests from
+- ``admin.local_is_admin`` (default false) additionally treats requests from
   this computer as administrator without signing in.
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.

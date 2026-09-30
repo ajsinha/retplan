@@ -381,6 +381,35 @@ def test_config():
         check("the default SQLite file moves with the data dir",
               cfg.database_url == "sqlite:///" + os.path.join(ROOT, "somewhere/else/retplan.db"),
               cfg.database_url)
+    cfg = load_config()
+    check("the shipped YAML reads: optimiser and assistant sections, assistant off",
+          cfg.source.endswith("retplan.yaml") and cfg.get_int("strategy.search_trials") == 600
+          and cfg.get_float_list("strategy.investments.equity_shifts")[0] == -0.3
+          and not cfg.get_bool("assistant.enabled") and cfg.get("assistant.model"))
+    with tempfile.TemporaryDirectory() as d:
+        main, local = os.path.join(d, "x.yaml"), os.path.join(d, "x.local.yaml")
+        with open(main, "w") as fh:
+            fh.write("app:\n  data_dir: /tmp/rp\ndatabase:\n  url: \"${RP_T_URL:sqlite:///${app.data_dir}/a.db}\"\n"
+                     "prices:\n  run_at: \"07:05\"\nassistant:\n  enabled: false\n  api_key: \"\"\n")
+        with open(local, "w") as fh:
+            fh.write("assistant:\n  enabled: true\n  api_key: secret-key\n")
+        cfg = load_config(main)
+        check("${ENV:default} and ${other.key} resolve", cfg.database_url == "sqlite:////tmp/rp/a.db",
+              cfg.database_url)
+        check("the .local.yaml overlay wins over the file, only for what it names",
+              cfg.get_bool("assistant.enabled") and cfg.get("assistant.api_key") == "secret-key"
+              and cfg.prices_run_at == "07:05")
+        os.environ["RP_T_URL"] = "postgresql+psycopg://u@h/db"
+        os.environ["assistant.enabled"] = "false"
+        try:
+            cfg = load_config(main)
+            check("an environment variable wins over both files",
+                  cfg.database_url == "postgresql+psycopg://u@h/db"
+                  and not cfg.get_bool("assistant.enabled"))
+        finally:
+            del os.environ["RP_T_URL"]
+            del os.environ["assistant.enabled"]
+    load_config()
 
 
 def test_importer():

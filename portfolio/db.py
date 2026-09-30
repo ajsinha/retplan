@@ -1,7 +1,7 @@
 """Database access through SQLAlchemy, on SQLite or PostgreSQL.
 
-The backend is chosen by one URL in configuration (``[database] url`` in
-``config/retplan.toml``, or ``RETPLAN_DATABASE_URL``)::
+The backend is chosen by one URL in configuration (``database.url`` in
+``config/retplan.yaml``, or ``RETPLAN_DATABASE_URL``)::
 
     sqlite:///data/retplan.db
     postgresql+psycopg://retplan:secret@localhost:5432/retplan

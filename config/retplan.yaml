@@ -1,0 +1,122 @@
+# ==========================================================================
+# RetPlan - configuration
+# ==========================================================================
+# Read by core/properties_configurator.py (adopted from DishtaYantra):
+#   * values resolve ${other.key}, ${ENV_VAR} and ${ENV_VAR:default};
+#   * precedence, highest first: command line (--key=value), an environment
+#     variable named exactly like the key, config/retplan.local.yaml, this file;
+#   * config/retplan.local.yaml is an optional, git-ignored overlay loaded
+#     after this file - the place for secrets (an API key, a password);
+#   * a different file can be named with RETPLAN_CONFIG=/path/to/file.yaml;
+#   * the files are re-read every app.reload_seconds, so settings read live
+#     (the assistant's, the optimiser's) change without a restart.
+#
+# The environment variables RetPlan has always honoured still work - each is
+# the ${...} default of its key below.
+# ==========================================================================
+
+app:
+  # Where the session secret and the default SQLite file live. Relative paths
+  # (here and in a sqlite URL) are resolved from the project root.
+  data_dir: "${RETPLAN_DATA:data}"
+  reload_seconds: 60
+
+database:
+  # Pick the backend by URL; switch at any time (tools/copy_db.py copies data).
+  #   SQLite (default, zero setup):
+  url: "${RETPLAN_DATABASE_URL:sqlite:///${app.data_dir}/retplan.db}"
+  #   PostgreSQL:  postgresql+psycopg://retplan:CHANGE-ME@localhost:5432/retplan
+  echo: false          # log every SQL statement (debugging only)
+
+prices:
+  # Collect daily bars from Yahoo Finance for every held symbol, every market-
+  # data security and the exchange rates they need.
+  enabled: "${RETPLAN_PRICES_ENABLED:true}"
+  run_at: "${RETPLAN_PRICES_RUN_AT:18:30}"          # local time; also at start-up if stale
+  retention_days: "${RETPLAN_PRICES_RETENTION_DAYS:365}"   # unless a symbol keeps more
+
+admin:
+  # The administrator manages securities, prices and market data - the only
+  # things every workspace shares. Sign in at /admin/login. CHANGE THE DEFAULT
+  # PASSWORD from the app (a salted hash is then kept in the database), or set
+  # it in config/retplan.local.yaml.
+  username: "${RETPLAN_ADMIN_USERNAME:admin}"
+  password: "${RETPLAN_ADMIN_PASSWORD:retplan-dev-admin}"
+  # Also treat requests from this computer as administrator without signing in.
+  local_is_admin: "${RETPLAN_ADMIN_LOCAL:false}"
+
+# --------------------------------------------------------------------------
+# Strategy optimiser: when to retire, when to claim, how to spend and invest
+# --------------------------------------------------------------------------
+strategy:
+  enabled: true
+  search_trials: 600        # futures per candidate while searching
+  final_trials: 3000        # futures for the confirming run of the winner
+  max_seconds: 600          # stop searching after this long and report the best so far
+  retire:
+    earliest_shift: -5      # years before the planned retirement age to try
+    latest_age: 75          # never suggest working beyond this age
+  claiming:
+    # A public pension (Social Security) claimed early or late. US rules by
+    # default; set your country's.
+    min_age: 62
+    max_age: 70
+    full_age: 67            # the age the plan's amount is taken to be for
+    early_reduction: 0.0667 # per year claimed before full_age
+    late_increase: 0.08     # per year claimed after full_age
+  investments:
+    equity_shifts: [-0.3, -0.2, -0.1, 0.0, 0.1, 0.2]   # moves of the share in shares
+  withdrawals:
+    try_guardrails: true
+    try_draw_orders: true
+  conversions:
+    enabled: true
+    heir_tax_rate: 0.25     # tax heirs pay on money left in accounts taxed on the way out
+
+# --------------------------------------------------------------------------
+# AI assistant (optional). Off unless enabled and given an API key.
+# The assistant never invents a number: every figure it quotes comes from
+# RetPlan's own engine, through the tools allowed below.
+# --------------------------------------------------------------------------
+assistant:
+  enabled: false
+  provider: anthropic                   # anthropic | none
+  # Keep the key out of this file: set ANTHROPIC_API_KEY, or put
+  #   assistant: {api_key: "sk-ant-..."}  in config/retplan.local.yaml
+  api_key: "${ANTHROPIC_API_KEY:}"
+  base_url: ""                          # optional gateway or proxy
+  model: claude-sonnet-5-5              # conversation, what-ifs, review
+  strategy_model: claude-opus-5-5       # explaining a strategy, writing the report
+  max_tokens: 4000
+  temperature: 0.2
+  timeout_seconds: 60
+  max_tool_calls: 12                    # per question
+  access: everyone                      # everyone | admin
+  features:
+    intake: true                        # set up a plan by conversation
+    explain_strategy: true              # explain the optimiser's strategy
+    what_if: true                       # answer what-if questions by running the model
+    review: true                        # point out risks and gaps in the plan
+    report: true                        # write the strategy report
+  tools:
+    read_plan: true
+    read_portfolios: true
+    run_simulation: true
+    run_optimiser: true
+    save_scenario: true                 # writes: a new scenario, never the plan itself
+    edit_plan: false                    # writes to the active plan
+    confirm_writes: true                # ask before any write
+  privacy:
+    share_names: false                  # people and accounts become "Person 1", "Account 2"
+    share_holdings: false               # symbols and quantities of holdings
+    round_money_to: 1000                # round amounts sent to the model
+  limits:
+    questions_per_hour: 30              # per workspace
+    daily_token_budget: 2000000         # all workspaces together; 0 = no limit
+  logging:
+    keep_conversations: true
+    retention_days: 30
+    log_tool_calls: true
+  prompts:
+    system_file: ""                     # replace the built-in system prompt with this file
+    disclaimer: "Educational, not financial advice. Every figure comes from RetPlan's model and is only as good as its assumptions."

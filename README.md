@@ -64,14 +64,16 @@ page you see as administrator says so.
 
 ## Database and configuration
 
-Everything is in `config/retplan.toml`, overridable by `RETPLAN_*` environment
-variables. The database is SQLAlchemy over **SQLite** (default, zero setup) or
-**PostgreSQL**:
+Everything is in `config/retplan.yaml`, read by the configurator adopted from
+DishtaYantra (`core/`): dotted keys, `${ENV_VAR:default}` substitution, precedence
+command line > environment > a git-ignored `config/retplan.local.yaml` (for secrets) >
+the file, and live reload. The database is SQLAlchemy over **SQLite** (default, zero
+setup) or **PostgreSQL**:
 
-```toml
-[database]
-url = "sqlite:///{data_dir}/retplan.db"
-# url = "postgresql+psycopg://retplan:secret@localhost:5432/retplan"
+```yaml
+database:
+  url: "${RETPLAN_DATABASE_URL:sqlite:///${app.data_dir}/retplan.db}"
+  # url: postgresql+psycopg://retplan:secret@localhost:5432/retplan
 ```
 
 There are **no migrations**. The schema is two hand-written files describing the
@@ -132,7 +134,8 @@ web/static/  css/tokens.css + css/theme.css, js, vendored Bootstrap and icons
 web/templates/  base + _nav (mega menu) + _macros; one folder per area
 routes/      one handler class per area, registered by the app singleton
 schema/      sqlite.sql and postgres.sql - the only definition of the database
-config/      retplan.toml
+config/      retplan.yaml (+ optional, git-ignored retplan.local.yaml)
+core/        the configuration system adopted from DishtaYantra
 tools/       fetch_prices.py, copy_db.py
 tests/       run_tests.py (engine) and test_portfolio.py (database, prices,
              projections, builder, admin, web; offline)

@@ -23,7 +23,7 @@
       <h3 class="h6 mt-4">Switching to PostgreSQL</h3>
       <ol class="small mb-0">
         <li>Create an empty database: <code>createdb retplan</code></li>
-        <li>Set <code>url = "postgresql+psycopg://user:password@host:5432/retplan"</code> under <code>[database]</code> in <code>config/retplan.toml</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
+        <li>Set <code>database.url</code> to <code>postgresql+psycopg://user:password@host:5432/retplan</code> in <code>config/retplan.yaml</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
         <li>Restart. The schema is created from <code>schema/postgres.sql</code>.</li>
         <li>To bring existing data across: <code>python tools/copy_db.py --to postgresql+psycopg://…</code></li>
       </ol>

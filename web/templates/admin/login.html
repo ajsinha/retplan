@@ -10,7 +10,7 @@
     <div class="d-grid gap-2"><a class="btn btn-primary" href="{{ url_for('securities') }}">Manage securities</a>
       <a class="btn btn-outline-secondary" href="{{ url_for('admin_password') }}">Change password</a></div>
   {% elif mode == 'off' %}
-    <p>Administration is switched off: no password is configured and <code>[admin] local_is_admin</code> is false.</p>
+    <p>Administration is switched off: no password is configured and <code>admin.local_is_admin</code> is false.</p>
   {% else %}
     <form method="post" action="{{ url_for('admin_login_post') }}">
       <input type="hidden" name="next" value="{{ next or '/securities' }}">

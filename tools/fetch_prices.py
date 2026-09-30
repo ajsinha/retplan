@@ -9,7 +9,7 @@ built-in daily schedule.
     # crontab: weekdays at 18:30
     30 18 * * 1-5  cd /path/to/retplan && .venv/bin/python tools/fetch_prices.py
 
-Uses the database in config/retplan.toml (or RETPLAN_DATABASE_URL).
+Uses the database in config/retplan.yaml (or RETPLAN_DATABASE_URL).
 
 Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
 """

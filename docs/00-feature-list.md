@@ -205,7 +205,7 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 
 | ID | Feature | Where |
 |---|---|---|
-| F-SYS-1 | SQLite (default) or PostgreSQL, chosen by one URL | `config/retplan.toml`, `portfolio/db.py` |
+| F-SYS-1 | SQLite (default) or PostgreSQL, chosen by one URL | `config/retplan.yaml`, `portfolio/db.py` |
 | F-SYS-2 | Configuration file with `RETPLAN_*` environment overrides; launcher flags for host, port, reload, log level and data directory | `web/config.py`, `run_retplan_web.py` |
 | F-SYS-3 | Workspaces keyed by an opaque id in a signed session cookie; no user accounts | `web/store.session_id` |
 | F-SYS-4 | System page: database URL (password masked), row counts, scheduler status, versions | `/system` |

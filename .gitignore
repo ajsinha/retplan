@@ -13,3 +13,4 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/.session-secret
+config/*.local.yaml

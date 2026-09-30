@@ -42,7 +42,7 @@ def main() -> int:
     ap.add_argument("--log-level", default="info",
                     choices=["critical", "error", "warning", "info", "debug"])
     ap.add_argument("--data-dir", default=os.environ.get("RETPLAN_DATA"),
-                    help="overrides [app] data_dir in config/retplan.toml")
+                    help="overrides app.data_dir in config/retplan.yaml")
     args = ap.parse_args()
 
     logging.basicConfig(

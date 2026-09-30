@@ -4,7 +4,7 @@
 
 | Layer | Choice |
 |---|---|
-| Language | Python 3 (`tomllib`, so 3.11 or later) |
+| Language | Python 3.11 or later; configuration in YAML (PyYAML) |
 | Numerics | NumPy — the only dependency of the engine in `retplan/` |
 | Web | FastAPI on uvicorn, Starlette session middleware, Jinja2 templates |
 | Database | SQLAlchemy 2 Core over SQLite (default) or PostgreSQL 12+ (psycopg 3) |
@@ -29,7 +29,7 @@ web/templates/  base, _nav (mega menu), shared UI components; one folder per are
 web/static/     css/tokens.css, css/theme.css, js/, img/, vendor/
 routes/         one handler class per area
 schema/         sqlite.sql and postgres.sql — the only definition of the database
-config/         retplan.toml
+config/         retplan.yaml (and an optional, git-ignored retplan.local.yaml)
 tools/          fetch_prices.py, copy_db.py
 tests/          run_tests.py, test_portfolio.py
 run_retplan_web.py   launcher (port 5007 by default)
@@ -128,7 +128,7 @@ follows the theme — including a saved projection re-rendered later.
 ## 8. Database
 
 - `portfolio/db.Database` wraps one SQLAlchemy engine. The backend is chosen by
-  `[database] url` (or `RETPLAN_DATABASE_URL`):
+  `database.url` (or `RETPLAN_DATABASE_URL`):
   `sqlite:///{data_dir}/retplan.db` by default, or
   `postgresql+psycopg://user:pass@host:5432/db`.
 - **Two schema files, no migrations.** `schema/sqlite.sql` and
@@ -182,7 +182,7 @@ FX rates are ordinary symbols of the form `<FROM><TO>=X`.
 
 ## 11. Configuration
 
-`config/retplan.toml` (or the file named by `RETPLAN_CONFIG`), overridden by
+`config/retplan.yaml` (or the file named by `RETPLAN_CONFIG`), overridden by
 environment variables:
 
 | Key | Environment | Default |

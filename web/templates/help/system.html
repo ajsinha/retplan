@@ -7,18 +7,18 @@ you prefer &mdash; and reads its settings from one small file. This page is for
 whoever installs and looks after it.</p>
 
 <h2>The configuration file</h2>
-<p>Settings live in <code>config/retplan.toml</code>. Point
+<p>Settings live in <code>config/retplan.yaml</code>. Point
 <code>RETPLAN_CONFIG</code> at another file to use that instead. Every setting can
 also be given as an environment variable, which wins over the file:</p>
 {{ field_table([
-  ("[app] data_dir", "Where the session secret, old plan files and the default SQLite file live. RETPLAN_DATA, or --data-dir on the launcher.",
+  ("app.data_dir", "Where the session secret, old plan files and the default SQLite file live. RETPLAN_DATA, or --data-dir on the launcher.",
    "Default data. Relative paths are resolved from the project folder, not from wherever you started the app."),
-  ("[database] url", "Which database to use. RETPLAN_DATABASE_URL.",
+  ("database.url", "Which database to use. RETPLAN_DATABASE_URL.",
    "sqlite:///{data_dir}/retplan.db (the default - {data_dir} is replaced by the setting above, so the database moves with it) or postgresql+psycopg://user:password@host:5432/retplan."),
-  ("[database] echo", "Log every SQL statement.", "Debugging only; it is very noisy."),
-  ("[prices] enabled", "Run the daily price collector. RETPLAN_PRICES_ENABLED.", "true, false, 1, 0, yes, no, on or off."),
-  ("[prices] run_at", "Local time of the daily collection, HH:MM. RETPLAN_PRICES_RUN_AT.", "Default 18:30. An invalid time stops RetPlan from starting, with a message saying so."),
-  ("[prices] retention_days", "Days of daily closes kept. RETPLAN_PRICES_RETENTION_DAYS.", "Default 365. See Daily prices."),
+  ("database.echo", "Log every SQL statement.", "Debugging only; it is very noisy."),
+  ("prices.enabled", "Run the daily price collector. RETPLAN_PRICES_ENABLED.", "true, false, 1, 0, yes, no, on or off."),
+  ("prices.run_at", "Local time of the daily collection, HH:MM. RETPLAN_PRICES_RUN_AT.", "Default 18:30. An invalid time stops RetPlan from starting, with a message saying so."),
+  ("prices.retention_days", "Days of daily closes kept. RETPLAN_PRICES_RETENTION_DAYS.", "Default 365. See Daily prices."),
   ("RETPLAN_SECRET", "The key that signs browser sessions.", "Optional; see below. Environment only."),
 ]) }}
 <p>The launcher, <code>python run_retplan_web.py</code>, listens on
@@ -31,13 +31,13 @@ four slashes). The {{ goto('system', 'system page') }} shows the file that was r
 the values in effect. Settings are read once, at start-up.</p>
 
 <h2>Administration</h2>
-<p>The <code>[admin]</code> section decides who may add, amend and delete securities
+<p>The <code>admin:</code> section decides who may add, amend and delete securities
 and their prices:</p>
 {{ field_table([
-  ("[admin] username", "The administrator's user name. RETPLAN_ADMIN_USERNAME.", "admin by default."),
-  ("[admin] password", "The administrator's starting password. RETPLAN_ADMIN_PASSWORD.",
+  ("admin.username", "The administrator's user name. RETPLAN_ADMIN_USERNAME.", "admin by default."),
+  ("admin.password", "The administrator's starting password. RETPLAN_ADMIN_PASSWORD.",
    "retplan-dev-admin by default. Change it in the app (shield icon, Change password): the new one is stored as a salted PBKDF2 hash in the database and this setting is ignored from then on. Signing in marks only that browser's session."),
-  ("[admin] local_is_admin", "Also treat requests from this computer as administrator without signing in. RETPLAN_ADMIN_LOCAL.",
+  ("admin.local_is_admin", "Also treat requests from this computer as administrator without signing in. RETPLAN_ADMIN_LOCAL.",
    "false by default. Never turn it on behind a reverse proxy, where every request looks local."),
 ]) }}
 
@@ -51,7 +51,7 @@ back it up. It needs the <code>psycopg</code> driver, installed from
 {% call steps() %}
 <li>Create an empty database: <code>createdb retplan</code>.</li>
 <li>Set <code>url = "postgresql+psycopg://user:password@host:5432/retplan"</code>
-    under <code>[database]</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
+    as <code>database.url</code>, or export <code>RETPLAN_DATABASE_URL</code>.</li>
 <li>Restart RetPlan. The tables are created from <code>schema/postgres.sql</code>.</li>
 <li>To bring your existing data across, copy it (next section).</li>
 {% endcall %}

@@ -254,7 +254,7 @@ GUIDES = [
                  "plan to it."),
     dict(slug="configuration", kind="catalogue", icon="sliders",
          title="Configuration reference",
-         summary="Every setting in config/retplan.toml and every environment variable, "
+         summary="Every setting in config/retplan.yaml and every environment variable, "
                  "with its default and what it does."),
     dict(slug="api", kind="catalogue", icon="braces",
          title="HTTP API reference",

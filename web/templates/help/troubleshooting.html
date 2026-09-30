@@ -92,7 +92,7 @@ give the same answer. If a number moved, one of these changed:</p>
       symbol search. Until it prices, the holding counts as zero in every total.</li>
   <li><strong>Prices are stale.</strong> Collection runs once a day at the configured time
       (18:30 local by default) and at start-up if the last run is old. If
-      <code>[prices] enabled</code> is false, or <code>RETPLAN_PRICES_ENABLED</code>
+      <code>prices.enabled</code> is false, or <code>RETPLAN_PRICES_ENABLED</code>
       turns it off, nothing is collected; the prices page can also run a collection on
       demand.</li>
   <li><strong>&ldquo;request failed: HTTP Error 429&rdquo;.</strong> Yahoo is throttling.
