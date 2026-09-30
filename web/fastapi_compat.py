@@ -144,6 +144,12 @@ def _inject_globals(request: Request) -> dict:
                                              and default_password_in_force(request))
     except Exception:  # noqa: BLE001 - a page must render even if config is odd
         context["is_admin"] = context["admin_default_password"] = False
+    try:
+        cfg = request.app.state.config
+        context["assistant_nav"] = cfg.get_bool("assistant.enabled", False) and (
+            str(cfg.get("assistant.access", "everyone")).lower() != "admin" or context["is_admin"])
+    except Exception:  # noqa: BLE001
+        context["assistant_nav"] = False
     return context
 
 

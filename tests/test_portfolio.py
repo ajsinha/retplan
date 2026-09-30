@@ -94,7 +94,8 @@ def fresh_db():
     if DB_URL != "sqlite://":
         # a shared server database: empty every table first, children first
         with db.tx() as c:
-            for t in ("projections", "holdings", "portfolio_accounts", "portfolio_children",
+            for t in ("assistant_messages", "assistant_conversations", "assistant_usage",
+                      "projections", "holdings", "portfolio_accounts", "portfolio_children",
                       "accounts", "price_gaps", "prices", "portfolios", "plans",
                       "securities", "fetch_runs", "import_drafts", "snapshots", "app_settings"):
                 Database.run(c, f"DELETE FROM {t}")
@@ -1312,6 +1313,207 @@ def test_strategy_web():
         wa.db.dispose()
 
 
+def test_assistant():
+    """The assistant: provider and model abstractions, the fake that does nothing, the
+    tool loop, privacy, approvals, limits and settings."""
+    import json as _json
+    from web.assistant import Assistant, AssistantUnavailable, providers
+    from web.assistant.providers import AnthropicProvider, FakeProvider, LLMReply, ToolCall
+    from web.assistant.settings import AssistantSettings
+    from fastapi.testclient import TestClient
+    from web.config import Config
+    from web.retplan_webapp import RetPlanWebApp
+    check("both providers are registered", {p.key for p in providers.providers()} >= {"anthropic", "fake"})
+    fake = providers.get("fake")
+    null = fake.model("fake-null")
+    check("the fake model does nothing: no tools, a fixed note, no tokens",
+          not null.tools and fake.reply("fake-null", "", [], [], AssistantSettings()).text == providers.FAKE_NOTE
+          and fake.reply("fake-null", "", [], [], AssistantSettings()).tokens_in == 0)
+    check("a model not in a provider's list is taken as given", fake.model("custom-x").id == "custom-x")
+
+    # Anthropic's request and response, against a stand-in for the network
+    sent = {}
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def read(self):
+            return _json.dumps(self.body).encode()
+
+    def opener(req, timeout=None):
+        sent.update(url=req.full_url, headers=dict(req.header_items()),
+                    body=_json.loads(req.data), timeout=timeout)
+        return Resp({"type": "message", "model": "claude-sonnet-5-5", "stop_reason": "tool_use",
+                     "content": [{"type": "text", "text": "Let me check."},
+                                 {"type": "tool_use", "id": "tu_1", "name": "get_results", "input": {}}],
+                     "usage": {"input_tokens": 120, "output_tokens": 15}})
+    ap = AnthropicProvider(opener=opener)
+    st = AssistantSettings(api_key="k-123", base_url="https://gw.example/", max_tokens=900, timeout_seconds=7)
+    reply = ap.reply("claude-sonnet-5-5", "SYS",
+                     [{"role": "user", "text": "hi"},
+                      {"role": "assistant", "text": "", "tool_calls": [ToolCall("t0", "get_plan_summary", {})]},
+                      {"role": "user", "tool_results": [providers.ToolResult("t0", "{}")]}],
+                     [{"name": "get_results", "description": "d", "schema": {"type": "object"}}], st)
+    check("Anthropic: the Messages API, key and version headers, the gateway URL",
+          sent["url"] == "https://gw.example/v1/messages" and sent["headers"].get("X-api-key") == "k-123"
+          and sent["headers"].get("Anthropic-version") == "2023-06-01" and sent["timeout"] == 7, sent["headers"])
+    check("Anthropic: system, tools with input_schema, tool_use and tool_result blocks",
+          sent["body"]["system"] == "SYS" and sent["body"]["max_tokens"] == 900
+          and sent["body"]["tools"][0]["input_schema"] == {"type": "object"}
+          and sent["body"]["messages"][1]["content"][0]["type"] == "tool_use"
+          and sent["body"]["messages"][2]["content"][0]["type"] == "tool_result")
+    check("Anthropic: a reply's text, tool calls, stop reason and tokens",
+          reply.text == "Let me check." and reply.tool_calls[0].name == "get_results"
+          and reply.stop == "tool_use" and reply.tokens_in == 120 and reply.tokens_out == 15)
+    check("Anthropic needs a key", not ap.available(AssistantSettings())[0])
+
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(data_dir=d, database_url=DB_URL if DB_URL != "sqlite://"
+                     else f"sqlite:///{d}/web.db", prices_enabled=False,
+                     overrides={"assistant.enabled": True, "assistant.provider": "fake",
+                                "assistant.model": "fake-tools"})
+        wa = RetPlanWebApp(config=cfg, start_scheduler=False)
+        if DB_URL != "sqlite://":
+            fresh_db()
+        sid = "ws-assist"
+        plan = wa.store.get(sid)
+        plan.persons[0].label = "Maria"
+        plan.ledgers[0].label = "Maria's Fidelity 401k"
+        wa.store.put(sid, plan)
+        script = [LLMReply(tool_calls=[ToolCall("1", "get_plan_summary", {}),
+                                       ToolCall("2", "run_simulation", {"retire_years": 2}),
+                                       ToolCall("3", "edit_plan", {}),
+                                       ToolCall("4", "run_simulation", {"retire_years": 99})]),
+                  LLMReply(tool_calls=[ToolCall("5", "save_scenario",
+                                                {"name": "Person 1 works longer",
+                                                 "adjustments": {"retire_years": 2}})]),
+                  LLMReply(text="Person 1 retiring later helps; I have proposed a scenario.")]
+        f = FakeProvider(script)
+        a = Assistant(wa.app, provider=f)
+        r = a.ask(sid, "What if Maria works two more years?")
+        out = _json.dumps(f.seen, default=str)
+        check("names never reach the model; the answer has them back",
+              "Maria" not in out and "Fidelity" not in out and r["answer"].startswith("Maria retiring"))
+        check("the tools run on RetPlan's engine and every call is listed",
+              [c["name"] for c in r["tool_calls"]] == ["get_plan_summary", "run_simulation", "edit_plan",
+                                                       "run_simulation", "save_scenario"]
+              and '"success"' in r["tool_calls"][1]["summary"])
+        check("a tool not offered, and out-of-range arguments, are refused",
+              r["tool_calls"][2]["summary"] == "not available"
+              and r["tool_calls"][3]["summary"].startswith("refused"))
+        check("amounts are rounded before they are sent",
+              all(int(float(x)) % 1000 == 0 for x in re.findall(r'"p50": ([0-9.]+)', out)))
+        check("a write is only proposed", len(r["pending"]) == 1 and "Maria works longer" in r["pending"][0]["text"])
+        n = len(wa.store.scenarios(sid))
+        a.confirm(sid, r["pending"][0]["id"], False)
+        check("declining changes nothing", len(wa.store.scenarios(sid)) == n)
+        f.script = [LLMReply(tool_calls=[ToolCall("6", "save_scenario", {"name": "Keep it"})]),
+                    LLMReply(text="Proposed.")]
+        r2 = a.ask(sid, "Save it", r["conversation"])
+        res = a.confirm(sid, r2["pending"][0]["id"], True)
+        check("approving adds a scenario and leaves the active plan alone",
+              len(wa.store.scenarios(sid)) == n + 1 and wa.store.get(sid).label == plan.label
+              and "Keep it" in res["message"])
+        check("the conversation is kept, with its tool calls",
+              len(a.store.messages(sid, r["conversation"])) >= 4
+              and a.store.messages(sid, r["conversation"])[1]["tool_calls"])
+        try:
+            a.confirm("someone-else", r2["pending"][0]["id"], True)
+            other = False
+        except AssistantUnavailable:
+            other = True
+        check("a proposal is only the asker's to approve", other)
+
+        # settings: tools and features switch off; limits; access; logging
+        wa.config.overrides["assistant.tools.run_simulation"] = False
+        f.script = [LLMReply(text="ok")]
+        a.ask(sid, "hello")
+        check("a tool switched off is not even offered",
+              "run_simulation" not in [t["name"] for t in f.seen[-1]["tools"]]
+              and "get_plan_summary" in [t["name"] for t in f.seen[-1]["tools"]])
+        wa.config.overrides["assistant.features.review"] = False
+        f.script = [LLMReply(text="ok")]
+        a.ask(sid, "hello")
+        check("a feature switched off takes its tools with it",
+              "review_plan" not in [t["name"] for t in f.seen[-1]["tools"]])
+        wa.config.overrides["assistant.limits.questions_per_hour"] = 1
+        try:
+            a.ask(sid, "one more")
+            limited = False
+        except AssistantUnavailable:
+            limited = True
+        check("the hourly limit is enforced", limited)
+        wa.config.overrides["assistant.limits.questions_per_hour"] = 100
+        wa.config.overrides["assistant.logging.keep_conversations"] = False
+        f.script = [LLMReply(text="ok")]
+        before = len(a.store.list(sid))
+        r3 = a.ask(sid, "not kept")
+        check("with conversations not kept, nothing is stored",
+              r3["conversation"] is None and len(a.store.list(sid)) == before)
+        wa.config.overrides["assistant.access"] = "admin"
+        check("access can be kept to the administrator",
+              not a.check(False)[0] and a.check(True)[0])
+        wa.config.overrides["assistant.access"] = "everyone"
+        wa.config.overrides["assistant.enabled"] = False
+        check("switched off in the configuration, it cannot answer", not a.check(False)[0])
+        wa.config.overrides["assistant.enabled"] = True
+
+        # choosing the provider and model: configuration, then the settings page
+        s = a.settings()
+        check("provider and model come from the configuration",
+              s.provider == "fake" and s.model == "fake-tools" and s.sources["model"] == "config")
+        from web.assistant.settings import save_ui_choice
+        save_ui_choice(wa.db, "provider", "anthropic")
+        save_ui_choice(wa.db, "model", "claude-haiku-4-5-20251001")
+        s = a.settings()
+        check("a choice on the settings page wins over the configuration",
+              s.provider == "anthropic" and s.model == "claude-haiku-4-5-20251001"
+              and s.sources["provider"] == "ui")
+        for k in ("provider", "model"):
+            save_ui_choice(wa.db, k, None)
+        check("and reset returns to the configuration", a.settings().provider == "fake")
+
+        c = TestClient(wa.app, raise_server_exceptions=False)
+        wa.config.overrides["assistant.model"] = "fake-null"
+        page = c.get("/assistant").text
+        check("the assistant page and its nav link appear when it is on",
+              "data-assistant" in page and 'title="Assistant"' in page)
+        r = c.post("/api/assistant/ask", json={"question": "Hello"})
+        check("asking through the web gets the fake model's note", r.status_code == 200
+              and r.json()["answer"] == providers.FAKE_NOTE)
+        check("the preview shows what is sent, redacted",
+              c.get("/assistant/preview").status_code == 200)
+        check("only the administrator reaches the settings page",
+              c.get("/admin/assistant", follow_redirects=False).status_code == 303)
+        c.post("/admin/login", data={"username": "admin", "password": "retplan-dev-admin"})
+        r = c.post("/admin/assistant", data={"provider": "anthropic", "model": "claude-sonnet-5-5",
+                                              "strategy_model": "claude-opus-5-5"}, follow_redirects=True)
+        check("the administrator switches provider and model in the UI",
+              "now uses Anthropic" in r.text and a.settings().provider == "anthropic")
+        r = c.post("/admin/assistant/test", follow_redirects=True)
+        check("the test message reports a missing key rather than failing", "No API key" in r.text)
+        c.post("/admin/assistant/reset")
+        wa.config.overrides["assistant.enabled"] = False
+        check("switched off, the page says so and the link goes",
+              "not available" in c.get("/assistant").text
+              and 'title="Assistant"' not in c.get("/dashboard").text)
+        wa.db.dispose()
+
+    from web.assistant.review import review
+    findings = review(wizard_plan_retiring_at(60))
+    check("the review finds a missing health cover before 65",
+          any(x["check"] == "health cover before 65" and x["severity"] == "high" for x in findings))
+
+
+def wizard_plan_retiring_at(age):
+    from web import wizard
+    return wizard.build_plan(dict(wizard.DEFAULTS, retire_age=str(age)))
+
+
 # ------------------------------------------------------------------ web
 def test_web():
     from fastapi.testclient import TestClient
@@ -1783,7 +1985,7 @@ def main():
     test_projection_structure(); test_stress(); test_rebalance()
     test_plan_store_and_wizard(); test_builder(); test_security_admin()
     test_admin_gate(); test_tools(); test_conventions(); test_help_and_about()
-    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_trading_calendar(); test_strategy(); test_strategy_web(); test_web()
+    test_new_tools(); test_plan_dialogs(); test_accounts_and_draw_rate(); test_draw_rate_web(); test_accounts_web(); test_market_data(); test_market_web(); test_trading_calendar(); test_strategy(); test_strategy_web(); test_assistant(); test_web()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed in {time.time() - t0:.1f}s")
     for f in FAIL:
         print("  FAILED:", f)

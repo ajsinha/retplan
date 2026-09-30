@@ -103,6 +103,7 @@
         <input id="global-search" name="q" type="search" placeholder="Search…  Ctrl-K" value="{{ q or '' }}">
       </form>
       <div class="rp-tools">
+        {% if assistant_nav %}<a class="tool" href="{{ url_for('assistant') }}" title="Assistant" aria-label="Assistant"><i class="bi bi-chat-dots" aria-hidden="true"></i></a>{% endif %}
         {% include "_theme_menu.html" %}
         <div class="dropdown">
           <button class="tool dropdown-toggle" data-bs-toggle="dropdown" type="button" aria-expanded="false"
@@ -114,6 +115,7 @@
             <div class="dropdown-divider"></div>
             <a class="dropdown-item" href="{{ url_for('securities') }}"><i class="bi bi-tags" aria-hidden="true"></i> Manage securities</a>
             <a class="dropdown-item" href="{{ url_for('admin_password') }}"><i class="bi bi-key" aria-hidden="true"></i> Change password</a>
+            <a class="dropdown-item" href="{{ url_for('admin_assistant') }}"><i class="bi bi-chat-dots" aria-hidden="true"></i> Assistant settings</a>
             <a class="dropdown-item" href="{{ url_for('system') }}"><i class="bi bi-hdd-stack" aria-hidden="true"></i> System</a>
             <div class="dropdown-divider"></div>
             <form method="post" action="{{ url_for('admin_logout') }}"><button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out</button></form>

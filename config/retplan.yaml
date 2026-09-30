@@ -82,7 +82,13 @@ strategy:
 # --------------------------------------------------------------------------
 assistant:
   enabled: false
-  provider: anthropic                   # anthropic | none
+  # The LLM provider and models. Also switchable by the administrator on the
+  # Assistant settings page (kept in the database, wins until reset there).
+  #   anthropic - Claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-4-5-20251001
+  #   fake      - no model at all: fake-null answers with a fixed note and does
+  #               nothing (fake-tools is the same, but is offered the tools)
+  #   none      - no provider (the assistant cannot answer)
+  provider: anthropic
   # Keep the key out of this file: set ANTHROPIC_API_KEY, or put
   #   assistant: {api_key: "sk-ant-..."}  in config/retplan.local.yaml
   api_key: "${ANTHROPIC_API_KEY:}"
@@ -106,7 +112,7 @@ assistant:
     run_simulation: true
     run_optimiser: true
     save_scenario: true                 # writes: a new scenario, never the plan itself
-    edit_plan: false                    # writes to the active plan
+    edit_plan: false                    # writes to the active plan - not offered in this version
     confirm_writes: true                # ask before any write
   privacy:
     share_names: false                  # people and accounts become "Person 1", "Account 2"

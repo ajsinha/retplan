@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Assistant settings{% endblock %}
+{% block content %}
+{% call ui.page_head('Assistant settings', 'Choose the LLM provider and models here, or in config/retplan.yaml. A choice made here is kept in the database and wins over the configuration until you reset it. Everything else is under assistant: in the configuration, read live.', eyebrow='Administrator') %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('assistant') }}"><i class="bi bi-chat-dots" aria-hidden="true"></i> Assistant</a>
+{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Status', 'ready' if ok else 'not ready', why if not ok else ('for ' ~ s.access), 'activity', 'good' if ok else 'warn') }}
+  {{ ui.kpi('Provider', s.provider, 'from ' ~ ('this page' if s.sources.provider == 'ui' else 'the configuration'), 'plug') }}
+  {{ ui.kpi('Model', s.model, 'from ' ~ ('this page' if s.sources.model == 'ui' else 'the configuration'), 'cpu') }}
+  {{ ui.kpi('Strategy model', s.strategy_model, 'explanations and reports', 'signpost-split') }}
+</div>
+{% if test %}
+<div class="link-box {{ 'linked' if test.ok }}"><i class="bi bi-{{ 'check-circle' if test.ok else 'x-circle' }}" aria-hidden="true"></i>
+  <div class="grow"><strong>Test of {{ test.provider }} · {{ test.model }}:</strong> {{ test.text }}{% if test.tokens %} <span class="small-muted">({{ test.tokens }} tokens)</span>{% endif %}</div></div>
+{% endif %}
+<form class="card" method="post" action="{{ url_for('admin_assistant_save') }}">
+  <div class="card-header"><i class="bi bi-plug" aria-hidden="true"></i> Provider and models</div>
+  <div class="card-body">
+    <div class="choice-grid choice-grid-wide mb-3" role="radiogroup">
+      {% for p in catalogue %}
+      <label class="choice"><input type="radio" name="provider" value="{{ p.key }}" {% if p.key == s.provider %}checked{% endif %}>
+        <span class="t">{{ p.label }}</span><span class="d">{{ p.blurb }}</span>
+        <span class="d {{ 'up' if p.ready else 'down' }}">{{ 'Ready' if p.ready else p.note }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="row g-3">
+      {% for field, label, current in [('model', 'Model for conversation, what-ifs and reviews', s.model), ('strategy_model', 'Model for explaining a strategy and writing the report', s.strategy_model)] %}
+      <div class="col-md-6">
+        <label class="form-label" for="m-{{ field }}">{{ label }}</label>
+        <select class="form-select" id="m-{{ field }}" name="{{ field }}">
+          {% for p in catalogue %}<optgroup label="{{ p.label }}">{% for m in p.models %}<option value="{{ m.id }}" {% if m.id == current %}selected{% endif %}>{{ m.label }} ({{ m.id }})</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+        <input class="form-control form-control-sm mt-1 mono" name="{{ field }}_custom" placeholder="or type a model id" aria-label="Another model id">
+        <div class="form-hint mt-1">Pick a model of the provider chosen above; a typed id is sent as given.</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Use these</button>
+    </div>
+  </div>
+</form>
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <form method="post" action="{{ url_for('admin_assistant_test') }}" data-busy="Asking…"><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-send-check" aria-hidden="true"></i> Send a test message</button></form>
+  <form method="post" action="{{ url_for('admin_assistant_reset') }}"><button class="btn btn-outline-secondary btn-sm" type="submit" {% if 'ui' not in s.sources.values() %}disabled{% endif %}>Reset to the configuration</button></form>
+</div>
+<div class="card"><div class="card-header"><i class="bi bi-sliders" aria-hidden="true"></i> From the configuration</div>
+  <div class="card-body">
+    {{ ui.kv([('Switched on (assistant.enabled)', 'yes' if s.enabled else 'no'),
+              ('API key', 'set' if s.api_key else 'not set'),
+              ('Gateway (assistant.base_url)', s.base_url or 'the provider\'s own'),
+              ('Who may use it (assistant.access)', s.access),
+              ('Features', s.features.items()|selectattr(1)|map(attribute=0)|join(', ') or 'none'),
+              ('Tools', s.tools.items()|selectattr(1)|map(attribute=0)|join(', ') or 'none'),
+              ('Writes need approval', 'yes' if s.confirm_writes else 'no'),
+              ('Privacy', ('names replaced' if not s.share_names else 'names shared') ~ ', money rounded to ' ~ s.round_money_to|int ~ ', holdings ' ~ ('shared' if s.share_holdings else 'held back')),
+              ('Limits', s.questions_per_hour ~ ' questions an hour per workspace; ' ~ ('{:,}'.format(s.daily_token_budget) ~ ' tokens a day' if s.daily_token_budget else 'no token budget')),
+              ('Conversations', ('kept ' ~ s.retention_days ~ ' days') if s.keep_conversations else 'not kept')]) }}
+    <p class="small-muted mb-0">Changing active-plan editing (<code>assistant.tools.edit_plan</code>) has no effect in this version: the assistant only ever adds scenarios.</p>
+  </div></div>
+{% endblock %}

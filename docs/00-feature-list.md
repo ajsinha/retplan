@@ -142,6 +142,17 @@ A plan is one `retplan.plan.Plan`, stored as JSON in the `plans` table.
 | F-STG-5 | Report: each decision now and recommended with its worth on its own, standing rules, alternatives within the noise, the plan year by year, saved as a scenario | `strategy/index.html` |
 | F-STG-6 | Runs in the background with progress; settings in `strategy.*` of `config/retplan.yaml`, read at each search | `strategy.Jobs` |
 
+## 8b. AI assistant — `F-AI-*`
+
+| ID | Feature | Where |
+|---|---|---|
+| F-AI-1 | Provider and model abstractions; `anthropic` and a `fake` provider (`fake-null` does nothing); switched in configuration or by the administrator | `web/assistant/providers.py`, `/admin/assistant` |
+| F-AI-2 | Tool-use loop over RetPlan's engine with schema-checked arguments, switchable tools and features, a call limit | `web/assistant/__init__.py`, `tools.py` |
+| F-AI-3 | Privacy: names to placeholders and back, money rounded, institutions and notes withheld; a preview of what is sent | `web/assistant/privacy.py`, `/assistant/preview` |
+| F-AI-4 | Writes only as proposals approved by the person; only new scenarios | `Assistant.confirm` |
+| F-AI-5 | Rule-based plan review (health cover, emergency cash, survivor, required withdrawals, shares near retirement, guaranteed income, odds) | `web/assistant/review.py` |
+| F-AI-6 | Conversations, usage, hourly and daily limits, retention | `web/assistant/store.py` |
+
 ## 9. Prices — `F-PX-*`
 
 | ID | Feature | Where |

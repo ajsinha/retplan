@@ -204,6 +204,27 @@ before you add them:</p>
 <strong>Add to my plan</strong> or <strong>Save as a scenario</strong> keeps them. Care risks are
 edited under {{ goto('plan_section', 'Plan → Health and care', 'care') }}.</p>
 
+<h2 id="assistant">The assistant</h2>
+<p>An optional assistant answers questions about your plan in plain words - <em>what if I retire
+two years earlier?</em>, <em>when should I claim?</em>, <em>what am I missing?</em>, or
+<em>explain this strategy</em>. It is off unless the configuration switches it on.</p>
+{% call steps() %}
+  <li><strong>Its figures are RetPlan's.</strong> The model works nothing out itself: it asks
+      RetPlan to run simulations, the spending check, the optimiser and so on, and every call
+      is listed under <em>How this was worked out</em>.</li>
+  <li><strong>Your names stay here.</strong> People, accounts and portfolios are sent as
+      "Person 1", "Account 2"; amounts are rounded; institutions and notes are not sent.
+      <em>What is sent</em> shows exactly what the model sees.</li>
+  <li><strong>Nothing changes without you.</strong> The assistant can only propose a new
+      scenario; it is saved when you press <em>Approve</em>. Your active plan is never edited.</li>
+  <li><strong>Provider and model.</strong> The administrator chooses them on
+      <em>Admin → Assistant settings</em> or in the configuration. The <em>fake</em> provider
+      does nothing - it is there to try the pages without a model or a key.</li>
+{% endcall %}
+{% call note('warn', 'Educational, not advice') %}
+<p>The assistant explains your plan's numbers; it is not financial, tax or legal advice.</p>
+{% endcall %}
+
 <h2 id="networth">Net worth history</h2>
 <p>{{ goto('networth', 'Open net worth history') }} A plan looks forward; this looks back.</p>
 {% call steps() %}

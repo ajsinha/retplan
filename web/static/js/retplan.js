@@ -22,6 +22,7 @@
  *   form[data-stepper]        one [data-step] at a time, with Back / Next
  *   input[data-reveal=<id>]   a checkbox shows #id when ticked (and disables its inputs when not)
  *   [data-strategy-job=<url>] poll a strategy search's progress; reload when it ends
+ *   [data-assistant]          the assistant's conversation: ask, show answers and proposals
  *
  * Copyright (c) 2026 Ashutosh Sinha. All rights reserved.
  */
@@ -651,6 +652,103 @@
         .catch(function () { setTimeout(poll, 3000); });
     }
     setTimeout(poll, 800);
+  });
+
+  // ---------- the assistant ----------
+  // Answers are inserted as text, never as HTML: whatever a model writes stays inert.
+  document.querySelectorAll('[data-assistant]').forEach(function (box) {
+    var log = box.querySelector('[data-chat-log]');
+    var form = box.querySelector('[data-chat-form]');
+    var q = form.querySelector('textarea');
+    var conv = form.querySelector('[name=conversation]');
+    var mode = form.querySelector('[name=mode]');
+    var btn = form.querySelector('[type=submit]');
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) { e.className = cls; }
+      if (text !== undefined) { e.textContent = text; }
+      return e;
+    }
+    function say(role, text) {
+      var empty = log.querySelector('[data-chat-empty]');
+      if (empty) { empty.remove(); }
+      var m = el('div', 'msg ' + role);
+      m.appendChild(el('div', 'bubble', text));
+      log.appendChild(m);
+      log.scrollTop = log.scrollHeight;
+      return m;
+    }
+    function how(m, calls) {
+      if (!calls || !calls.length) { return; }
+      var d = el('details', 'how');
+      d.appendChild(el('summary', null, 'How this was worked out · ' + calls.length + ' step' + (calls.length === 1 ? '' : 's')));
+      var ol = el('ol');
+      calls.forEach(function (c) {
+        var li = el('li');
+        li.appendChild(el('code', null, c.name));
+        li.appendChild(document.createTextNode(' '));
+        li.appendChild(el('span', 'small-muted', c.summary || ''));
+        ol.appendChild(li);
+      });
+      d.appendChild(ol);
+      m.appendChild(d);
+    }
+    function proposal(m, p) {
+      var card = el('div', 'proposal');
+      card.appendChild(el('div', null, p.text));
+      var btns = el('div', 'btns');
+      [['Approve', true, 'btn btn-sm btn-primary'], ['No thanks', false, 'btn btn-sm btn-outline-secondary']].forEach(function (b) {
+        var x = el('button', b[2], b[0]);
+        x.type = 'button';
+        x.addEventListener('click', function () {
+          btns.querySelectorAll('button').forEach(function (y) { y.disabled = true; });
+          fetch(box.getAttribute('data-confirm-url') + encodeURIComponent(p.id), {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approve: b[1] })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            card.textContent = d.error || d.message;
+          }).catch(function (e) { card.textContent = String(e); });
+        });
+        btns.appendChild(x);
+      });
+      card.appendChild(btns);
+      m.appendChild(card);
+    }
+    function ask(text) {
+      text = (text || '').trim();
+      if (!text) { return; }
+      say('user', text);
+      q.value = '';
+      btn.disabled = true;
+      var wait = say('assistant thinking', 'Working it out with RetPlan…');
+      fetch(box.getAttribute('data-ask-url'), {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text, conversation: conv.value || null, mode: mode.value })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        wait.remove();
+        if (d.error && !d.answer) { say('assistant', d.error); return; }
+        var m = say('assistant', d.answer);
+        how(m, d.tool_calls);
+        (d.pending || []).forEach(function (p) { proposal(m, p); });
+        if (d.conversation) {
+          conv.value = d.conversation;
+          try { history.replaceState(null, '', '?c=' + d.conversation); } catch (e) { /* ignore */ }
+        }
+        mode.value = 'chat';
+      }).catch(function (e) {
+        wait.remove();
+        say('assistant', 'Something went wrong: ' + e);
+      }).then(function () { btn.disabled = false; q.focus(); });
+    }
+    form.addEventListener('submit', function (ev) { ev.preventDefault(); ask(q.value); });
+    q.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); ask(q.value); }
+    });
+    box.querySelectorAll('[data-suggest]').forEach(function (b) {
+      b.addEventListener('click', function () { ask(b.getAttribute('data-suggest')); });
+    });
+    if (q.hasAttribute('data-autoask')) { ask(q.value); }
+    log.scrollTop = log.scrollHeight;
   });
 
   window.RetPlan = { money: money, pct: pct };

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}Assistant{% endblock %}
+{% block content %}
+{% call ui.page_head('Assistant', 'Ask about your plan in plain words. Every figure it gives comes from RetPlan\'s own model - it runs the simulations, the explorers and the strategy optimiser, and shows how each answer was worked out.', eyebrow='Ask', help=url_for('help_tools') ~ '#assistant') %}
+  {% if s.enabled %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('assistant_preview') }}"><i class="bi bi-eye" aria-hidden="true"></i> What is sent?</a>{% endif %}
+  {% if is_admin %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_assistant') }}"><i class="bi bi-gear" aria-hidden="true"></i> Settings</a>{% endif %}
+{% endcall %}
+
+{% if not ok %}
+<div class="card"><div class="card-body">
+  {% call ui.empty('chat-dots', 'The assistant is not available', why) %}
+    <p class="small-muted mb-2">It is switched on and set up in <code>config/retplan.yaml</code> under <code>assistant:</code> - the API key best in <code>config/retplan.local.yaml</code> or <code>ANTHROPIC_API_KEY</code>.{% if is_admin %} The provider and model can be chosen on the settings page.{% endif %}</p>
+    {% if is_admin %}<a class="btn btn-primary btn-sm" href="{{ url_for('admin_assistant') }}">Assistant settings</a>{% endif %}
+  {% endcall %}
+</div></div>
+{% else %}
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="card"><div class="card-header"><i class="bi bi-chat-left-text" aria-hidden="true"></i> Conversations
+      <a class="ms-auto small" href="{{ url_for('assistant') }}">New</a></div>
+      <div class="card-body p-2">
+        {% if conversations %}
+        <ul class="list-unstyled mb-0 convo-list">{% for c in conversations %}
+          <li class="{{ 'active' if current and current.id == c.id }}"><a href="{{ url_for('assistant') }}?c={{ c.id }}">{{ c.title or 'Conversation' }}</a>
+            <span class="cell-sub">{{ c.updated_at|dt }}</span></li>{% endfor %}</ul>
+        {% else %}<p class="small-muted mb-0 px-1">{{ 'Nothing yet.' if s.keep_conversations else 'Conversations are not kept (assistant.logging.keep_conversations).' }}</p>{% endif %}
+      </div></div>
+    <p class="small-muted mt-2">{{ provider.label if provider else s.provider }} · {{ s.model }}{% if usage %} · {{ usage.questions }} question{{ '' if usage.questions == 1 else 's' }} today{% endif %}</p>
+  </div>
+  <div class="col-lg-9">
+    <div class="card chat" data-assistant data-ask-url="{{ url_for('api_assistant_ask') }}" data-confirm-url="/api/assistant/confirm/">
+      <div class="card-body chat-log" data-chat-log>
+        {% for m in messages %}
+          <div class="msg {{ m.role }}"><div class="bubble">{{ m.content }}</div>
+            {% if m.tool_calls %}<details class="how"><summary>How this was worked out · {{ m.tool_calls|length }} step{{ '' if m.tool_calls|length == 1 else 's' }}</summary>
+              <ol>{% for t in m.tool_calls %}<li><code>{{ t.name }}</code> <span class="small-muted">{{ t.summary }}</span></li>{% endfor %}</ol></details>{% endif %}
+          </div>
+        {% endfor %}
+        {% if not messages %}
+        <div class="chat-empty" data-chat-empty>
+          <p class="mb-2">Ask anything about your plan. For example:</p>
+          <div class="kind-chips">{% for q in suggestions %}<button type="button" class="kind-chip" data-suggest="{{ q }}">{{ q }}</button>{% endfor %}</div>
+        </div>
+        {% endif %}
+      </div>
+      <form class="card-footer chat-input" data-chat-form>
+        <input type="hidden" name="conversation" value="{{ current.id if current else '' }}">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        <label class="visually-hidden" for="chat-q">Your question</label>
+        <textarea class="form-control" id="chat-q" name="question" rows="2" maxlength="4000" placeholder="Ask about your plan…" {% if ask %}data-autoask{% endif %}>{{ ask }}</textarea>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-send" aria-hidden="true"></i><span class="visually-hidden">Ask</span></button>
+      </form>
+    </div>
+    <p class="small-muted mt-2"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ s.disclaimer }}{% if not s.share_names %} Names are replaced before anything is sent; amounts are rounded.{% endif %}</p>
+    {% if current %}<form method="post" action="{{ url_for('assistant_delete', cid=current.id) }}" data-confirm="Delete this conversation?"><button class="btn btn-sm btn-link text-danger p-0" type="submit">Delete this conversation</button></form>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

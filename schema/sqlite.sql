@@ -210,6 +210,39 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_snapshots_day ON snapshots (owner, taken_on, kind, ref);
 
+-- The AI assistant (web/assistant): conversations and their messages, kept for
+-- assistant.logging.retention_days unless assistant.logging.keep_conversations
+-- is false; and usage per workspace and day, for the configured limits.
+CREATE TABLE IF NOT EXISTS assistant_conversations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner       TEXT    NOT NULL,
+    title       TEXT    NOT NULL DEFAULT '',
+    created_at  TEXT    NOT NULL,
+    updated_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_assistant_conversations_owner ON assistant_conversations (owner);
+
+CREATE TABLE IF NOT EXISTS assistant_messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES assistant_conversations (id) ON DELETE CASCADE,
+    role            TEXT    NOT NULL,                    -- user | assistant
+    content         TEXT    NOT NULL DEFAULT '',
+    tool_calls      TEXT    NOT NULL DEFAULT '[]',          -- JSON: name, input, summary
+    tokens_in       INTEGER NOT NULL DEFAULT 0,
+    tokens_out      INTEGER NOT NULL DEFAULT 0,
+    model           TEXT    NOT NULL DEFAULT '',
+    created_at      TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_assistant_messages_conversation ON assistant_messages (conversation_id);
+
+CREATE TABLE IF NOT EXISTS assistant_usage (
+    day         TEXT    NOT NULL,
+    owner       TEXT    NOT NULL,
+    questions   INTEGER NOT NULL DEFAULT 0,
+    tokens      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, owner)
+);
+
 -- Application-wide key/value settings (JSON values), e.g. the collector schedule.
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,

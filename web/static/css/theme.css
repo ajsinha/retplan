@@ -924,6 +924,8 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .choice-row { display: flex; flex-wrap: wrap; gap: .5rem; }
 .choice-row .btn { border-radius: 999px; }
 .choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; }
+.choice-grid-wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.choice-grid-wide .d { overflow-wrap: anywhere; }
 .choice-card { display: block; cursor: pointer; padding: .65rem .8rem; border-radius: 10px; border: 1px solid var(--rp-border); background: var(--rp-surface); }
 .choice-card .t { display: block; font-weight: 700; }
 .choice-card .d { display: block; font-size: 12.5px; color: var(--rp-slate); }
@@ -1026,3 +1028,25 @@ a.lp2-card { display: block; text-decoration: none; color: inherit; }
 .strategy-rules { padding-left: 1.2rem; }
 .strategy-rules li { margin-bottom: .5rem; }
 tr.event td { background: var(--rp-crimson-tint); }
+
+/* ---------- assistant ---------- */
+.chat .chat-log { min-height: 360px; max-height: 65vh; overflow-y: auto; display: flex; flex-direction: column; gap: .75rem; }
+.chat .msg { display: flex; flex-direction: column; max-width: 88%; }
+.chat .msg.user { align-self: flex-end; align-items: flex-end; }
+.chat .msg .bubble { padding: .6rem .85rem; border-radius: 12px; white-space: pre-wrap; line-height: 1.45; }
+.chat .msg.user .bubble { background: var(--rp-crimson); color: var(--rp-on-crimson); border-bottom-right-radius: 4px; }
+.chat .msg.assistant .bubble { background: var(--rp-canvas); border: 1px solid var(--rp-border); border-bottom-left-radius: 4px; }
+.chat .msg.thinking .bubble { color: var(--rp-slate); font-style: italic; }
+.chat .how { font-size: 12.5px; margin-top: .3rem; color: var(--rp-slate); }
+.chat .how ol { padding-left: 1.2rem; margin: .3rem 0 0; }
+.chat .how code { font-size: 12px; }
+.chat .proposal { border: 1px solid var(--rp-crimson); border-radius: 10px; padding: .55rem .75rem; margin-top: .4rem; background: var(--rp-crimson-tint); font-size: 14px; }
+.chat .proposal .btns { display: flex; gap: .4rem; margin-top: .4rem; }
+.chat-input { display: flex; gap: .5rem; align-items: flex-end; background: var(--rp-surface); }
+.chat-input textarea { resize: vertical; }
+.chat-empty { margin: auto; text-align: center; max-width: 560px; }
+.chat-empty .kind-chips { justify-content: center; }
+.convo-list li { padding: .35rem .5rem; border-radius: 8px; }
+.convo-list li.active { background: var(--rp-crimson-tint); }
+.convo-list a { text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-pre { white-space: pre-wrap; font-size: 12.5px; max-height: 420px; overflow: auto; margin: 0; }

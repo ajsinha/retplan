@@ -107,22 +107,27 @@ assistant:
 
 ## `assistant` - the AI assistant (optional)
 
-Off unless `assistant.enabled` is true and an API key is set. Every figure it quotes comes
-from RetPlan's own engine, through the tools allowed here.
+Off unless `assistant.enabled` is true and its provider is ready (Anthropic needs an API
+key; the fake provider needs nothing). Every figure it quotes comes from RetPlan's own engine,
+through the tools allowed here.
+
+The administrator can switch the provider and the two models on **Admin → Assistant
+settings** without editing this file; that choice is kept in the database and wins over the
+file until *Reset to configuration*. The page also sends a test message.
 
 | Key | Default | What it does |
 |---|---|---|
 | `assistant.enabled` | `false` | Switch the assistant on. |
-| `assistant.provider` | `anthropic` | `anthropic`, or `none`. |
+| `assistant.provider` | `anthropic` | `anthropic` (Claude), `fake` (no model: does nothing), or `none`. |
 | `assistant.api_key` | `${ANTHROPIC_API_KEY:}` | The API key. Set the environment variable, or put it in `config/retplan.local.yaml` - never in the committed file. |
 | `assistant.base_url` | empty | An optional gateway or proxy. |
-| `assistant.model` | `claude-sonnet-5-5` | The model for conversation, what-ifs and reviews. |
+| `assistant.model` | `claude-sonnet-5-5` | The model for conversation, what-ifs and reviews. Anthropic: `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-4-5-20251001` (or any other id). Fake: `fake-null` (a fixed note, no tools) or `fake-tools`. |
 | `assistant.strategy_model` | `claude-opus-5-5` | The model for explaining a strategy and writing its report. |
 | `assistant.max_tokens`, `temperature`, `timeout_seconds` | `4000`, `0.2`, `60` | Limits of one answer. |
 | `assistant.max_tool_calls` | `12` | How many engine calls one question may make. |
 | `assistant.access` | `everyone` | `everyone`, or `admin` to keep it to the administrator. |
 | `assistant.features.*` | all `true` | `intake` (set up a plan by conversation), `explain_strategy`, `what_if`, `review`, `report`. |
-| `assistant.tools.*` | reads and simulations on; `edit_plan` off | Which engine tools it may call: `read_plan`, `read_portfolios`, `run_simulation`, `run_optimiser`, `save_scenario`, `edit_plan`; `confirm_writes` asks you before any write. |
+| `assistant.tools.*` | reads and simulations on; `edit_plan` off | Which engine tools it may call: `read_plan`, `read_portfolios`, `run_simulation`, `run_optimiser`, `save_scenario`, `edit_plan` (not offered in this version); `confirm_writes` asks you before any write. |
 | `assistant.privacy.share_names` | `false` | People and accounts become "Person 1", "Account 2" before anything is sent. |
 | `assistant.privacy.share_holdings` | `false` | Whether symbols and quantities of holdings are sent. |
 | `assistant.privacy.round_money_to` | `1000` | Amounts sent to the model are rounded to this. |

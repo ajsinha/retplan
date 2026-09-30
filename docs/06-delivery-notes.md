@@ -51,6 +51,21 @@ make test                               # both test suites, offline
 
 ## Changes
 
+### 2026-09-29 - The AI assistant
+
+- **Assistant** (`/assistant`, off by default): questions about your plan answered by a language
+  model that takes every figure from RetPlan's own engine through tools - the plan, results,
+  portfolios, what-if simulations, levers, claiming, conversions, the spending check, draw
+  orders, a rule-based review and the strategy optimiser. Conversations are kept 30 days.
+- **Provider and model abstractions** (`web/assistant/providers.py`): `anthropic` (Claude, over
+  HTTPS, no SDK) and `fake` - `fake-null` does nothing and needs no key. Switched in
+  `config/retplan.yaml` or on **Admin → Assistant settings**, which also sends a test message.
+- **Privacy**: names become "Person 1", "Account 2"; amounts rounded; institutions and notes
+  never sent; the answer has the names put back. *What is sent* shows it exactly.
+- **Safety**: tool arguments checked against their schema; tools and features switched off are
+  not offered; the only write is a new scenario, proposed and run only when approved; hourly
+  and daily limits; access `everyone` or `admin`.
+
 ### 2026-09-29 - Configuration in YAML; the strategy optimiser; the assistant designed
 
 - **Configuration** moved to `config/retplan.yaml`, read by the configurator adopted from

@@ -1,8 +1,10 @@
 # 07 · AI assistant — design
 
-Status: **designed, configuration in place, not yet built.** The `assistant:` section of
-`config/retplan.yaml` already exists (off by default) so the design below is anchored to real
-settings. Nothing in RetPlan calls a language model today.
+Status: **built** (`web/assistant/`, `routes/assistant_routes.py`), off by default. The provider
+and model are abstractions (`web/assistant/providers.py`) chosen in `config/retplan.yaml` or by the
+administrator on **Assistant settings** (`/admin/assistant`); a **fake** provider that does
+nothing lets the pages run with no model and no key. `edit_plan` is not offered in this version:
+the assistant only ever *adds* scenarios, each after the person approves it.
 
 ## 1. What it is for, and the rules it keeps
 
@@ -160,10 +162,14 @@ never the committed file), `base_url`, `model`, `strategy_model`, `max_tokens`, 
    survivor's drop), the model explaining and prioritising them.
 5. **Other providers or a local model** behind the same `Provider` protocol, if wanted.
 
-## 10. Decisions to make before building
+## 10. Decisions taken
 
-- Which models by default (Sonnet 5.5 for conversation and Opus 5.5 for strategy are the
-  configured defaults).
-- Whether everyone may use it or only the administrator at first (`assistant.access`).
-- Whether it may ever change the active plan (`tools.edit_plan`), or only add scenarios.
-- How long conversations are kept (`logging.retention_days`).
+- **Models:** not fixed - `LLMProvider` / `LLMModel` abstractions. `anthropic` lists Claude Opus 5.5,
+  Sonnet 5.5 and Haiku 4.5 (any other id is taken as given); `fake` lists `fake-null` (answers
+  with a fixed note, no tools, no tokens) and `fake-tools` (offered the tools; scripted in tests).
+  Chosen by `assistant.provider` / `model` / `strategy_model`, or on the settings page, where the
+  choice is kept in `app_settings` and wins until *Reset to configuration*. A new provider is a
+  subclass with `models()` and `reply()`, then `providers.register(...)`.
+- **Access:** everyone by default; `assistant.access: admin` keeps it to the administrator.
+- **Writes:** only new scenarios, never the active plan; `edit_plan` is not offered.
+- **Retention:** 30 days (`logging.retention_days`), pruned as questions are asked.

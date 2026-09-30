@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "_macros/ui.html" as ui %}
+{% block title %}What is sent{% endblock %}
+{% block content %}
+{% call ui.page_head('What the assistant sends', 'Exactly what the model is given about this plan when you ask a question: its instructions with a brief of the plan, and the plan summary as the plan tool returns it. Tool results for what-ifs and strategies are redacted and rounded the same way.', eyebrow='Assistant') %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('assistant') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Assistant</a>
+{% endcall %}
+<div class="stat-grid">
+  {{ ui.kpi('Names', 'shared' if s.share_names else 'replaced', 'assistant.privacy.share_names', 'person-badge') }}
+  {{ ui.kpi('Money', ('rounded to ' ~ '{:,.0f}'.format(s.round_money_to)) if s.round_money_to else 'exact', 'assistant.privacy.round_money_to', 'cash') }}
+  {{ ui.kpi('Holdings', 'shared' if s.share_holdings else 'held back', 'assistant.privacy.share_holdings', 'briefcase') }}
+  {{ ui.kpi('Tools offered', tools|length, 'assistant.tools.* and features.*', 'tools') }}
+</div>
+<div class="card"><div class="card-header"><i class="bi bi-file-text" aria-hidden="true"></i> Instructions and plan brief</div>
+  <div class="card-body"><pre class="preview-pre">{{ system }}</pre></div></div>
+<div class="card"><div class="card-header"><i class="bi bi-braces" aria-hidden="true"></i> The plan summary (get_plan_summary)</div>
+  <div class="card-body"><pre class="preview-pre">{{ summary }}</pre></div></div>
+<div class="card"><div class="card-header"><i class="bi bi-tools" aria-hidden="true"></i> Tools the model may call</div>
+  <div class="card-body"><ul class="list-rows">{% for t in tools %}<li><span class="grow"><code>{{ t.name }}</code><span class="cell-sub">{{ t.description }}</span></span>{% if t.writes %}{{ ui.pill('warn', 'writes, with approval') }}{% endif %}</li>{% endfor %}</ul></div></div>
+{% endblock %}
